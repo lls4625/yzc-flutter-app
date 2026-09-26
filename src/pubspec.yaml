@@ -27,5 +27,6 @@ flutter:
     - assets/database/init.sql
     - assets/branding/app-icon.png
     - assets/basic_knowledge/
+    - assets/grammar_lookup/
     - assets/kana/
     - assets/demos/
