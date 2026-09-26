@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 以脚本旁的 web 文件夹为站点根目录，供 App 下载测试资源。
+# 以项目根目录的 resources/web 为站点根目录，供 App 下载测试资源。
 set -eu
 
 WEB_ROOT="/Users/javalee/work/proj/yzc_f/resources/web"

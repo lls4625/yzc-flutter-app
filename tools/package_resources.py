@@ -194,11 +194,11 @@ def publish(replacements, backup):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='打包 yzc_v3/database 教材，更新 resources/web/textbook 的 ZIP 与 yzc_textbook.json；不启动或上传服务器。',
+        description='打包 yzc_v3.1/database/textbook 教材，更新 resources/web/textbook 的 ZIP 与 yzc_textbook.json；不启动或上传服务器。',
     )
     parser.add_argument('packages', nargs='*', help='教材目录名，可指定多个，例如 xbr_1_1；兼容 elementary_1 别名')
-    parser.add_argument('--all', action='store_true', help='打包 yzc_v3/database 中全部册别（不含 study）')
-    parser.add_argument('--v3', action='store_true', help='兼容已有执行脚本；现在默认打包 yzc_v3/database 教材')
+    parser.add_argument('--all', action='store_true', help='打包 yzc_v3.1/database/textbook 中全部册别')
+    parser.add_argument('--v3', action='store_true', help='兼容已有执行脚本；现在默认打包 yzc_v3.1/database/textbook 教材')
     args = parser.parse_args()
     if bool(args.packages) == args.all:
         parser.error('请指定册别 ID，或单独使用 --all')

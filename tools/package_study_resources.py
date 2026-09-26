@@ -162,7 +162,7 @@ def package_levels(levels):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='打包 yzc_v3/database/study/n1～n5 到 resources/web/study，并更新 study.json。',
+        description='打包 yzc_v3.1/database/study/n1～n5 到 resources/web/study，并更新 study.json。',
     )
     parser.add_argument('levels', nargs='*', help='级别目录名：n1～n5；不指定时打包全部')
     parser.add_argument('--all', action='store_true', help='打包全部五个级别')
