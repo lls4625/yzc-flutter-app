@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "notices": [
+      {
+      "id": "notice-example-001",
+      "title": "通知示例1",
+      "content": "这是公告格式示例1。",
+      "type": "info",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 5,
+      "publishedAt": "2026-09-17T17:58:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    },
+    {
+      "id": "notice-example-002",
+      "title": "通知示例2",
+      "content": "这是公告格式示例2。",
+      "type": "warning",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 5,
+      "publishedAt": "2026-09-17T18:20:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    },
+    {
+      "id": "notice-example-003",
+      "title": "通知示例3",
+      "content": "这是公告格式示例3。",
+      "type": "important",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 5,
+      "publishedAt": "2026-09-17T18:10:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    },
+        {
+      "id": "notice-example-004",
+      "title": "通知示例4",
+      "content": "这是公告格式示例4。",
+      "type": "urgent",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 5,
+      "publishedAt": "2026-09-17T18:30:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    },
+    {
+      "id": "notice-example-1001",
+      "title": "通知示例5",
+      "content": "这是公告格式示例5",
+      "type": "important",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 3,
+      "publishedAt": "2026-09-18T10:30:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    },
+    {
+      "id": "notice-example-1002",
+      "title": "通知示例6",
+      "content": "这是公告格式示例6",
+      "type": "important",
+      "closeDelaySeconds": 5,
+      "repeatEnabled": true,
+      "repeatCount": 3,
+      "publishedAt": "2026-09-18T10:50:00+08:00",
+      "expiresAt": null,
+      "enabled": true
+    }
+  ]
+}
