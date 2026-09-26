@@ -71,20 +71,17 @@ class _StudyRoomPurchaseContent extends StatelessWidget {
                   ],
                 ],
                 if (purchase.initialized)
-                  Align(
-                    alignment: Alignment.center,
-                    child: TextButton(
-                      onPressed: purchase.busy || !purchase.supported ? null : () async {
-                        await purchase.restore();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(
-                          content: Text(purchase.message ?? (purchase.unlocked
-                              ? '购买权益已恢复，自习室已解锁'
-                              : '未找到可恢复的自习室购买记录')),
-                        ));
-                      },
-                      child: Text(purchase.busy ? '正在处理…' : '恢复购买'),
-                    ),
+                  StudyButton.text(
+                    onPressed: purchase.busy || !purchase.supported ? null : () async {
+                      await purchase.restore();
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(
+                        content: Text(purchase.message ?? (purchase.unlocked
+                            ? '购买权益已恢复，自习室已解锁'
+                            : '未找到可恢复的自习室购买记录')),
+                      ));
+                    },
+                    child: Text(purchase.busy ? '正在处理…' : '恢复购买'),
                   ),
                 if (purchase.message != null) ...[
                   const SizedBox(height: 4),
