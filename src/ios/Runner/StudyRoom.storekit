@@ -1,0 +1,108 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "929BF60E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "68",
+      "familyShareable" : false,
+      "internalID" : "6723189054",
+      "localizations" : [
+        {
+          "description" : "一次购买，永久解锁全部自习室功能",
+          "displayName" : "自习室",
+          "locale" : "zh_Hans"
+        }
+      ],
+      "productID" : "com.javalee.nihongoPath.v31.studyroom.lifetime",
+      "referenceName" : "自习室永久解锁",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "6",
+      "familyShareable" : false,
+      "internalID" : "6723189055",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "一份鼓励", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.small",
+      "referenceName" : "一份鼓励",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "18",
+      "familyShareable" : false,
+      "internalID" : "6723189056",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "暖心支持", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.medium",
+      "referenceName" : "暖心支持",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "68",
+      "familyShareable" : false,
+      "internalID" : "6723189057",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "特别支持", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.large",
+      "referenceName" : "特别支持",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "168",
+      "familyShareable" : false,
+      "internalID" : "6723189058",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "大力支持", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.xlarge",
+      "referenceName" : "大力支持",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "298",
+      "familyShareable" : false,
+      "internalID" : "6723189059",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "顶级鼓励", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.premium",
+      "referenceName" : "顶级鼓励",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "688",
+      "familyShareable" : false,
+      "internalID" : "6723189060",
+      "localizations" : [{ "description" : "一次性支持语之初的持续开发，不解锁额外功能，不可恢复。", "displayName" : "夯", "locale" : "zh_Hans" }],
+      "productID" : "com.javalee.nihongoPath.v31.tip.strong",
+      "referenceName" : "夯",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "zh_Hans",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "CHN",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 5,
+    "minor" : 0
+  }
+}

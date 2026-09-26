@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "source": {
+    "textbook_id": "1971170190440288258",
+    "lessons_id": "1971195561424547842",
+    "resource": "resources/xbr_v3/xbr_1_1/data.sqlite"
+  },
+  "book": {
+    "id": "listening-demo",
+    "textbook": "新标日-初级",
+    "volume": "上"
+  },
+  "lesson": {
+    "id": "1971195561424547842",
+    "textbook_id": "1971170190440288258",
+    "unit_id": "1971214972793466881",
+    "num": 1,
+    "lesson": "l01",
+    "title": "李さんは　中国人です。",
+    "sub_title": "出迎え",
+    "definition": "小李是中国人。",
+    "sub_definition": "机场迎接"
+  },
+  "words": [
+    {
+      "id": "2096511198060085248",
+      "kana": "ちゅうごくじん@4",
+      "kanji": "中国人",
+      "pos": "名",
+      "definition": "中国人",
+      "word": "!中(ちゅう) !国(ごく) !人(じん)",
+      "phonetic": "w_l01_01.mp3",
+      "sort": 1
+    },
+    {
+      "id": "2096511198060085249",
+      "kana": "にほんじん@4",
+      "kanji": "日本人",
+      "pos": "名",
+      "definition": "日本人",
+      "word": "!日(に)   !本(ほん)   !人(じん)",
+      "phonetic": "w_l01_02.mp3",
+      "sort": 2
+    }
+  ],
+  "content": [
+    {
+      "id": "1973685560434880514",
+      "category": "01",
+      "role": "",
+      "content": "!李(り)さんは　!中国人(ちゅうごくじん)です。",
+      "definition": "小李是中国人。",
+      "phonetic": "l_l01_01.mp3",
+      "sort": 1
+    },
+    {
+      "id": "1973685560476823554",
+      "category": "01",
+      "role": "",
+      "content": "!森(もり)さんは　!学生(がくせい)では　ありません。",
+      "definition": "森先生不是学生。",
+      "phonetic": "l_l01_02.mp3",
+      "sort": 2
+    }
+  ]
+}
