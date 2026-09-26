@@ -1,0 +1,17 @@
+narrator (ja-JP-NanamiNeural):
+一番。女の人と男の人が話しています。
+
+narrator (ja-JP-NanamiNeural):
+女の人は、これからまず何をしますか。
+
+女 (ja-JP-NanamiNeural):
+今から本を返すんですか。
+
+男 (ja-JP-KeitaNeural):
+いいえ。先にカードを作るんです。本を返すのは私がやります。
+
+女 (ja-JP-NanamiNeural):
+はい、分かりました。
+
+narrator (ja-JP-NanamiNeural):
+女の人は、これからまず何をしますか。
