@@ -21,7 +21,7 @@ PROJECT_ROOT = ROOT.parent.parent
 WEB = PROJECT_ROOT / 'resources' / 'web' / 'textbook'
 TEXTBOOKS = WEB / 'yzc_textbook.json'
 ZIP = Path('/usr/bin/zip')
-V3_PACKAGES = ROOT.parent / 'database'
+V3_PACKAGES = ROOT.parent / 'database/textbook'
 
 
 def readonly_database(path):
