@@ -908,6 +908,226 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
       ),
     ],
   ),
+  BasicKnowledgeCategory(
+    title: '旅行实用',
+    subtitle: '交通、饮食与安全',
+    icon: Icons.luggage_outlined,
+    topics: [
+      BasicKnowledgeTopic(
+        id: 'travel_transport',
+        title: '铁路与城市交通',
+        subtitle: '车站、乘车、换乘与延误信息',
+        icon: Icons.train_outlined,
+        sections: [
+          BasicKnowledgeSection('认识日本城市交通', [
+            BasicKnowledgeItem('JR、私铁与地下铁', 'JR 是由多家 JR 公司经营的铁路网络；私铁由其他铁路公司经营；地下铁主要服务城市内部。不同公司可能共用车站或直通运行，换乘时要确认线路名和运营公司。'),
+            BasicKnowledgeItem('新干线与普通铁路', '!新幹線(しんかんせん)主要连接大中城市，普通铁路承担城市和地区交通。新干线通常使用独立站台和票务体系，部分车站的“新〇〇站”与市中心站并非同一地点。'),
+            BasicKnowledgeItem('路面电车与单轨电车', '!路面電車(ろめんでんしゃ)在道路上或专用轨道运行，モノレール是单轨交通。上下车、付费和站台形式会因城市而异，应查看现场标识。'),
+            BasicKnowledgeItem('城市巴士与高速巴士', '!路線(ろせん)バス服务市内和郊区，!高速(こうそく)バス连接较远城市或机场。高速巴士常需预约，城市巴士则可能采用里程计价。'),
+            BasicKnowledgeItem('出租车与其他交通', '出租车适合深夜、携带行李或多人同行；渡轮、自行车和租车适合特定地区。选择前应同时考虑距离、末班时间、天气和行李。'),
+          ]),
+          BasicKnowledgeSection('列车种类与停靠方式', [
+            BasicKnowledgeItem('普通／各站停车', '!普通(ふつう)或!各駅停車(かくえきていしゃ)通常每站停车，适合前往快车不停靠的小站。'),
+            BasicKnowledgeItem('快速与新快速', '!快速(かいそく)、!新快速(しんかいそく)会跳过部分车站，但具体停靠规则由各公司决定。不能只凭名称推断目的站一定停靠。'),
+            BasicKnowledgeItem('急行与快速急行', '!急行(きゅうこう)、!快速急行(かいそくきゅうこう)多见于私铁，通常比普通列车停站少。上车前应查看停車駅或站台电子屏。'),
+            BasicKnowledgeItem('特急', '!特急(とっきゅう)主要停靠重要车站，部分列车除乘车券外还需要特急券或指定席券。是否全车指定席也因列车而异。'),
+            BasicKnowledgeItem('确认停靠站', '电子屏或线路图中的 !停車駅(ていしゃえき)表示停靠站。看到目的地名称、列车种类和发车时间三项一致后再上车。'),
+          ]),
+          BasicKnowledgeSection('车票、IC 卡与座席', [
+            BasicKnowledgeItem('交通 IC 卡', '预付式 IC 卡可在许多铁路、巴士、商店和自动售货机使用。并非所有地区和交通工具都支持，进站前应确认 IC 标志。'),
+            BasicKnowledgeItem('充值与余额不足', '!チャージ表示充值。余额不足时闸机可能不开，可在精算机或有人改札补足费用；不要强行通过。'),
+            BasicKnowledgeItem('乘车券与特急券', '!乗車券(じょうしゃけん)对应基本乘车区间，!特急券(とっきゅうけん)对应乘坐特急或新干线的附加资格。部分行程需要同时持有。'),
+            BasicKnowledgeItem('指定席与自由席', '!指定席(していせき)有固定车次、车厢和座位；!自由席(じゆうせき)不指定座位。部分列车为全车指定席，必须提前确认。'),
+            BasicKnowledgeItem('进站与出站', '使用 IC 卡时进站和出站都要触碰读卡区；使用纸质车票时按闸机提示插入并取回。二维码票则扫描指定读码区。'),
+            BasicKnowledgeItem('易变信息', '押金、游客卡有效期、通票价格和销售位置可能变化。本页只说明概念，实际购买应以铁路公司最新公告为准。'),
+          ]),
+          BasicKnowledgeSection('看懂车站与站台', [
+            BasicKnowledgeItem('入口、出口与出口编号', '!入口(いりぐち)是入口，!出口(でぐち)是出口。大站常以东口、西口或 A1、B2 等编号区分，约人时要说清出口。'),
+            BasicKnowledgeItem('改札', '!改札(かいさつ)是检票区域，!有人改札(ゆうじんかいさつ)有工作人员。换乘专用闸机可能连接不同线路，不一定要完全出站。'),
+            BasicKnowledgeItem('ホーム／番線', 'ホーム是站台，!番線(ばんせん)是站台编号。如「3!番線(ばんせん)」表示 3 号站台。'),
+            BasicKnowledgeItem('行先与方面', '!行先(ゆきさき)是列车终点或目的方向，「〇〇!方面(ほうめん)」表示开往某方向。只看线路颜色而不看方向容易坐反。'),
+            BasicKnowledgeItem('时刻信息', '!発車(はっしゃ)是发车，!到着(とうちゃく)是到达，!予定(よてい)是预计。临时变化时以电子屏和广播为准。'),
+            BasicKnowledgeItem('站内设施', 'エレベーター、バリアフリールート、トイレ、コインロッカー分别是电梯、无障碍路线、卫生间和投币式储物柜。'),
+          ]),
+          BasicKnowledgeSection('方向、换乘与坐错车', [
+            BasicKnowledgeItem('上行与下行', '!上(のぼ)り／!下(くだ)り是线路运营方向，不能简单等同于北行和南行。应结合目的站、终点站或方面标识判断。'),
+            BasicKnowledgeItem('内回与外回', '环线可能使用 !内回(うちまわ)り／!外回(そとまわ)り区分方向。实际更快方向取决于目的站位置。'),
+            BasicKnowledgeItem('当站始发与终到', '!当駅始発(とうえきしはつ)表示从本站始发，!当駅止(とうえきど)まり表示列车在本站终止运行。'),
+            BasicKnowledgeItem('换乘', '!乗(の)り!換(か)え表示换乘。确认下一条线路、方向、站台和剩余时间，跨站换乘可能需要出站步行。'),
+            BasicKnowledgeItem('直通运行', '!直通運転(ちょくつううんてん)表示列车进入另一公司或线路继续运行，途中线路名称可能改变，但乘客不一定需要下车。'),
+            BasicKnowledgeItem('坐错或坐过站', '如果坐错方向或错过车站，先在下一站下车并向工作人员说明，不要自行跨越轨道或逆行通过闸机。'),
+          ]),
+          BasicKnowledgeSection('延误、停运与临时变更', [
+            BasicKnowledgeItem('遅延', '!遅延(ちえん)表示晚点。确认延误分钟数、受影响区间和是否仍有列车运行。'),
+            BasicKnowledgeItem('運転見合わせ', '!運転見合(うんてんみあ)わせ表示暂时停止运行，恢复时间可能尚未确定。'),
+            BasicKnowledgeItem('運休与運転再開', '!運休(うんきゅう)表示列车或班次停运，!運転再開(うんてんさいかい)表示恢复运行。恢复后仍可能拥挤或继续延误。'),
+            BasicKnowledgeItem('振替輸送', '!振替輸送(ふりかえゆそう)是在符合条件时允许改乘其他指定线路。适用票种、区间和操作方法应向工作人员确认。'),
+            BasicKnowledgeItem('番線変更', '!番線変更(ばんせんへんこう)表示发车站台临时改变。看到变更提示后应重新确认站台编号。'),
+            BasicKnowledgeItem('遅延証明書', '!遅延証明書(ちえんしょうめいしょ)用于证明列车延误，可按运营公司提供的方式取得。它不保证赔偿或免除所有迟到责任。'),
+          ]),
+          BasicKnowledgeSection('巴士与出租车', [
+            BasicKnowledgeItem('巴士上下车方式', '巴士可能前门上车，也可能后门上车；可能上车付费，也可能下车付费。先观察车门标识和其他乘客。'),
+            BasicKnowledgeItem('整理券与下车按钮', '!整理券(せいりけん)用于记录上车区间。准备下车时按 !降車(こうしゃ)ボタン，并提前准备车费或 IC 卡。'),
+            BasicKnowledgeItem('巴士方向', '同名站点的不同方向可能分设在道路两侧或不同编号站台。应核对目的地、行先和站牌时刻表。'),
+            BasicKnowledgeItem('出租车状态', '!空車(くうしゃ)表示空车，!迎車(げいしゃ)表示正在接预约乘客。日本出租车车门常由司机控制，不要自行用力拉门。'),
+            BasicKnowledgeItem('支付前确认', '现金、银行卡、二维码或 IC 支付的支持情况因车辆和地区而异，上车或结账前可查看标识。'),
+          ]),
+          BasicKnowledgeSection('行李、礼仪与无障碍', [
+            BasicKnowledgeItem('大件行李', '大件行李不要堵住车门和通道。部分新干线路段的超大行李席位需要提前预约，应在购票时确认。'),
+            BasicKnowledgeItem('车内礼仪', '手机设为静音，普通车厢内尽量避免通话；背包在人多时可放到身前，先下后上并保持通道畅通。'),
+            BasicKnowledgeItem('优先席与无障碍空间', '!優先席(ゆうせんせき)和轮椅、婴儿车空间应优先留给有需要的人。需要协助时可提前联系车站。'),
+            BasicKnowledgeItem('女性专用车厢', '!女性専用車(じょせいせんようしゃ)的适用时间、区间和对象以站台及车厢标识为准。'),
+            BasicKnowledgeItem('末班车', '!終電(しゅうでん)是末班列车。深夜换乘时要确认每一段末班时间，不要只看第一段发车时间。'),
+            BasicKnowledgeItem('寄存与宅配', '车站储物柜可能满柜或有尺寸限制。行李宅配可减少移动负担，但送达时间和禁运物品需事先确认。'),
+          ]),
+        ],
+      ),
+      BasicKnowledgeTopic(
+        id: 'food_culture',
+        title: '日本饮食文化',
+        subtitle: '餐厅类型、点餐方式与用餐礼仪',
+        icon: Icons.restaurant_menu_outlined,
+        sections: [
+          BasicKnowledgeSection('日本饮食的基本特点', [
+            BasicKnowledgeItem('和食与洋食', '!和食(わしょく)指日本传统饮食体系，!洋食(ようしょく)是日本发展出的西式料理，如蛋包饭、咖喱饭和汉堡排。二者都属于现代日本饮食的重要部分。'),
+            BasicKnowledgeItem('旬', '「!旬(しゅん)」表示食材风味和供应最合适的时节。季节菜单常以春夏秋冬的鱼、蔬菜和果物为重点。'),
+            BasicKnowledgeItem('地方料理与名物', '!郷土料理(きょうどりょうり)是地区传统料理，!名物(めいぶつ)是当地代表性食物或商品。相同菜名也可能存在地方做法差异。'),
+            BasicKnowledgeItem('一汁三菜', '!一汁三菜(いちじゅうさんさい)是由一份汤、一道主菜和两道副菜搭配米饭的传统结构概念，不代表每顿饭都必须完全相同。'),
+            BasicKnowledgeItem('出汁与鲜味', '!出汁(だし)常由昆布、柴鱼、煮干或其他材料制成，是许多料理的味道基础。素食者和过敏者不能只凭菜品外观看是否含动物成分。'),
+            BasicKnowledgeItem('盛付与器皿', '!盛(も)り!付(つ)け、器皿和留白也是日本饮食体验的一部分，常随季节、料理类型和店铺风格变化。'),
+          ]),
+          BasicKnowledgeSection('常见餐厅类型', [
+            BasicKnowledgeItem('定食店', '!定食(ていしょく)通常把主菜、米饭、汤和小菜组成一套，适合快速了解常见家庭风格餐食。'),
+            BasicKnowledgeItem('寿司店与回转寿司', '传统寿司店可在吧台逐项点单，!回転寿司(かいてんずし)多用传送带、触屏或二维码点单。价格可能按盘色或单品计算。'),
+            BasicKnowledgeItem('拉面、荞麦与乌冬', '拉面店常使用食券机；荞麦面和乌冬面有冷、热及不同汤汁形式。加料和面量规则因店铺而异。'),
+            BasicKnowledgeItem('居酒屋', '!居酒屋(いざかや)是提供酒类和共享小菜的休闲餐饮场所，常按用餐过程分多次追加点单。'),
+            BasicKnowledgeItem('烧肉与铁板烧', '!焼肉(やきにく)由客人在桌上烤制，需注意生熟夹具；铁板烧通常由店员在铁板上烹调。'),
+            BasicKnowledgeItem('喫茶店与家庭餐厅', '!喫茶店(きっさてん)常提供咖啡和轻食，ファミリーレストラン菜品多样，适合多人和家庭用餐。'),
+            BasicKnowledgeItem('屋台与百货美食层', '!屋台(やたい)是摊位式餐饮，百货地下食品层常称 デパ地下，可购买便当、熟食、甜点和地方食品。'),
+          ]),
+          BasicKnowledgeSection('入店、预约与座位', [
+            BasicKnowledgeItem('人数', '入店时常被问「!何名様(なんめいさま)ですか」。回答可说「!二人(ふたり)です」等。'),
+            BasicKnowledgeItem('预约与时间', '!予約(よやく)した时间应尽量准时；不能到店时要尽早取消。小型餐厅可能已按预约人数准备食材。'),
+            BasicKnowledgeItem('满席与等位', '!満席(まんせき)表示座位已满，!空席(くうせき)表示空位。需要等位时可能登记姓名或领取 !整理券(せいりけん)。'),
+            BasicKnowledgeItem('座位类型', 'カウンター是吧台，テーブル!席(せき)是桌席，!個室(こしつ)是包间，!座敷(ざしき)多为脱鞋就座的日式席位。'),
+            BasicKnowledgeItem('禁烟与规则', '!禁煙(きんえん)、!喫煙(きつえん)等标识应按店内规定理解。部分店铺还可能设置最低消费或限制用餐时间。'),
+          ]),
+          BasicKnowledgeSection('看菜单与点餐', [
+            BasicKnowledgeItem('单品、套餐与定食', '!単品(たんぴん)是单点，セット是组合套餐，!定食(ていしょく)通常是完整餐食。内容相似时也要看是否包含饮料或小菜。'),
+            BasicKnowledgeItem('推荐与限定', 'おすすめ是推荐，!名物(めいぶつ)是代表性餐点，!季節限定(きせつげんてい)和!期間限定(きかんげんてい)表示季节或期间限定。'),
+            BasicKnowledgeItem('售罄与最后点单', '!売(う)り!切(き)れ表示售罄，ラストオーダー表示最后点单时间，通常早于闭店时间。'),
+            BasicKnowledgeItem('食券机与电子点单', '!食券機(しょっけんき)通常先购券再交给店员。触屏、平板和二维码点单的结账方式可能不同。'),
+            BasicKnowledgeItem('分量与调整', '!大盛(おおも)り是大份，!少(すく)なめ是少量，!追加(ついか)是追加。「～!抜(ぬ)き」可请求不放某项，但店铺不一定能处理。'),
+            BasicKnowledgeItem('冷热与熟度', '!冷(つめ)たい／!温(あたた)かい、!辛(から)さ、!焼(や)き!加減(かげん)分别涉及冷热、辣度和熟度。生食前应确认个人健康风险。'),
+          ]),
+          BasicKnowledgeSection('代表性饮食场景', [
+            BasicKnowledgeItem('寿司与刺身', '!寿司(すし)把醋饭与鱼介等搭配，!刺身(さしみ)是不配醋饭的生鲜切片。并非所有寿司都含生鱼。'),
+            BasicKnowledgeItem('面类', 'ラーメン、そば、うどん的面、汤底和吃法不同。荞麦过敏者还要注意共用煮面水或器具的风险。'),
+            BasicKnowledgeItem('定食与盖饭', '!定食(ていしょく)由多种餐具组成，!丼(どんぶり)通常把配菜盖在米饭上。米饭、汤或卷心菜是否可续加由店铺决定。'),
+            BasicKnowledgeItem('居酒屋共享菜', '居酒屋常把菜放在中央共享，并使用 !取(と)り!皿(ざら)分到个人小碟。追加点单时要留意数量，避免过量。'),
+            BasicKnowledgeItem('怀石与会席', '!懐石料理(かいせきりょうり)与茶道传统有关，!会席料理(かいせきりょうり)多为宴席套餐；两者读音相同但背景和构成不同。'),
+            BasicKnowledgeItem('便当与外带', '!弁当(べんとう)、!駅弁(えきべん)、!惣菜(そうざい)和テイクアウト适合移动中或住宿处用餐，但应遵守车内和公共场所规定。'),
+          ]),
+          BasicKnowledgeSection('过敏、宗教与饮食限制', [
+            BasicKnowledgeItem('主动说明过敏', '严重食物过敏不能只问“有没有”，应明确过敏原、严重程度以及共用器具或微量成分是否也会引发反应。'),
+            BasicKnowledgeItem('常见过敏原', '鸡蛋、乳制品、小麦、荞麦、花生、坚果、虾和蟹等可能出现在主料、酱汁或加工食品中。'),
+            BasicKnowledgeItem('高汤与调味汁', '看似只有蔬菜的汤、酱汁或咖喱也可能含鱼、肉、乳制品或酒精，不能只根据菜名判断。'),
+            BasicKnowledgeItem('素食与纯素', 'ベジタリアン和ヴィーガン的可食范围不同。请求去掉可见肉类，不等于高汤和调味料也符合要求。'),
+            BasicKnowledgeItem('清真与酒精', 'ハラール需要同时关注肉类来源、酒精、调味料和烹饪器具。无法确认时应选择明确标示并能说明流程的店铺。'),
+            BasicKnowledgeItem('准备信息卡', '有严重限制时，可随身准备日文信息卡，列出不能食用的材料、交叉接触要求和紧急联系人。'),
+          ]),
+          BasicKnowledgeSection('用餐礼仪', [
+            BasicKnowledgeItem('餐前与餐后用语', '「いただきます」表达接受食物的感谢，「ごちそうさまでした」表达用餐后的感谢。游客并非必须说，但理解其文化含义有助于交流。'),
+            BasicKnowledgeItem('筷子礼仪', '不要把筷子直插在饭中，也不要用筷子直接把食物传到另一双筷子；这些动作会让人联想到葬礼习俗。'),
+            BasicKnowledgeItem('公筷与个人小碟', '共享菜应按场合使用公筷或个人未入口的一端，并先夹到 !取(と)り!皿(ざら)再食用。'),
+            BasicKnowledgeItem('面类声音', '吃拉面、荞麦或乌冬时发出吸食声音通常可接受，但不是必须。重点是避免影响他人和溅到周围。'),
+            BasicKnowledgeItem('寿司的吃法', '寿司可用筷子或手食用。不同店铺氛围不同，不必把某一种方式绝对化。'),
+            BasicKnowledgeItem('香水与拍照', '精致料理重视香气，强烈香水可能影响他人。拍照前要遵守店铺、厨师和其他顾客的隐私规则。'),
+          ]),
+          BasicKnowledgeSection('费用、结账与离店', [
+            BasicKnowledgeItem('含税与未税', '!税込(ぜいこみ)表示含税，!税抜(ぜいぬき)表示未税。菜单同时标两种价格时要看清实际支付金额。'),
+            BasicKnowledgeItem('席料与お通し', '部分餐厅有 !席料(せきりょう)或服务费。居酒屋自动提供的 お!通(とお)し常与席料相关，并不一定是免费赠品。'),
+            BasicKnowledgeItem('结账位置', '!会計(かいけい)可能在收银台，也可能在桌边。桌上有 !伝票(でんぴょう)时通常把它带到收银台。'),
+            BasicKnowledgeItem('支付方式', '现金、银行卡、交通 IC 卡和二维码支付的支持情况因店铺而异，尤其小型店铺应提前确认。'),
+            BasicKnowledgeItem('小费', '日本一般没有支付小费的习惯。部分餐厅会明确收取服务费，应以账单和店铺说明为准。'),
+            BasicKnowledgeItem('分别付款', '!別々(べつべつ)に!払(はら)う表示分别付款，但繁忙或使用食券的店铺不一定能处理，应在结账前询问。'),
+            BasicKnowledgeItem('剩余食物', '剩余食物能否打包由店铺基于食品安全决定，不能默认一定可以带走。离店前应确认手机、外套和购物袋。'),
+          ]),
+        ],
+      ),
+      BasicKnowledgeTopic(
+        id: 'travel_safety',
+        title: '旅行安全与紧急应对',
+        subtitle: '灾害、求助、遗失与医疗联络',
+        icon: Icons.health_and_safety_outlined,
+        sections: [
+          BasicKnowledgeSection('先记住的求助渠道', [
+            BasicKnowledgeItem('110：紧急报警', '遇到犯罪、正在发生的危险或严重交通事故时拨打 110。非紧急咨询不应占用紧急线路。'),
+            BasicKnowledgeItem('119：消防与救护车', '发生火灾、严重疾病或重伤时拨打 119。尽量说明地点、发生了什么以及需要消防车还是救护车。'),
+            BasicKnowledgeItem('交番', '!交番(こうばん)是社区警察岗亭，可处理问路、遗失物、被盗报案和附近安全问题。紧急危险仍应直接拨打 110。'),
+            BasicKnowledgeItem('现场工作人员', '车站、酒店、商场和景点工作人员熟悉本地流程。无法准确描述位置时，可先出示地图、车票或住宿信息。'),
+            BasicKnowledgeItem('Japan Visitor Hotline', 'JNTO Japan Visitor Hotline 可为外国游客提供事故、疾病、灾害和一般旅行协助。电话号码、服务时间和语言可能变化，应通过 JNTO 官方页面核对。'),
+            BasicKnowledgeItem('本国驻日使领馆', '护照遗失、重大事故或需要领事协助时联系本国驻日使领馆。出发前保存最新联系方式和办公时间。'),
+          ]),
+          BasicKnowledgeSection('地震发生时', [
+            BasicKnowledgeItem('先保护自己', '感到强烈摇晃时先保护头部，远离玻璃、货架和可能坠落的物品，不要在摇晃中慌张冲向出口。'),
+            BasicKnowledgeItem('听从现场指示', '摇晃停止后，听从车站、酒店、商场或景点工作人员指示；不要擅自使用可能停运的电梯。'),
+            BasicKnowledgeItem('注意余震与火灾', '!余震(よしん)可能继续发生，同时留意火灾、漏水、破损道路和掉落物。'),
+            BasicKnowledgeItem('海岸附近的强震', '在海岸附近感到强震或长时间摇晃时，不要等待自行判断海啸大小，应按当地指示尽快向高处或指定避难地点移动。'),
+            BasicKnowledgeItem('预先确认出口', '入住酒店或进入大型设施后，先确认 !非常口(ひじょうぐち)和 !避難経路(ひなんけいろ)。'),
+          ]),
+          BasicKnowledgeSection('海啸、台风、大雨与火山', [
+            BasicKnowledgeItem('海啸', '!津波警報(つなみけいほう)发布时应远离海岸和河口，前往高处或海啸避难设施，并等待正式解除通知。'),
+            BasicKnowledgeItem('台风', '!台風(たいふう)接近时，航空、铁路和景点可能提前停运或关闭。不要等到风雨最强时才移动。'),
+            BasicKnowledgeItem('大雨与土砂灾害', '!大雨(おおあめ)、!洪水(こうずい)、!土砂災害(どしゃさいがい)和河流泛滥会影响道路和铁路，应同时关注天气和避难信息。'),
+            BasicKnowledgeItem('火山警戒', '看到 !噴火警戒(ふんかけいかい)或!立入禁止(たちいりきんし)时，不得进入限制区。火山周边活动应以官方警戒等级为准。'),
+            BasicKnowledgeItem('使用官方信息', '优先查看日本气象厅、地方政府、交通运营商和 JNTO Japan Safe Travel 信息，不依据未经核实的社交媒体传言行动。'),
+          ]),
+          BasicKnowledgeSection('看懂避难与警示信息', [
+            BasicKnowledgeItem('避難所与避難場所', '!避難所(ひなんじょ)通常提供一段时间的避难生活支持，!避難場所(ひなんばしょ)是紧急确保安全的地点；具体定义以当地标识为准。'),
+            BasicKnowledgeItem('非常口与避難経路', '!非常口(ひじょうぐち)是紧急出口，!避難経路(ひなんけいろ)是撤离路线。不要在通道堆放行李。'),
+            BasicKnowledgeItem('立入禁止与通行止め', '!立入禁止(たちいりきんし)表示禁止进入，!通行止(つうこうど)め表示道路或通道封闭。即使看起来安全也不能擅自穿越。'),
+            BasicKnowledgeItem('运休与欠航', '!運休(うんきゅう)是列车或班次停运，!欠航(けっこう)多指航班或船班取消。后续安排应联系承运人。'),
+            BasicKnowledgeItem('听从最新广播', '灾害信息会变化。优先看时间最新的多语言广播、电子屏和官方通知，并遵从现场工作人员指示。'),
+          ]),
+          BasicKnowledgeSection('生病、受伤与就医', [
+            BasicKnowledgeItem('判断紧急程度', '轻微不适可先向酒店、药店或保险公司咨询；严重呼吸困难、意识异常、大量出血等紧急情况应拨打 119。'),
+            BasicKnowledgeItem('医院、诊所与药店', '!病院(びょういん)通常规模较大，クリニック／!診療所(しんりょうじょ)处理门诊，!薬局(やっきょく)负责药品。夜间和节假日开放情况不同。'),
+            BasicKnowledgeItem('携带必要资料', '就医时准备护照、保险资料、过敏、既往疾病和正在使用的药物信息。不要只提供药品颜色或外观。'),
+            BasicKnowledgeItem('语言支持', '并非所有医疗机构都提供外语服务，可通过官方医疗机构查询、游客热线或保险公司寻找支持。'),
+            BasicKnowledgeItem('费用与保险', '日本就医可能需要先付款。提前确认旅行保险的联络方式、理赔材料和是否提供直接结算服务。'),
+          ]),
+          BasicKnowledgeSection('遗失、被盗与护照问题', [
+            BasicKnowledgeItem('先联系最后出现地点', '在车站、机场、商店或酒店遗失物品时，先联系该设施的 !忘(わす)れ!物(もの)／!遺失物(いしつぶつ)窗口。'),
+            BasicKnowledgeItem('向警察申报', '仍未找到或确认被盗时，前往交番或警察署说明。保险理赔、补发证件时可能需要警方出具的记录。'),
+            BasicKnowledgeItem('冻结支付与通信', '银行卡、手机或交通卡遗失后，应尽快联系发行方或运营商暂停使用，降低继续损失。'),
+            BasicKnowledgeItem('护照遗失', '护照遗失或被盗时联系本国驻日使领馆，并按要求准备警方记录、身份材料和照片。具体流程以使领馆最新说明为准。'),
+            BasicKnowledgeItem('保护敏感信息', '应用只提供准备清单，不保存护照号码、银行卡、保险单号或紧急联系人的敏感信息。'),
+          ]),
+          BasicKnowledgeSection('交通中断与滞留', [
+            BasicKnowledgeItem('确认影响范围', '先确认受影响线路、区间、方向和预计恢复时间，不要只看到“延误”就取消全部行程。'),
+            BasicKnowledgeItem('寻找替代路线', '查看 !振替輸送(ふりかえゆそう)、其他铁路、巴士或步行方案；适用条件应向工作人员确认。'),
+            BasicKnowledgeItem('出示目的地', '语言不通时，可向工作人员出示目的地名称、住宿地址和当前车票，确认可行路线。'),
+            BasicKnowledgeItem('深夜滞留', '末班车中断时优先确保安全，确认车站安排、住宿、出租车或官方开放的临时等待场所。'),
+            BasicKnowledgeItem('航班与长途交通', '航班、新干线或高速巴士取消时，改签和退款应联系承运人或购票平台。保存票据和官方通知。'),
+          ]),
+          BasicKnowledgeSection('出发前的安全准备', [
+            BasicKnowledgeItem('安全保存资料副本', '为护照、签证和保险资料准备安全副本，并与原件分开保存；不要上传到公开位置。'),
+            BasicKnowledgeItem('记录联系方式', '保存住宿、保险公司、本国使领馆和同行者的最新联系方式，确保手机没电时仍能查到。'),
+            BasicKnowledgeItem('收藏官方渠道', '提前收藏日本气象厅、JNTO Japan Safe Travel、交通运营商和目的地地方政府的官方页面。'),
+            BasicKnowledgeItem('电力与现金', '随身准备充电设备和适量现金。灾害或通信故障时，电子支付和充电设施可能受影响。'),
+            BasicKnowledgeItem('日文紧急信息卡', '可准备姓名、国籍、严重过敏、疾病、用药和紧急联系人等日文信息。内容应由本人确认并妥善保管。'),
+            BasicKnowledgeItem('高风险活动', '登山、滑雪、潜水等活动前确认天气、装备、运营方规则和保险覆盖范围，不进入封闭区域。'),
+          ]),
+          BasicKnowledgeSection('官方信息与更新时间', [
+            BasicKnowledgeItem('现场指示优先', '本页提供的是通用准备知识，不替代警察、消防、医疗、气象、地方政府、交通运营商和现场人员的实时指示。'),
+            BasicKnowledgeItem('紧急号码', '警察紧急电话为 110，消防与救护为 119。JNTO 游客热线等辅助渠道的号码、时间和支持语言应在使用前查看官方最新页面。'),
+            BasicKnowledgeItem('最后核对日期', '本主题核心安全信息于 2026 年 9 月核对。灾害制度、警戒名称和服务渠道可能调整，应优先阅读最新官方信息。'),
+          ]),
+        ],
+      ),
+    ],
+  ),
 ];
 
 class BasicKnowledgeCategoryPage extends StatelessWidget {
@@ -940,6 +1160,9 @@ class BasicKnowledgeCategoryPage extends StatelessWidget {
               'writing' => const Color(0xFF3B7E72),
               'counters' => const Color(0xFFD0712A),
               'date_time' => const Color(0xFF5579A7),
+              'travel_transport' => const Color(0xFF3E6F9E),
+              'food_culture' => const Color(0xFFB8663C),
+              'travel_safety' => const Color(0xFF3D7D69),
               _ => vermilion,
             },
             preview: switch (topic.id) {
@@ -947,6 +1170,9 @@ class BasicKnowledgeCategoryPage extends StatelessWidget {
               'writing' => '3 个主题 · 21 个知识点',
               'counters' => '3个苹果 · 2本书 · 5条鱼',
               'date_time' => '9月23日（水）· 7:30',
+              'travel_transport' => '改札 · 乗り換え · 遅延',
+              'food_culture' => '和食 · 点餐 · 用餐礼仪',
+              'travel_safety' => '110 · 119 · 避難',
               _ => null,
             },
             onTap: topic.id == 'kana'
@@ -988,6 +1214,9 @@ class BasicKnowledgeTopicPage extends StatelessWidget {
       'location',
       'colors_shapes',
       'weather',
+      'travel_transport',
+      'food_culture',
+      'travel_safety',
     }.contains(topic.id);
     return PlaybackScaffold(
       appBar: StudyAppBar(title: Text(topic.title)),
@@ -1033,7 +1262,7 @@ class BasicKnowledgeTopicPage extends StatelessWidget {
   }
 }
 
-enum _TopicVisualKind { image, demonstratives, family, body, location, colors, weather, pronunciation, writing, verbs, adjectives, nouns, particles, calendar }
+enum _TopicVisualKind { image, demonstratives, family, body, location, colors, weather, pronunciation, writing, verbs, adjectives, nouns, particles, calendar, travelTransport, foodCulture, travelSafety }
 
 class _TopicPresentation {
   const _TopicPresentation({
@@ -1168,6 +1397,27 @@ _TopicPresentation? _topicPresentation(String id) => switch (id) {
     assetPath: 'assets/basic_knowledge/seasons_weather.jpg',
     semanticLabel: '从樱花春景、夏季细雨、秋季红叶到冬季积雪的连续四季风景',
   ),
+  'travel_transport' => const _TopicPresentation(
+    eyebrow: '从进站到抵达',
+    summary: '认清车站、车票、方向与异常信息，让每次换乘都有依据。',
+    highlights: ['检票与车票', '方向与换乘', '延误与停运'],
+    accent: Color(0xFF3E6F9E),
+    visualKind: _TopicVisualKind.travelTransport,
+  ),
+  'food_culture' => const _TopicPresentation(
+    eyebrow: '从入店到结账',
+    summary: '认识日本饮食类型，也看懂点餐方式、费用和餐桌礼仪。',
+    highlights: ['餐厅类型', '菜单与点餐', '礼仪与结账'],
+    accent: Color(0xFFB8663C),
+    visualKind: _TopicVisualKind.foodCulture,
+  ),
+  'travel_safety' => const _TopicPresentation(
+    eyebrow: '先判断，再求助',
+    summary: '遇到灾害、疾病、遗失或交通中断时，先找到正确的第一步。',
+    highlights: ['110／119', '避难与就医', '遗失与滞留'],
+    accent: Color(0xFF3D7D69),
+    visualKind: _TopicVisualKind.travelSafety,
+  ),
   _ => null,
 };
 
@@ -1203,6 +1453,12 @@ class _TopicHero extends StatelessWidget {
             _ColorsVisual(presentation: presentation)
           else if (presentation.visualKind == _TopicVisualKind.weather)
             _WeatherVisual(presentation: presentation)
+          else if (presentation.visualKind == _TopicVisualKind.travelTransport)
+            _TravelTransportVisual(accent: presentation.accent)
+          else if (presentation.visualKind == _TopicVisualKind.foodCulture)
+            _FoodCultureVisual(accent: presentation.accent)
+          else if (presentation.visualKind == _TopicVisualKind.travelSafety)
+            _TravelSafetyVisual(accent: presentation.accent)
           else if (presentation.assetPath != null)
             AspectRatio(
               aspectRatio: 16 / 9,
@@ -1275,6 +1531,221 @@ class _TopicHero extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TravelTransportVisual extends StatelessWidget {
+  const _TravelTransportVisual({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _TravelChoiceVisual(
+    accent: accent,
+    prompt: '点击车站设施，确认它在行程中的作用。',
+    entries: const [
+      _TravelVisualEntry(Icons.confirmation_number_outlined, '券売機', 'きっぷを買う', '购买车票、充值或领取部分预约票券。'),
+      _TravelVisualEntry(Icons.door_front_door_outlined, '改札口', 'かいさつぐち', '进出付费区；异常时可向有人改札求助。'),
+      _TravelVisualEntry(Icons.alt_route_rounded, '乗り換え', 'のりかえ', '换乘前确认线路、方向、站台和剩余时间。'),
+      _TravelVisualEntry(Icons.train_rounded, 'ホーム', '站台', '核对行先、列车种类、发车时间和停靠站。'),
+      _TravelVisualEntry(Icons.lock_outline_rounded, 'ロッカー', '行李寄存', '确认尺寸、空柜、费用和可取回时间。'),
+    ],
+  );
+}
+
+class _FoodCultureVisual extends StatelessWidget {
+  const _FoodCultureVisual({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _TravelChoiceVisual(
+    accent: accent,
+    prompt: '点击餐桌物品，查看它的用途与礼仪。',
+    entries: const [
+      _TravelVisualEntry(Icons.cleaning_services_outlined, 'おしぼり', '湿巾', '通常用于餐前擦手；用后折好放回一旁。'),
+      _TravelVisualEntry(Icons.horizontal_rule_rounded, '箸置き', 'はしおき', '暂时放筷子，避免把筷子直接搁在餐具上。'),
+      _TravelVisualEntry(Icons.dinner_dining_outlined, '取り皿', 'とりざら', '共享菜先夹到个人小碟，再开始食用。'),
+      _TravelVisualEntry(Icons.tapas_outlined, 'お通し', 'とおし', '居酒屋常自动提供的小菜，可能与席料相关。'),
+      _TravelVisualEntry(Icons.receipt_long_outlined, '伝票', 'でんぴょう', '账单；不少店铺需要把它带到收银台结账。'),
+    ],
+  );
+}
+
+class _TravelSafetyVisual extends StatelessWidget {
+  const _TravelSafetyVisual({required this.accent});
+
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => _TravelChoiceVisual(
+    accent: accent,
+    prompt: '发生什么情况？先确认最重要的第一步。',
+    entries: const [
+      _TravelVisualEntry(Icons.medical_services_outlined, '生病受伤', '严重时拨打 119', '先判断是否危及生命；严重伤病拨打 119，轻症可联系酒店、保险或医疗机构。'),
+      _TravelVisualEntry(Icons.search_rounded, '遗失被盗', '先联系最后地点', '联系车站、商店或酒店失物处；确认被盗或仍未找到时再向交番或警察说明。'),
+      _TravelVisualEntry(Icons.waves_rounded, '地震海啸', '保护头部并听从指示', '摇晃时先确保安全；在海岸遇强震时按指示尽快前往高处或指定避难地点。'),
+      _TravelVisualEntry(Icons.sync_problem_outlined, '交通中断', '确认区间与替代路线', '查看受影响方向、预计恢复时间和振替输送，并向工作人员出示目的地。'),
+    ],
+  );
+}
+
+class _TravelVisualEntry {
+  const _TravelVisualEntry(this.icon, this.title, this.label, this.detail);
+
+  final IconData icon;
+  final String title;
+  final String label;
+  final String detail;
+}
+
+class _TravelChoiceVisual extends StatefulWidget {
+  const _TravelChoiceVisual({
+    required this.accent,
+    required this.prompt,
+    required this.entries,
+  });
+
+  final Color accent;
+  final String prompt;
+  final List<_TravelVisualEntry> entries;
+
+  @override
+  State<_TravelChoiceVisual> createState() => _TravelChoiceVisualState();
+}
+
+class _TravelChoiceVisualState extends State<_TravelChoiceVisual> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedIndex == null ? null : widget.entries[_selectedIndex!];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            widget.accent.withValues(alpha: .16),
+            widget.accent.withValues(alpha: .045),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var index = 0; index < widget.entries.length; index++)
+                _TravelChoiceButton(
+                  entry: widget.entries[index],
+                  accent: widget.accent,
+                  selected: _selectedIndex == index,
+                  onTap: () => setState(() => _selectedIndex = index),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: selected == null
+                ? Row(
+                    key: const ValueKey('travel-prompt'),
+                    children: [
+                      Icon(Icons.touch_app_outlined, size: 19, color: widget.accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.prompt,
+                          style: const TextStyle(fontSize: 13, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  )
+                : Container(
+                    key: ValueKey(selected.title),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withValues(alpha: .92),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: widget.accent.withValues(alpha: .2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${selected.title} · ${selected.label}',
+                          style: TextStyle(
+                            color: widget.accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(selected.detail, style: const TextStyle(height: 1.45)),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TravelChoiceButton extends StatelessWidget {
+  const _TravelChoiceButton({
+    required this.entry,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _TravelVisualEntry entry;
+  final Color accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: entry.title,
+    child: Material(
+      color: selected
+          ? accent.withValues(alpha: .16)
+          : Theme.of(context).colorScheme.surface.withValues(alpha: .9),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 92),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? accent : accent.withValues(alpha: .18),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(entry.icon, color: accent, size: 24),
+              const SizedBox(height: 5),
+              Text(
+                entry.title,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _GrammarTopicHero extends StatelessWidget {
@@ -1601,6 +2072,9 @@ class _TopicConceptVisual extends StatelessWidget {
       _TopicVisualKind.location => const <(String, String)>[],
       _TopicVisualKind.colors => const <(String, String)>[],
       _TopicVisualKind.weather => const <(String, String)>[],
+      _TopicVisualKind.travelTransport => const <(String, String)>[],
+      _TopicVisualKind.foodCulture => const <(String, String)>[],
+      _TopicVisualKind.travelSafety => const <(String, String)>[],
       _TopicVisualKind.image => const <(String, String)>[],
     };
     return Container(
