@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../playback_scaffold.dart';
 import '../../ui.dart';
+import 'onomatopoeia.dart';
 
 class BasicKnowledgeCategory {
   const BasicKnowledgeCategory({
@@ -898,6 +899,12 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
           ]),
         ],
       ),
+      BasicKnowledgeTopic(
+        id: 'onomatopoeia',
+        title: '拟声拟态词',
+        subtitle: '声音、动作、状态与心情',
+        icon: Icons.bubble_chart_outlined,
+      ),
     ],
   ),
 ];
@@ -929,6 +936,12 @@ class BasicKnowledgeCategoryPage extends StatelessWidget {
             subtitle: topic.subtitle,
             onTap: topic.id == 'kana'
               ? onOpenKana
+              : topic.id == 'onomatopoeia'
+              ? () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const OnomatopoeiaPage(),
+                  ),
+                )
               : () => Navigator.of(context).push(MaterialPageRoute<void>(
                   builder: (_) => BasicKnowledgeTopicPage(topic: topic),
                 )),
