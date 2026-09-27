@@ -62,8 +62,8 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
       ),
       BasicKnowledgeTopic(
         id: 'pronunciation',
-        title: '发音规则',
-        subtitle: '音拍、音变与自然语流',
+        title: '发音与音拍',
+        subtitle: '长音、促音、拨音与自然语流',
         icon: Icons.graphic_eq_rounded,
         sections: [
           BasicKnowledgeSection('发音的基本单位', [
@@ -95,13 +95,14 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
       ),
       BasicKnowledgeTopic(
         id: 'writing',
-        title: '日语文字与标点',
+        title: '文字与标点',
         subtitle: '文字体系、书写规范与常用符号',
         icon: Icons.text_fields_rounded,
         sections: [
           BasicKnowledgeSection('文字体系', [
-            BasicKnowledgeItem('平假名', '平假名主要书写日语固有词、助词、助动词及汉字后的送假名。例如「わたしは!本(ほん)を!読(よ)みます」中的「は」「を」和「みます」使用平假名。儿童读物或希望降低阅读难度的内容，也会较多使用平假名。'),
-            BasicKnowledgeItem('片假名', '片假名常用于外来语、外国人名和地名、拟声拟态词、动植物学名及强调，如 コンピューター、アメリカ、ドキドキ。片假名词的长音多用「ー」，但实际读音仍需按音拍掌握。'),
+            BasicKnowledgeItem('假名与真名', '古代日本借用汉字书写日语。汉字在与假名相对时曾称「!真名(まな)」，而借用汉字表示日语读音、再逐渐简化形成的表音文字称「!仮名(かな)」。这里的“假”表示借用或暂代，并非“虚假”。早期用汉字表音的写法称「!万葉仮名(まんようがな)」，后来由此发展出平假名和片假名；现代所说的假名通常主要指这两套文字。'),
+            BasicKnowledgeItem('平假名', '平假名是一套按音拍表音的文字，多由万叶假名的草书形逐渐简化而来。现代主要书写日语固有词、助词、助动词及汉字后的送假名。例如「わたしは!本(ほん)を!読(よ)みます」中的「は」「を」和「みます」使用平假名。儿童读物或希望降低阅读难度的内容，也会较多使用平假名。'),
+            BasicKnowledgeItem('片假名', '片假名同样是按音拍表音的文字，多由万叶假名字形的一部分简化而来。「ア」与「あ」等对应字符通常表示相同音拍，区别主要在字形和现代用途。片假名常用于外来语、外国人名和地名、拟声拟态词、动植物学名及强调，如 コンピューター、アメリカ、ドキドキ。片假名词的长音多用「ー」，但实际读音仍需按音拍掌握。'),
             BasicKnowledgeItem('汉字', '汉字主要承担词义信息，能让句子更易分词和理解。同一汉字可能有音读、训读及特殊读法，如「生」可见于 !学生(がくせい)、!生活(せいかつ)、!生(い)きる、!生(う)まれる；应结合完整词语记忆读音。'),
             BasicKnowledgeItem('音读与训读', '日语的「!音読(おんよ)み」多源于古代汉语读音，常见于汉字复合词，如 !学校(がっこう)；「!訓読(くんよ)み」是用日语固有词对应汉字意义，如 !山(やま)。这只是常见倾向，姓名、地名和固定词中存在许多特殊读法。'),
             BasicKnowledgeItem('送假名', '日语的「!送(おく)り!仮名(がな)」是汉字后用于显示活用词尾或补充读音信息的假名，如 !書(か)く、!書(か)いた、!高(たか)い、!静(しず)かだ。送假名会随动词和形容词的活用改变，是判断词形和语法关系的重要线索。'),
@@ -935,11 +936,15 @@ class BasicKnowledgeCategoryPage extends StatelessWidget {
             title: topic.title,
             subtitle: topic.subtitle,
             accent: switch (topic.id) {
+              'pronunciation' => const Color(0xFFD47B22),
+              'writing' => const Color(0xFF3B7E72),
               'counters' => const Color(0xFFD0712A),
               'date_time' => const Color(0xFF5579A7),
               _ => vermilion,
             },
             preview: switch (topic.id) {
+              'pronunciation' => '4 个主题 · 17 个知识点',
+              'writing' => '3 个主题 · 21 个知识点',
               'counters' => '3个苹果 · 2本书 · 5条鱼',
               'date_time' => '9月23日（水）· 7:30',
               _ => null,
@@ -971,6 +976,8 @@ class BasicKnowledgeTopicPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final presentation = _topicPresentation(topic.id);
     final usesExpandableSections = const {
+      'pronunciation',
+      'writing',
       'verbs',
       'noun_sentences',
       'particles',
@@ -1026,7 +1033,7 @@ class BasicKnowledgeTopicPage extends StatelessWidget {
   }
 }
 
-enum _TopicVisualKind { image, demonstratives, family, body, location, colors, weather, verbs, adjectives, nouns, particles, calendar }
+enum _TopicVisualKind { image, demonstratives, family, body, location, colors, weather, pronunciation, writing, verbs, adjectives, nouns, particles, calendar }
 
 class _TopicPresentation {
   const _TopicPresentation({
@@ -1049,6 +1056,20 @@ class _TopicPresentation {
 }
 
 _TopicPresentation? _topicPresentation(String id) => switch (id) {
+  'pronunciation' => const _TopicPresentation(
+    eyebrow: '听清每一拍',
+    summary: '从音拍长短到自然语流，逐步建立稳定的日语节奏。',
+    highlights: ['音拍', '长音与促音', '自然语流'],
+    accent: Color(0xFFD47B22),
+    visualKind: _TopicVisualKind.pronunciation,
+  ),
+  'writing' => const _TopicPresentation(
+    eyebrow: '认识文字系统',
+    summary: '把假名、汉字与标点放在真实排版中理解。',
+    highlights: ['文字体系', '书写规范', '常用标点'],
+    accent: Color(0xFF3B7E72),
+    visualKind: _TopicVisualKind.writing,
+  ),
   'verbs' => const _TopicPresentation(
     eyebrow: '变形路线',
     summary: '先辨类别，再沿着词尾变化寻找正确形式。',
@@ -1557,6 +1578,8 @@ class _TopicConceptVisual extends StatelessWidget {
         ('書いて', '连接'),
       ],
       _TopicVisualKind.adjectives => const [('高い', 'い形容词'), ('静か', 'な形容词')],
+      _TopicVisualKind.pronunciation => const [('っ', '促音'), ('ー', '长音'), ('ん', '拨音')],
+      _TopicVisualKind.writing => const [('あ', '平假名'), ('ア', '片假名'), ('字', '汉字'), ('。', '标点')],
       _TopicVisualKind.nouns => const [
         ('学生です', '现在・肯定'),
         ('学生ではありません', '现在・否定'),
