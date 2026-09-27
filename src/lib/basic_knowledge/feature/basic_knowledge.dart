@@ -930,15 +930,15 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
             BasicKnowledgeItem('普通／各站停车', '!普通(ふつう)或!各駅停車(かくえきていしゃ)通常每站停车，适合前往快车不停靠的小站。'),
             BasicKnowledgeItem('快速与新快速', '!快速(かいそく)、!新快速(しんかいそく)会跳过部分车站，但具体停靠规则由各公司决定。不能只凭名称推断目的站一定停靠。'),
             BasicKnowledgeItem('急行与快速急行', '!急行(きゅうこう)、!快速急行(かいそくきゅうこう)多见于私铁，通常比普通列车停站少。上车前应查看停車駅或站台电子屏。'),
-            BasicKnowledgeItem('特急', '!特急(とっきゅう)主要停靠重要车站，部分列车除乘车券外还需要特急券或指定席券。是否全车指定席也因列车而异。'),
+            BasicKnowledgeItem('特急', '!特急(とっきゅう)主要停靠重要车站。是否需要另购特急券、是否设自由席或全车指定席，因铁路公司和列车而异，乘车前应确认。'),
             BasicKnowledgeItem('确认停靠站', '电子屏或线路图中的 !停車駅(ていしゃえき)表示停靠站。看到目的地名称、列车种类和发车时间三项一致后再上车。'),
           ]),
           BasicKnowledgeSection('车票、IC 卡与座席', [
             BasicKnowledgeItem('交通 IC 卡', '预付式 IC 卡可在许多铁路、巴士、商店和自动售货机使用。并非所有地区和交通工具都支持，进站前应确认 IC 标志。'),
-            BasicKnowledgeItem('充值与余额不足', '!チャージ表示充值。余额不足时闸机可能不开，可在精算机或有人改札补足费用；不要强行通过。'),
-            BasicKnowledgeItem('乘车券与特急券', '!乗車券(じょうしゃけん)对应基本乘车区间，!特急券(とっきゅうけん)对应乘坐特急或新干线的附加资格。部分行程需要同时持有。'),
+            BasicKnowledgeItem('充值与余额不足', 'チャージ表示充值。余额不足时闸机可能不开，可在精算机或有人改札补足费用；不要强行通过。'),
+            BasicKnowledgeItem('乘车券与特急券', '!乗車券(じょうしゃけん)对应基本乘车区间，!特急券(とっきゅうけん)是乘坐新干线或收费特急所需的附加票券，通常需要与乘车券同时使用；部分纸质票或电子票会将两者合并显示。'),
             BasicKnowledgeItem('指定席与自由席', '!指定席(していせき)有固定车次、车厢和座位；!自由席(じゆうせき)不指定座位。部分列车为全车指定席，必须提前确认。'),
-            BasicKnowledgeItem('进站与出站', '使用 IC 卡时进站和出站都要触碰读卡区；使用纸质车票时按闸机提示插入并取回。二维码票则扫描指定读码区。'),
+            BasicKnowledgeItem('进站与出站', '使用 IC 卡时进站和出站都要触碰读卡区；使用纸质车票时按闸机提示插入，只取回闸机退回的票券，普通单程票在最终出站时通常会被回收。二维码票则扫描指定读码区。'),
             BasicKnowledgeItem('易变信息', '押金、游客卡有效期、通票价格和销售位置可能变化。本页只说明概念，实际购买应以铁路公司最新公告为准。'),
           ]),
           BasicKnowledgeSection('看懂车站与站台', [
@@ -1039,7 +1039,7 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
           BasicKnowledgeSection('用餐礼仪', [
             BasicKnowledgeItem('餐前与餐后用语', '「いただきます」表达接受食物的感谢，「ごちそうさまでした」表达用餐后的感谢。游客并非必须说，但理解其文化含义有助于交流。'),
             BasicKnowledgeItem('筷子礼仪', '不要把筷子直插在饭中，也不要用筷子直接把食物传到另一双筷子；这些动作会让人联想到葬礼习俗。'),
-            BasicKnowledgeItem('公筷与个人小碟', '共享菜应按场合使用公筷或个人未入口的一端，并先夹到 !取(と)り!皿(ざら)再食用。'),
+            BasicKnowledgeItem('公筷与个人小碟', '共享菜应优先使用店家提供的公筷或取餐用具，并先夹到 !取(と)り!皿(ざら)再食用；没有公筷时可向店员询问。'),
             BasicKnowledgeItem('面类声音', '吃拉面、荞麦或乌冬时发出吸食声音通常可接受，但不是必须。重点是避免影响他人和溅到周围。'),
             BasicKnowledgeItem('寿司的吃法', '寿司可用筷子或手食用。不同店铺氛围不同，不必把某一种方式绝对化。'),
             BasicKnowledgeItem('香水与拍照', '精致料理重视香气，强烈香水可能影响他人。拍照前要遵守店铺、厨师和其他顾客的隐私规则。'),
@@ -1062,11 +1062,11 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
         icon: Icons.health_and_safety_outlined,
         sections: [
           BasicKnowledgeSection('先记住的求助渠道', [
-            BasicKnowledgeItem('110：紧急报警', '遇到犯罪、正在发生的危险或严重交通事故时拨打 110。非紧急咨询不应占用紧急线路。'),
+            BasicKnowledgeItem('110：紧急报警', '遇到犯罪、正在发生的危险或严重交通事故时拨打 110；事故中有人受伤或需要救护车时还应拨打 119。非紧急咨询不应占用紧急线路。'),
             BasicKnowledgeItem('119：消防与救护车', '发生火灾、严重疾病或重伤时拨打 119。尽量说明地点、发生了什么以及需要消防车还是救护车。'),
             BasicKnowledgeItem('交番', '!交番(こうばん)是社区警察岗亭，可处理问路、遗失物、被盗报案和附近安全问题。紧急危险仍应直接拨打 110。'),
             BasicKnowledgeItem('现场工作人员', '车站、酒店、商场和景点工作人员熟悉本地流程。无法准确描述位置时，可先出示地图、车票或住宿信息。'),
-            BasicKnowledgeItem('Japan Visitor Hotline', 'JNTO Japan Visitor Hotline 可为外国游客提供事故、疾病、灾害和一般旅行协助。电话号码、服务时间和语言可能变化，应通过 JNTO 官方页面核对。'),
+            BasicKnowledgeItem('Japan Visitor Hotline', 'JNTO Japan Visitor Hotline 可为外国游客提供事故、疾病、灾害和一般旅行协助。2026 年 9 月核对的号码为 050-3816-2787；服务时间和支持语言可能变化，使用前应通过 JNTO 官方页面核对。'),
             BasicKnowledgeItem('本国驻日使领馆', '护照遗失、重大事故或需要领事协助时联系本国驻日使领馆。出发前保存最新联系方式和办公时间。'),
           ]),
           BasicKnowledgeSection('地震发生时', [
@@ -1080,7 +1080,7 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
             BasicKnowledgeItem('海啸', '!津波警報(つなみけいほう)发布时应远离海岸和河口，前往高处或海啸避难设施，并等待正式解除通知。'),
             BasicKnowledgeItem('台风', '!台風(たいふう)接近时，航空、铁路和景点可能提前停运或关闭。不要等到风雨最强时才移动。'),
             BasicKnowledgeItem('大雨与土砂灾害', '!大雨(おおあめ)、!洪水(こうずい)、!土砂災害(どしゃさいがい)和河流泛滥会影响道路和铁路，应同时关注天气和避难信息。'),
-            BasicKnowledgeItem('火山警戒', '看到 !噴火警戒(ふんかけいかい)或!立入禁止(たちいりきんし)时，不得进入限制区。火山周边活动应以官方警戒等级为准。'),
+            BasicKnowledgeItem('火山警戒', '看到 !噴火警報(ふんかけいほう)、!噴火警戒(ふんかけいかい)レベル或!立入禁止(たちいりきんし)时，不得进入限制区。火山周边活动应以官方警戒等级为准。'),
             BasicKnowledgeItem('使用官方信息', '优先查看日本气象厅、地方政府、交通运营商和 JNTO Japan Safe Travel 信息，不依据未经核实的社交媒体传言行动。'),
           ]),
           BasicKnowledgeSection('看懂避难与警示信息', [
@@ -1565,7 +1565,7 @@ class _FoodCultureVisual extends StatelessWidget {
       _TravelVisualEntry(Icons.cleaning_services_outlined, 'おしぼり', '湿巾', '通常用于餐前擦手；用后折好放回一旁。'),
       _TravelVisualEntry(Icons.horizontal_rule_rounded, '箸置き', 'はしおき', '暂时放筷子，避免把筷子直接搁在餐具上。'),
       _TravelVisualEntry(Icons.dinner_dining_outlined, '取り皿', 'とりざら', '共享菜先夹到个人小碟，再开始食用。'),
-      _TravelVisualEntry(Icons.tapas_outlined, 'お通し', 'とおし', '居酒屋常自动提供的小菜，可能与席料相关。'),
+      _TravelVisualEntry(Icons.tapas_outlined, 'お通し', 'おとおし', '居酒屋常自动提供的小菜，可能与席料相关。'),
       _TravelVisualEntry(Icons.receipt_long_outlined, '伝票', 'でんぴょう', '账单；不少店铺需要把它带到收银台结账。'),
     ],
   );
@@ -1582,7 +1582,8 @@ class _TravelSafetyVisual extends StatelessWidget {
     prompt: '发生什么情况？先确认最重要的第一步。',
     entries: const [
       _TravelVisualEntry(Icons.medical_services_outlined, '生病受伤', '严重时拨打 119', '先判断是否危及生命；严重伤病拨打 119，轻症可联系酒店、保险或医疗机构。'),
-      _TravelVisualEntry(Icons.search_rounded, '遗失被盗', '先联系最后地点', '联系车站、商店或酒店失物处；确认被盗或仍未找到时再向交番或警察说明。'),
+      _TravelVisualEntry(Icons.search_rounded, '物品遗失', '联系最后出现地点', '联系车站、商店或酒店的失物处；仍未找到时可前往交番或警察署申报。'),
+      _TravelVisualEntry(Icons.report_outlined, '确认被盗', '确保安全并立即止损', '先远离危险，尽快冻结银行卡、手机或交通卡，并向交番或警察报案；紧急危险拨打 110。'),
       _TravelVisualEntry(Icons.waves_rounded, '地震海啸', '保护头部并听从指示', '摇晃时先确保安全；在海岸遇强震时按指示尽快前往高处或指定避难地点。'),
       _TravelVisualEntry(Icons.sync_problem_outlined, '交通中断', '确认区间与替代路线', '查看受影响方向、预计恢复时间和振替输送，并向工作人员出示目的地。'),
     ],
