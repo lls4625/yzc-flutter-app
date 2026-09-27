@@ -765,8 +765,10 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   bool get _resourceBusy => fetching || _operationBusy;
   bool _checkCurrent(int revision) => _pageCurrent && revision == _checkRevision && !_operationBusy;
   bool _canDownload(RowData book) {
-    final remote = widget.app.resources.publishedTextbook(textOf(book, 'id'));
-    return _serverReady != false && remote != null && textOf(remote, 'sfky') == '1';
+    final id = textOf(book, 'id');
+    final remote = widget.app.resources.publishedTextbook(id);
+    return _serverReady != false && remote != null &&
+        !widget.app.resources.hasInvalidPublishedTextbookHash(id) && textOf(remote, 'sfky') == '1';
   }
   @override
   void initState() {
@@ -833,16 +835,15 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   Future<void> _local({int? checkRevision}) async {
     final rows = await widget.app.store.textbooks();
     final localById = {for (final row in rows) textOf(row, 'id'): row};
-    final combined = <String, RowData>{
-      for (final row in widget.app.resources.publishedTextbooks) textOf(row, 'id'): row,
-      ...localById,
-    }.values.toList();
-    combined.sort((a, b) {
-      if (a['sort'] == null && b['sort'] != null) return 1;
-      if (a['sort'] != null && b['sort'] == null) return -1;
-      final order = intOf(a, 'sort').compareTo(intOf(b, 'sort'));
-      return order != 0 ? order : textOf(a, 'id').compareTo(textOf(b, 'id'));
-    });
+    final published = widget.app.resources.publishedTextbooks;
+    final publishedIds = {for (final row in published) textOf(row, 'id')};
+    final combined = widget.app.resources.hasPublishedCatalog
+        ? <RowData>[
+            ...published,
+            for (final row in rows)
+              if (!publishedIds.contains(textOf(row, 'id'))) row,
+          ]
+        : <RowData>[];
     final installs = await widget.app.resources.installations();
     final counts = await widget.app.store.db.rawQuery('SELECT textbook_id,COUNT(*) count FROM yzc_lessons GROUP BY textbook_id');
     if (mounted && (checkRevision == null || _checkCurrent(checkRevision))) setState(() {
@@ -857,6 +858,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     final revision = ++_checkRevision;
     setState(() { fetching = true; error = null; permissionError = false; });
     try {
+      widget.app.resources.clearPublishedTextbooks();
       await _local(checkRevision: revision);
       if (!_checkCurrent(revision)) return;
       if (!(await _checkConnection(checkRevision: revision))) {
@@ -974,11 +976,16 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   }
   Widget _bookCard(RowData book, Resources resource) {
     final id = textOf(book, 'id');
+    final textbook = textOf(book, 'textbook').trim();
+    final displayTextbook = textbook.isEmpty ? '教材' : textbook;
+    final coverTitle = displayTextbook.replaceAll(RegExp(r'\s*[-－—–]\s*'), '\n');
     final operating = (_operatingBookId ?? resource.activeBook) == id;
     final ready = installed[id]?['status'] == 'ready' && !resource.unavailable.contains(id);
     final remote = resource.publishedTextbook(id);
-    final localOnly = ready && resource.hasPublishedCatalog && remote == null;
-    final update = ready && remote != null && textOf(remote, 'sha256') != textOf(localBooks[id] ?? {}, 'sha256');
+    final localOnly = resource.hasPublishedCatalog && remote == null && localBooks.containsKey(id);
+    final invalidHash = resource.hasInvalidPublishedTextbookHash(id);
+    final remoteHash = remote?['sha256'];
+    final update = ready && remoteHash is String && remoteHash != installed[id]?['sha256'];
     final missing = !ready;
     final disabled = _operationBusy;
     final canDownload = _canDownload(book);
@@ -988,24 +995,28 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       child: Stack(children: [
         Padding(padding: const EdgeInsets.fromLTRB(18, 18, 58, 18), child: Row(children: [
           Container(width: 62, height: 78, decoration: BoxDecoration(color: bookColor(book), borderRadius: BorderRadius.circular(10)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text('標準\n日本語', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+            Text(coverTitle, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
             const SizedBox(height: 5), Text(textOf(book, 'volume'), style: const TextStyle(color: Colors.white70, fontSize: 10)),
           ])),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Text(textOf(book, 'textbook'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              Flexible(child: Text(displayTextbook, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
               const SizedBox(width: 8),
               Text(textOf(book, 'volume'), style: TextStyle(color: bookColor(book), fontWeight: FontWeight.w700)),
             ]),
             const SizedBox(height: 5), Text(textOf(book, 'descr'), style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 7),
-            Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
-              resource.activeBook == id
-                ? '${switch (resource.stage) { 'catalog' => '获取教材信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
-                : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}${ready ? (localOnly ? '本地教材 · 可离线使用' : '可离线使用') : installed[id]?['status'] == 'broken' ? '音频缺失或资源需修复，请重新下载' : '选择后下载'}',
-              style: Theme.of(context).textTheme.labelMedium,
-            ))]),
+            if (!invalidHash || ready) ...[
+              const SizedBox(height: 7),
+              Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
+                resource.activeBook == id
+                  ? '${switch (resource.stage) { 'catalog' => '获取教材信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
+                  : localOnly
+                    ? '本地数据，服务器已删除，请自行处理本地数据'
+                    : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}${ready ? '可离线使用' : installed[id]?['status'] == 'broken' ? '音频缺失或资源需修复，请重新下载' : '选择后下载'}',
+                style: Theme.of(context).textTheme.labelMedium,
+              ))]),
+            ],
             if (resource.activeBook == id) ...[
               const SizedBox(height: 8), StudyLinearProgressIndicator(value: resource.progress),
             ],
@@ -1018,7 +1029,16 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
             child: const ResourceActivityIcon(checking: true),
           ))),
         )),
-        if (!operating && !_resourceBusy && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
+        if (!operating && invalidHash) Positioned(top: 7, right: 7, child: Tooltip(
+          message: '教材校验错误',
+          child: Semantics(
+            label: '教材校验错误',
+            child: SizedBox(width: 48, height: 48, child: Center(child: Icon(
+              Icons.error_outline, color: Theme.of(context).colorScheme.error,
+            ))),
+          ),
+        )),
+        if (!operating && !invalidHash && !_resourceBusy && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
           tooltip: update ? '更新教材' : '下载教材',
           icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
           color: Theme.of(context).colorScheme.primary,

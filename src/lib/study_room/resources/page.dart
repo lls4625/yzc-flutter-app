@@ -83,7 +83,9 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
     setState(() => _operationLabel = resources.isReady(level) ? '资源更新' : '资源下载');
     try {
       await resources.install(level);
-      if (resources.error.isEmpty && resources.isReady(level)) _notice('题库已安装，可离线使用');
+      if (resources.error.isEmpty && resources.isReady(level) && !resources.hasInvalidHash(level)) {
+        _notice('题库已安装，可离线使用');
+      }
     } finally { _resumeRefresh(); }
   }
 
@@ -135,6 +137,7 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
     final colors = Theme.of(context).colorScheme;
     final ready = resources.isReady(level);
     final update = resources.hasLevelUpdate(level);
+    final invalidHash = resources.hasInvalidHash(level);
     final operating = resources.busy && resources.activeLevel == level;
     final removable = ready || resources.installedAt(level) != null || resources.needsCleanup(level);
     final counts = resources.attachmentCounts[level];
@@ -152,12 +155,14 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
               const SizedBox(width: 16),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(resources.textbook(level) ?? '', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 6),
-                Text(operating ? '${resources.message}${resources.progress == null ? '' : ' ${(resources.progress! * 100).round()}%'}'
-                  : resources.checking ? '检查更新中'
-                  : !ready ? (resources.installedAt(level) != null ? '资源缺失，请重新下载' : '未下载')
-                  : update ? '有可用更新' : '已下载 · 可离线使用',
-                  style: TextStyle(color: colors.primary)),
+                if (!invalidHash || ready) ...[
+                  const SizedBox(height: 6),
+                  Text(operating ? '${resources.message}${resources.progress == null ? '' : ' ${(resources.progress! * 100).round()}%'}'
+                    : resources.checking ? '检查更新中'
+                    : !ready ? (resources.installedAt(level) != null ? '资源缺失，请重新下载' : '未下载')
+                    : update ? '有可用更新' : '已下载 · 可离线使用',
+                    style: TextStyle(color: colors.primary)),
+                ],
               ])),
             ]),
             if (ready) ...[
@@ -190,7 +195,16 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
             child: const ResourceActivityIcon(checking: true),
           ))),
         )),
-        if (!operating && !_resourceBusy && (!ready || update))
+        if (!operating && invalidHash) Positioned(top: 7, right: 7, child: Tooltip(
+          message: '资源校验错误',
+          child: Semantics(
+            label: '资源校验错误',
+            child: SizedBox(width: 48, height: 48, child: Center(child: Icon(
+              Icons.error_outline, color: colors.error,
+            ))),
+          ),
+        )),
+        if (!operating && !invalidHash && !_resourceBusy && (!ready || update))
           Positioned(top: 7, right: 7, child: StudyIconButton(
             tooltip: update ? '更新题库' : '下载题库',
             icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
@@ -241,7 +255,7 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
                     child: Text(resources.errorNeedsRecheck || resources.infoError.isNotEmpty ? '重新检查' : '关闭')),
                 ])),
               )),
-            for (final level in StudyResources.levels) _levelCard(level, resources),
+            for (final level in resources.publishedLevels) _levelCard(level, resources),
             const SizedBox(height: 14),
             const Text('按需下载 N1～N5 题库，J练习与J测试共用对应级别资源。更新或删除仅影响该级别，保留作答历史和错题记录。'),
           ])),

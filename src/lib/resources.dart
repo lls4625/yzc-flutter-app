@@ -86,11 +86,14 @@ class Resources extends ChangeNotifier {
   double? progress;
   final Set<String> unavailable = {};
   Map<String, RowData> _publishedTextbooks = {};
+  Set<String> _invalidPublishedTextbookHashes = {};
   bool hasPublishedCatalog = false;
   List<RowData> get publishedTextbooks => _publishedTextbooks.values.toList();
   RowData? publishedTextbook(String id) => _publishedTextbooks[id];
+  bool hasInvalidPublishedTextbookHash(String id) => _invalidPublishedTextbookHashes.contains(id);
   void clearPublishedTextbooks() {
     _publishedTextbooks = {};
+    _invalidPublishedTextbookHashes = {};
     hasPublishedCatalog = false;
   }
   DateTime _lastNotice = DateTime.fromMillisecondsSinceEpoch(0);
@@ -157,24 +160,34 @@ class Resources extends ChangeNotifier {
     final columns = await store.db.rawQuery('PRAGMA table_info(yzc_textbook)');
     final keys = columns.map((r) => r['name'] as String).toSet();
     final rows = <String, RowData>{};
+    final invalidHashes = <String>{};
     for (final entry in json) {
       if (entry is! Map || entry['id'] is! String || (entry['id'] as String).isEmpty || rows.containsKey(entry['id'])) {
         throw const FormatException('教材 ID 必须为唯一字符串');
       }
+      final id = entry['id'] as String;
       final row = <String, Object?>{};
       for (final key in keys) {
         final value = entry[key];
-        if (value != null && (key == 'sort' ? value is! int : value is! String)) throw FormatException('教材字段 $key 类型错误');
+        if (key != 'sha256' && value != null && (key == 'sort' ? value is! int : value is! String)) {
+          throw FormatException('教材字段 $key 类型错误');
+        }
         row[key] = value;
       }
-      final hash = row['sha256'];
-      if (hash is! String || !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hash)) {
-        throw const FormatException('教材 sha256 必须是 64 位十六进制字符串');
+      final hash = entry['sha256'];
+      if (hash == null || (hash is String && hash.trim().isEmpty)) {
+        row['sha256'] = null;
+      } else if (hash is String && RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hash)) {
+        row['sha256'] = hash.toLowerCase();
+      } else {
+        row['sha256'] = null;
+        invalidHashes.add(id);
       }
       // The server catalog is not an installed textbook. Persist only on install.
-      rows[entry['id'] as String] = row;
+      rows[id] = row;
     }
     _publishedTextbooks = rows;
+    _invalidPublishedTextbookHashes = invalidHashes;
     hasPublishedCatalog = true;
     return rows.values.toList();
   }
@@ -303,10 +316,12 @@ class Resources extends ChangeNotifier {
       await _recoverBook(id);
       // Refresh availability without overwriting the installed textbook or its hash.
       final books = await refreshTextbooks();
-      if (!books.any((b) => b['id'] == id && b['sfky'] == '1')) throw StateError('本次目录中教材不存在或不可下载');
+      if (!books.any((b) => b['id'] == id && b['sfky'] == '1') || hasInvalidPublishedTextbookHash(id)) {
+        throw StateError('本次目录中教材不存在或不可下载');
+      }
       final remoteBook = books.firstWhere((book) => book['id'] == id);
       final descriptor = await _descriptor(remoteBook);
-      diagnostics.addAll({'url': descriptor['url'], 'folder': descriptor['folder'], 'expected_sha256': remoteBook['sha256']});
+      diagnostics.addAll({'url': descriptor['url'], 'folder': descriptor['folder'], 'catalog_sha256': remoteBook['sha256']});
       await store.write(() => store.db.update('yzc_resource_operation', {
         'folder': descriptor['folder'], 'update_time': nowMs(),
       }, where: 'id=?', whereArgs: [operationId]));
@@ -322,7 +337,7 @@ class Resources extends ChangeNotifier {
       await _excludeDownloadsFromBackup();
       final zip = File('$staging/$folder.zip');
       await _downloadFile(descriptor, zip);
-      // Keep the actual ZIP hash in the operation log; update checks use textbook metadata.
+      // Keep the actual ZIP hash in the operation log for later update checks.
       final hash = (await sha256.bind(zip.openRead()).first).toString();
       diagnostics['actual_sha256'] = hash;
       diagnostics['zip_path'] = zip.path;

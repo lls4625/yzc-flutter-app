@@ -25,6 +25,7 @@ class StudyResources extends ChangeNotifier {
   String? activeLevel;
   final Map<String, Map<String, dynamic>> _installed = {};
   Map<String, Map<String, dynamic>> _remote = {};
+  Set<String> _invalidRemoteHashes = {};
   final Map<String, String> _installedDates = {};
   final Set<String> _available = {}, _cleanup = {};
   Future<void>? _checking;
@@ -32,9 +33,14 @@ class StudyResources extends ChangeNotifier {
   final Map<String, ({int audio, int images})> attachmentCounts = {};
   String infoError = '';
   bool get ready => _available.isNotEmpty;
+  List<String> get publishedLevels => _remote.keys.toList(growable: false);
   bool get hasUpdate => levels.any(hasLevelUpdate);
   bool isReady(String level) => _available.contains(level.toLowerCase());
-  bool canDownload(String level) => _remote.containsKey(level.toLowerCase());
+  bool hasInvalidHash(String level) => _invalidRemoteHashes.contains(level.toLowerCase());
+  bool canDownload(String level) {
+    final id = level.toLowerCase();
+    return _remote.containsKey(id) && !_invalidRemoteHashes.contains(id);
+  }
   String? textbook(String level) {
     final id = level.toLowerCase();
     return (_remote[id] ?? _installed[id])?['textbook'] as String?;
@@ -50,6 +56,7 @@ class StudyResources extends ChangeNotifier {
     permissionError = false;
     if (!errorNeedsRecheck) return;
     _remote = {};
+    _invalidRemoteHashes = {};
     try {
       final status = await const MethodChannel('yuzhichu/device')
           .invokeMapMethod<String, Object?>('networkStatus')
@@ -63,8 +70,8 @@ class StudyResources extends ChangeNotifier {
   }
   bool hasLevelUpdate(String level) {
     final id = level.toLowerCase();
-    return isReady(id) && _remote[id] != null &&
-        _remote[id]!['sha256'] != _installed[id]?['sha256'];
+    final remoteHash = _remote[id]?['sha256'];
+    return isReady(id) && remoteHash is String && remoteHash != _installed[id]?['sha256'];
   }
   bool needsCleanup(String level) => _cleanup.contains(level.toLowerCase());
   String? installedAt(String level) => _installedDates[level.toLowerCase()];
@@ -251,24 +258,41 @@ class StudyResources extends ChangeNotifier {
     } finally { busy = false; activeLevel = null; notifyListeners(); }
   }
 
-  Map<String, Map<String, dynamic>> _descriptors(String text) {
+  ({Map<String, Map<String, dynamic>> rows, Set<String> invalidHashes})
+      _parseDescriptors(String text, {required bool catalog}) {
     final json = jsonDecode(text);
     if (json is! List) throw const FormatException('自习资源目录必须是数组');
     final result = <String, Map<String, dynamic>>{};
+    final invalidHashes = <String>{};
     for (final value in json) {
       if (value is! Map) throw const FormatException('自习资源目录无效');
       final row = Map<String, dynamic>.from(value);
       final id = row['id'];
       if (id is! String || !levels.contains(id) || result.containsKey(id) ||
-          row['resource_file'] != '$id.zip' || row['sha256'] is! String ||
-          !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(row['sha256'] as String)) {
-        throw const FormatException('自习资源 ID、文件名或 SHA-256 无效');
+          row['resource_file'] != '$id.zip') {
+        throw const FormatException('自习资源 ID 或文件名无效');
       }
-      row['sha256'] = (row['sha256'] as String).toLowerCase();
+      final hash = row['sha256'];
+      if (hash == null || (hash is String && hash.trim().isEmpty)) {
+        if (!catalog) throw const FormatException('本地自习资源摘要无效');
+        row['sha256'] = null;
+      } else if (hash is String && RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(hash)) {
+        row['sha256'] = hash.toLowerCase();
+      } else {
+        if (!catalog) throw const FormatException('本地自习资源摘要无效');
+        row['sha256'] = null;
+        invalidHashes.add(id);
+      }
       result[id] = row;
     }
-    return result;
+    return (rows: result, invalidHashes: invalidHashes);
   }
+
+  Map<String, Map<String, dynamic>> _descriptors(String text) =>
+      _parseDescriptors(text, catalog: false).rows;
+
+  ({Map<String, Map<String, dynamic>> rows, Set<String> invalidHashes})
+      _catalogDescriptors(String text) => _parseDescriptors(text, catalog: true);
 
   Future<String> _fetchManifest() async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
@@ -285,7 +309,7 @@ class StudyResources extends ChangeNotifier {
         if (bytes.length > 1024 * 1024) throw const FormatException('自习资源目录过大');
       }
       final text = utf8.decode(bytes);
-      if (_descriptors(text).length != levels.length) {
+      if (_catalogDescriptors(text).rows.length != levels.length) {
         throw const FormatException('自习资源目录必须包含 n1～n5 五个级别');
       }
       return text;
@@ -297,15 +321,21 @@ class StudyResources extends ChangeNotifier {
     return _checking ??= _check().whenComplete(() => _checking = null);
   }
   Future<void> _check() async {
-    checking = true; error = ''; permissionError = false; errorNeedsRecheck = false; notifyListeners();
+    checking = true; error = ''; permissionError = false; errorNeedsRecheck = false;
+    _remote = {};
+    _invalidRemoteHashes = {};
+    notifyListeners();
     try {
       await _restoreReceipts();
       await refreshInfo();
-      _remote = _descriptors(await _fetchManifest());
+      final catalog = _catalogDescriptors(await _fetchManifest());
+      _remote = catalog.rows;
+      _invalidRemoteHashes = catalog.invalidHashes;
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'selfstudy', operation: '检查资源更新', context: {'base_url': StudyResourceConfig.baseUrl});
       error = ready ? '暂时无法检查更新，已下载资源仍可使用。' : '无法获取自习资源，请检查网络后重试。';
       _remote = {};
+      _invalidRemoteHashes = {};
       await _networkFailure(e);
       errorNeedsRecheck = true;
     } finally { checking = false; notifyListeners(); }
@@ -334,10 +364,17 @@ class StudyResources extends ChangeNotifier {
       await _restoreReceipts();
       oldManifest = await localManifest.readAsString(encoding: utf8);
       final manifest = await _fetchManifest();
-      _remote = _descriptors(manifest);
+      final catalog = _catalogDescriptors(manifest);
+      _remote = catalog.rows;
+      _invalidRemoteHashes = catalog.invalidHashes;
+      if (_invalidRemoteHashes.contains(level)) {
+        _report('资源信息校验失败', 1);
+        return;
+      }
       final descriptor = _remote[level]!;
-      diagnostics['expected_sha256'] = descriptor['sha256'];
-      if (isReady(level) && descriptor['sha256'] == _installed[level]?['sha256']) {
+      final catalogHash = descriptor['sha256'];
+      diagnostics['catalog_sha256'] = catalogHash;
+      if (isReady(level) && (catalogHash == null || catalogHash == _installed[level]?['sha256'])) {
         _report('该级别资源已是最新版本', 1); return;
       }
       staging = Directory('${directory.path}/staging/$level/${store.newId()}');
@@ -346,14 +383,12 @@ class StudyResources extends ChangeNotifier {
       await File('${staging.path}/study.json').writeAsString(manifest, encoding: utf8, flush: true);
       final zip = File('${staging.path}/$level.zip');
       await _download(zip, descriptor['resource_file'] as String);
-      _report('校验自习资源');
+      _report('准备自习资源');
       final actualHash = (await sha256.bind(zip.openRead()).first).toString();
+      final installedDescriptor = Map<String, dynamic>.from(descriptor)..['sha256'] = actualHash;
       diagnostics['actual_sha256'] = actualHash;
       diagnostics['zip_path'] = zip.path;
       diagnostics['downloaded_bytes'] = await zip.length();
-      if (actualHash != descriptor['sha256']) {
-        throw const FormatException('自习资源包摘要不一致，请稍后重试');
-      }
       await _extract(zip, '${staging.path}/extracted', level);
       source = await openDatabase('${staging.path}/extracted/$level/data.sqlite', readOnly: true, singleInstance: false);
       _report('读取资源数据');
@@ -377,7 +412,7 @@ class StudyResources extends ChangeNotifier {
       await validateStudyContent(sourceDb);
       // Install media into a new directory; the previous directory is never
       // overwritten while its database/manifest is still the installed version.
-      final media = Directory('${directory.path}/resources/$level/${descriptor['sha256']}');
+      final media = Directory('${directory.path}/resources/$level/$actualHash');
       if (!await media.exists()) {
         await media.parent.create(recursive: true);
         await _excludeDownloadsFromBackup();
@@ -433,12 +468,12 @@ class StudyResources extends ChangeNotifier {
           }
         }
         await tx.insert('stydy_resource_install', {
-          'id': level, 'manifest_json': jsonEncode([descriptor]), 'installed_at': DateTime.now().toUtc().toIso8601String(),
+          'id': level, 'manifest_json': jsonEncode([installedDescriptor]), 'installed_at': DateTime.now().toUtc().toIso8601String(),
         }, conflictAlgorithm: ConflictAlgorithm.replace);
         // Failure here rolls back all four tables. Startup reconciles the file
         // from the receipt if the process exits before this transaction commits.
         await _publish(jsonEncode([for (final id in levels)
-          if (id == level) descriptor else if (_installed.containsKey(id)) _installed[id]]));
+          if (id == level) installedDescriptor else if (_installed.containsKey(id)) _installed[id]]));
       }));
       committed = true;
       await _restoreReceipts();
