@@ -934,6 +934,16 @@ class BasicKnowledgeCategoryPage extends StatelessWidget {
             icon: topic.icon,
             title: topic.title,
             subtitle: topic.subtitle,
+            accent: switch (topic.id) {
+              'counters' => const Color(0xFFD0712A),
+              'date_time' => const Color(0xFF5579A7),
+              _ => vermilion,
+            },
+            preview: switch (topic.id) {
+              'counters' => '3个苹果 · 2本书 · 5条鱼',
+              'date_time' => '9月23日（水）· 7:30',
+              _ => null,
+            },
             onTap: topic.id == 'kana'
               ? onOpenKana
               : topic.id == 'onomatopoeia'
@@ -3652,29 +3662,65 @@ class _KnowledgeNavigationCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.accent = vermilion,
+    this.preview,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final Color accent;
+  final String? preview;
 
   @override
   Widget build(BuildContext context) => StudyCard(
     clipBehavior: Clip.antiAlias,
     child: StudyListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      minLeadingWidth: 32,
-      horizontalTitleGap: 16,
-      leading: SizedBox.square(
-        dimension: 32,
-        child: Center(child: Icon(icon, color: vermilion, size: 28)),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: preview == null ? 10 : 12,
       ),
+      minLeadingWidth: preview == null ? 32 : 42,
+      horizontalTitleGap: 16,
+      leading: preview == null
+        ? SizedBox.square(
+            dimension: 32,
+            child: Center(child: Icon(icon, color: accent, size: 28)),
+          )
+        : Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .11),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: accent, size: 25),
+          ),
       title: Text(
         title,
         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
-      subtitle: Text(subtitle),
+      subtitle: preview == null
+        ? Text(subtitle)
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(subtitle),
+              const SizedBox(height: 5),
+              Text(
+                preview!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
       trailing: const Icon(Icons.chevron_right_rounded, size: 24),
       onTap: onTap,
     ),

@@ -767,7 +767,9 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   bool _canDownload(RowData book) {
     final id = textOf(book, 'id');
     final remote = widget.app.resources.publishedTextbook(id);
+    final hash = remote?['sha256'];
     return _serverReady != false && remote != null &&
+        hash is String && hash.trim().isNotEmpty &&
         !widget.app.resources.hasInvalidPublishedTextbookHash(id) && textOf(remote, 'sfky') == '1';
   }
   @override
@@ -978,7 +980,10 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     final id = textOf(book, 'id');
     final textbook = textOf(book, 'textbook').trim();
     final displayTextbook = textbook.isEmpty ? '教材' : textbook;
-    final coverTitle = displayTextbook.replaceAll(RegExp(r'\s*[-－—–]\s*'), '\n');
+    final coverParts = displayTextbook.split(RegExp(r'\s*[-－—–]\s*')).where((part) => part.isNotEmpty).toList();
+    final coverTitleLines = coverParts.length <= 2
+        ? coverParts
+        : [coverParts.first, coverParts.skip(1).join('-')];
     final operating = (_operatingBookId ?? resource.activeBook) == id;
     final ready = installed[id]?['status'] == 'ready' && !resource.unavailable.contains(id);
     final remote = resource.publishedTextbook(id);
@@ -995,7 +1000,14 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       child: Stack(children: [
         Padding(padding: const EdgeInsets.fromLTRB(18, 18, 58, 18), child: Row(children: [
           Container(width: 62, height: 78, decoration: BoxDecoration(color: bookColor(book), borderRadius: BorderRadius.circular(10)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(coverTitle, maxLines: 3, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+            for (var index = 0; index < coverTitleLines.length; index++) ...[
+              if (index > 0) const SizedBox(height: 2),
+              SizedBox(width: 54, height: 16, child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(coverTitleLines[index], maxLines: 1, softWrap: false,
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              )),
+            ],
             const SizedBox(height: 5), Text(textOf(book, 'volume'), style: const TextStyle(color: Colors.white70, fontSize: 10)),
           ])),
           const SizedBox(width: 16),
@@ -1038,7 +1050,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
             ))),
           ),
         )),
-        if (!operating && !invalidHash && !_resourceBusy && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
+        if (!operating && !invalidHash && !_resourceBusy && canDownload && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
           tooltip: update ? '更新教材' : '下载教材',
           icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
           color: Theme.of(context).colorScheme.primary,

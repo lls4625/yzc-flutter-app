@@ -204,7 +204,7 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
             ))),
           ),
         )),
-        if (!operating && !invalidHash && !_resourceBusy && (!ready || update))
+        if (!operating && !invalidHash && !_resourceBusy && resources.canDownload(level) && (!ready || update))
           Positioned(top: 7, right: 7, child: StudyIconButton(
             tooltip: update ? '更新题库' : '下载题库',
             icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),

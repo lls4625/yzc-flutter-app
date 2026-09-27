@@ -39,7 +39,8 @@ class StudyResources extends ChangeNotifier {
   bool hasInvalidHash(String level) => _invalidRemoteHashes.contains(level.toLowerCase());
   bool canDownload(String level) {
     final id = level.toLowerCase();
-    return _remote.containsKey(id) && !_invalidRemoteHashes.contains(id);
+    final hash = _remote[id]?['sha256'];
+    return hash is String && hash.trim().isNotEmpty && !_invalidRemoteHashes.contains(id);
   }
   String? textbook(String level) {
     final id = level.toLowerCase();
