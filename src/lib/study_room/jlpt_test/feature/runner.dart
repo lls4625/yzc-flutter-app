@@ -11,7 +11,6 @@ import 'repository.dart';
 import 'result.dart';
 
 // This is the test module's own runner, independently maintained.
-const _phaseTitles = ['前部', '中部', '后部'];
 
 enum _FinishAction { cancel, answerMissing, submit }
 
@@ -43,12 +42,16 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
     return true;
   }
   String get _clock => q.clock;
-  int get _nextPosition => a.questions.indexWhere((item) => item.phase > q.phase);
+  int get _sectionIndex => a.sectionIndex(q);
+  int get _nextPosition => a.questions.indexWhere(
+    (item) => a.sectionIndex(item) > _sectionIndex);
   List<int> get _positions => [for (var i = 0; i < a.questions.length; i++)
-    if (a.questions[i].phase == q.phase) i];
+    if (a.questions[i].clock == _clock) i];
 
-  String _phaseDescription(int phase) {
-    final questions = a.questions.where((question) => question.phase == phase);
+  String _sectionDescription(String sectionCode) {
+    final knownName = examSectionNames[sectionCode];
+    if (knownName != null) return knownName;
+    final questions = a.questions.where((question) => question.clock == sectionCode);
     final categories = <String>[];
     if (questions.any((question) => question.type.startsWith('V_'))) categories.add('文字词汇');
     final grammar = questions.any((question) => question.type.startsWith('G_'));
@@ -65,7 +68,8 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
     return questions.map((question) => question.typeName).toSet().take(2).join('、');
   }
 
-  String _phaseLabel(int phase) => '${_phaseTitles[phase]} · ${_phaseDescription(phase)}';
+  String _sectionLabel(String sectionCode) =>
+    '第 ${a.sectionCodes.indexOf(sectionCode) + 1} 部分 · ${_sectionDescription(sectionCode)}';
 
   @override
   void initState() {
@@ -254,26 +258,22 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
     if (_busy) return;
     setState(() => _busy = true);
     final nextPosition = _nextPosition;
-    final nextPhase = nextPosition >= 0;
-    final positions = nextPhase ? _positions : List.generate(a.questions.length, (i) => i);
+    final hasNextSection = nextPosition >= 0;
+    final positions = hasNextSection ? _positions : List.generate(a.questions.length, (i) => i);
     final missing = positions.where((i) => !a.answers.containsKey(a.questions[i].id)).toList();
-    final missingMessage = missing.isEmpty ? '${nextPhase ? '本部分' : '全卷'}题目已全部作答。'
-      : '${nextPhase ? '本部分' : '全卷'}还有 ${missing.length} 题未答。';
-    final confirmed = await _confirm(nextPhase ? '完成本部分' : '提交答案',
-      missingMessage + (nextPhase ? '完成后进入下一部分准备页，计时暂停。' : '提交后生成结果与解析。'),
-      nextPhase ? '进入下一部分' : '提交', hasMissing: missing.isNotEmpty);
+    final missingMessage = missing.isEmpty ? '${hasNextSection ? '本部分' : '全卷'}题目已全部作答。'
+      : '${hasNextSection ? '本部分' : '全卷'}还有 ${missing.length} 题未答。';
+    final confirmed = await _confirm(hasNextSection ? '完成本部分' : '提交答案',
+      missingMessage + (hasNextSection ? '完成后进入下一部分准备页，计时暂停。' : '提交后生成结果与解析。'),
+      hasNextSection ? '进入下一部分' : '提交', hasMissing: missing.isNotEmpty);
     if (!mounted) return;
     if (confirmed == _FinishAction.answerMissing && missing.isNotEmpty) {
       _move(missing.first);
     } else if (confirmed == _FinishAction.submit) {
       _account(); _watch.stop();
-      if (nextPhase) {
-        final phase = q.phase;
-        final completed = a.progress['completed_phases'] as List;
-        if (!completed.contains(phase)) completed.add(phase);
+      if (hasNextSection) {
+        if (!a.completedSections.contains(_clock)) a.completedSections.add(_clock);
         a.position = nextPosition;
-        final furthest = a.progress['furthest_phase'] as int? ?? 0;
-        if (q.phase > furthest) a.progress['furthest_phase'] = q.phase;
         _paused = true;
         await _save();
       } else {
@@ -355,47 +355,46 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
   Widget _ready(BuildContext context) => Center(child: SingleChildScrollView(
     padding: const EdgeInsets.all(28), child: Column(children: [
       const Icon(Icons.menu_book_outlined, size: 56), const SizedBox(height: 20),
-      Text(_phaseLabel(q.phase),
+      Text(_sectionLabel(_clock),
         style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
       const SizedBox(height: 12), Text('本部分 ${_positions.length} 题 · $_timeLabel'),
       const SizedBox(height: 16),
       const Text('准备好后开始计时。暂停、退出或切到后台不计时。超过参考时间可继续作答。', textAlign: TextAlign.center),
-      if (['N1', 'N2'].contains(a.level) && q.phase < 2)
-        const Padding(padding: EdgeInsets.only(top: 12), child: Text('N1 / N2 前部与中部共用语言知识·阅读计时。')),
+      if (['N1', 'N2'].contains(a.level) && _clock == 'language_reading')
+        const Padding(padding: EdgeInsets.only(top: 12), child: Text('本部分包含文字、词汇、语法与阅读，并连续使用同一计时额度。')),
       if (q.listening) const Padding(padding: EdgeInsets.only(top: 12),
         child: Text('听力按题目播放配套音频；未提供音频的题目可查看文字稿。')),
-      const SizedBox(height: 24), _phaseIndicator(context),
+      const SizedBox(height: 24), _sectionIndicator(context),
       const SizedBox(height: 16), StudyButton.filledIcon(onPressed: _busy ? null : () {
         setState(() => _paused = false); _watch.start();
       }, icon: const Icon(Icons.play_arrow), label: const Text('开始 / 继续作答')),
     ]),
   ));
 
-  Widget _phaseIndicator(BuildContext context) {
+  Widget _sectionIndicator(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final phases = [for (var phase = 0; phase < 3; phase++)
-      if (a.questions.any((question) => question.phase == phase)) phase];
-    final completed = (a.progress['completed_phases'] as List? ?? const []);
+    final sections = a.sectionCodes;
+    final completed = a.completedSections;
     return Align(alignment: Alignment.center, child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 620),
       child: LayoutBuilder(builder: (context, bounds) {
         final spacing = bounds.maxWidth < 360 ? 6.0 : 10.0;
-        final cardWidth = (bounds.maxWidth - spacing * (phases.length - 1)) / phases.length;
+        final cardWidth = (bounds.maxWidth - spacing * (sections.length - 1)) / sections.length;
         final scale = (cardWidth / 160).clamp(.68, 1.0).toDouble();
         return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          for (var index = 0; index < phases.length; index++) ...[
+          for (var index = 0; index < sections.length; index++) ...[
             if (index > 0) SizedBox(width: spacing),
             Expanded(child: Builder(builder: (context) {
-              final phase = phases[index];
-              final current = phase == q.phase;
-              final done = !current && completed.contains(phase);
+              final sectionCode = sections[index];
+              final current = sectionCode == _clock;
+              final done = !current && completed.contains(sectionCode);
               final foreground = current ? scheme.primary : scheme.onSurfaceVariant;
               final icon = current
                 ? Icons.menu_book_rounded
                 : done ? Icons.check_circle_outline_rounded : Icons.lock_outline_rounded;
               return Semantics(
                 selected: current,
-                label: '${_phaseTitles[phase]}阶段，${_phaseDescription(phase)}，${current ? '当前阶段' : done ? '已完成' : '尚未开放'}',
+                label: '第 ${index + 1} 部分，${_sectionDescription(sectionCode)}，${current ? '当前阶段' : done ? '已完成' : '尚未开放'}',
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
@@ -421,7 +420,7 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
                           color: current ? scheme.primary : foreground.withValues(alpha: .68)),
                       ),
                       SizedBox(height: 7 * scale),
-                      Text(_phaseTitles[phase], maxLines: 1, overflow: TextOverflow.ellipsis,
+                      Text('第 ${index + 1} 部分', maxLines: 1, overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: foreground,
@@ -429,7 +428,7 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
                           fontWeight: current ? FontWeight.w700 : FontWeight.w600,
                         )),
                       SizedBox(height: 2 * scale),
-                      Text(_phaseDescription(phase), maxLines: 1, overflow: TextOverflow.ellipsis,
+                      Text(_sectionDescription(sectionCode), maxLines: 1, overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: foreground.withValues(alpha: current ? .82 : .62),
@@ -452,7 +451,7 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
     final answered = positions.where((i) => a.answers.containsKey(a.questions[i].id)).length;
     return Column(children: [
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Row(children: [Expanded(child: Text(_phaseLabel(q.phase))), Text(_timeLabel)])),
+        child: Row(children: [Expanded(child: Text(_sectionLabel(_clock))), Text(_timeLabel)])),
       LinearProgressIndicator(value: answered / positions.length),
       Padding(padding: const EdgeInsets.fromLTRB(12, 12, 8, 4), child: Row(children: [
         Expanded(child: Text('第 ${a.position + 1} 题 · 本部分已答 $answered/${positions.length}')),

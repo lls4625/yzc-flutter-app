@@ -64,10 +64,14 @@ class _JlptTestPageState extends State<JlptTestPage> {
   }
 
   List<Question> _questions(Json paper) {
+    final parts = (paper['parts'] as List).cast<Json>();
+    final partOrder = {for (var i = 0; i < parts.length; i++) parts[i]['code']: i};
     final allocation = (paper['type_allocation'] as List).cast<Json>();
     final order = {for (var i = 0; i < allocation.length; i++) allocation[i]['type_code']: i};
     final questions = (paper['questions'] as List).cast<Json>().map(Question.new).toList();
     questions.sort((a, b) {
+      final part = partOrder[a.clock]!.compareTo(partOrder[b.clock]!);
+      if (part != 0) return part;
       final type = order[a.type]!.compareTo(order[b.type]!);
       return type != 0 ? type : (a.data['paper_position'] as int).compareTo(b.data['paper_position'] as int);
     });
@@ -258,6 +262,7 @@ class _JlptTestPageState extends State<JlptTestPage> {
     final paper = _bank!.papers[_paper];
     final questions = _questions(paper);
     final parts = (paper['parts'] as List).cast<Json>();
+    final sectionCodes = orderedExamSectionCodes(parts, questions);
     final totalSeconds = parts.fold<int>(0, (sum, p) => sum + (p['recommended_seconds'] as int));
     return ListView(padding: const EdgeInsets.all(20), children: [
       _mistakesButton(),
@@ -324,29 +329,27 @@ class _JlptTestPageState extends State<JlptTestPage> {
       Text('考试介绍', style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700)),
       const SizedBox(height: 4),
-      Text('按前部 → 中部 → 后部顺序完成',
+      Text('按${sectionCodes.map(examSectionName).join(' → ')}顺序完成',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
       const SizedBox(height: 12),
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.schedule_rounded, size: 16, color: scheme.primary),
         const SizedBox(width: 6),
         Expanded(child: Text(
-          ['N1', 'N2'].contains(_level)
-            ? '前部与中部${_duration(parts, questions, 0).replaceFirst('前中共用', '共用')} · 后部${_duration(parts, questions, 2)}'
-            : [for (var phase = 0; phase < 3; phase++)
-                '${['前部', '中部', '后部'][phase]}${_duration(parts, questions, phase)}'].join(' · '),
+          [for (final code in sectionCodes)
+            '${examSectionName(code)}：${_duration(parts, code)}'].join(' · '),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         )),
       ]),
       const SizedBox(height: 12),
-      for (var phase = 0; phase < 3; phase++) ...[
-        if (phase > 0) const SizedBox(height: 10),
-        _phaseIntroduction(paper, questions, phase),
+      for (var sectionIndex = 0; sectionIndex < sectionCodes.length; sectionIndex++) ...[
+        if (sectionIndex > 0) const SizedBox(height: 10),
+        _sectionIntroduction(paper, questions, sectionCodes[sectionIndex], sectionIndex),
       ],
       const SizedBox(height: 16),
       Text(['N1', 'N2'].contains(_level)
-        ? 'N1 / N2 正式考试非听力部分共用计时；这里分前、中两页顺序作答，共用同一计时额度。'
-        : '前、中、后三部分分别计时。每部分完成后进入下一部分准备页。'),
+        ? 'N1 / N2 的语言知识与阅读连续作答并共用一个计时额度，完成后进入听力。'
+        : '三个部分分别计时。每部分完成后进入下一部分准备页。'),
       const SizedBox(height: 8),
       const Text('可暂停、退出续做；超时不会自动交卷。交卷前提示未答题，提交后查看解析和分项表现。'),
       const SizedBox(height: 8),
@@ -358,12 +361,13 @@ class _JlptTestPageState extends State<JlptTestPage> {
     ]);
   }
 
-  Widget _phaseIntroduction(Json paper, List<Question> questions, int phase) {
+  Widget _sectionIntroduction(Json paper, List<Question> questions,
+      String sectionCode, int sectionIndex) {
     final scheme = Theme.of(context).colorScheme;
     final styles = Theme.of(context).textTheme;
-    final phaseQuestions = questions.where((q) => q.phase == phase).toList();
+    final sectionQuestions = questions.where((q) => q.clock == sectionCode).toList();
     final allocations = (paper['type_allocation'] as List).cast<Json>()
-      .where((allocation) => phaseQuestions.any((q) => q.type == allocation['type_code']))
+      .where((allocation) => sectionQuestions.any((q) => q.type == allocation['type_code']))
       .toList();
     String name(Json allocation) =>
       typeNames[allocation['type_code']] ?? allocation['name_ja'].toString();
@@ -388,19 +392,19 @@ class _JlptTestPageState extends State<JlptTestPage> {
                 color: scheme.primary.withValues(alpha: .08),
                 borderRadius: BorderRadius.circular(7),
               ),
-              child: Text('0${phase + 1}', style: styles.labelMedium?.copyWith(
+              child: Text((sectionIndex + 1).toString().padLeft(2, '0'), style: styles.labelMedium?.copyWith(
                 color: scheme.primary, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 10),
-            Expanded(child: Text('${['前部', '中部', '后部'][phase]} · ${['文字与词汇', '语法与阅读', '听力适配'][phase]}',
+            Expanded(child: Text(examSectionName(sectionCode),
               style: styles.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
             const SizedBox(width: 8),
-            Text('${phaseQuestions.length} 题', style: styles.bodyMedium),
+            Text('${sectionQuestions.length} 题', style: styles.bodyMedium),
           ]),
           const SizedBox(height: 8),
           Text(summary, style: styles.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
           ExpansionTile(
-            key: ValueKey('$_level-$_paper-$phase'),
+            key: ValueKey('$_level-$_paper-$sectionCode'),
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(bottom: 10),
             initiallyExpanded: false,
@@ -454,12 +458,9 @@ class _JlptTestPageState extends State<JlptTestPage> {
     );
   }
 
-  String _duration(List<Json> parts, List<Question> questions, int phase) {
-    final phaseQuestions = questions.where((q) => q.phase == phase);
-    if (phaseQuestions.isEmpty) return '暂无题目';
-    final clock = phaseQuestions.first.clock;
-    final seconds = parts.firstWhere((part) => part['code'] == clock)['recommended_seconds'] as int;
-    return '${['N1', 'N2'].contains(_level) && phase < 2 ? '前中共用' : '参考'} ${seconds ~/ 60} 分钟';
+  String _duration(List<Json> parts, String sectionCode) {
+    final seconds = parts.firstWhere((part) => part['code'] == sectionCode)['recommended_seconds'] as int;
+    return '参考 ${seconds ~/ 60} 分钟';
   }
 
   @override

@@ -113,6 +113,18 @@ Future<StudyJson> readStudyBank(DatabaseExecutor db, String level,
         throw const FormatException('试卷计时信息无效');
       }
     }
+    final partCodes = [for (final part in parts) (part as Map)['code'] as String];
+    final expectedPartCodes = ['N1', 'N2'].contains(p['level'])
+        ? const ['language_reading', 'listening']
+        : const ['vocabulary', 'grammar_reading', 'listening'];
+    if (partCodes.length != expectedPartCodes.length ||
+        partCodes.toSet().length != partCodes.length ||
+        [for (var i = 0; i < partCodes.length; i++) partCodes[i] == expectedPartCodes[i]].contains(false)) {
+      throw const FormatException('试卷考试部分与等级不一致');
+    }
+    if (partCodes.any((code) => !questions.any((q) => q['exam_section_code'] == code))) {
+      throw const FormatException('试卷考试部分没有题目');
+    }
     for (final a in allocation) {
       if (a is! Map || !studyTypes.contains(a['type_code'])) throw const FormatException('试卷题型无效');
     }
@@ -126,6 +138,12 @@ Future<StudyJson> readStudyBank(DatabaseExecutor db, String level,
           !allocation.any((a) => a['type_code'] == q['type_code'])) {
         throw const FormatException('试卷分段或题型关联不完整');
       }
+    }
+    var previousPartIndex = 0;
+    for (final q in questions) {
+      final partIndex = partCodes.indexOf(q['exam_section_code'] as String);
+      if (partIndex < previousPartIndex) throw const FormatException('试卷考试部分顺序无效');
+      previousPartIndex = partIndex;
     }
     result.add({...p, 'parts': parts, 'type_allocation': allocation,
       'score_policy': score, 'questions': questions});
