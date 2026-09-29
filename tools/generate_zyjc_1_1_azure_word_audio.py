@@ -23,7 +23,7 @@ REGION = "japaneast"
 ENDPOINT = f"https://{REGION}.tts.speech.microsoft.com/cognitiveservices/v1"
 OUTPUT_FORMAT = "audio-24khz-96kbitrate-mono-mp3"
 FEMALE_VOICE = "ja-JP-NanamiNeural"
-MALE_VOICE = "ja-JP-KeitaNeural"
+MALE_VOICE = "ja-JP-NaokiNeural"
 
 
 @dataclass(frozen=True)
