@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'image_interaction_config.dart';
 import 'video_controller.dart';
 
 class CourseImageCard extends StatefulWidget {
@@ -44,6 +46,133 @@ class _CourseImageCardState extends State<CourseImageCard> {
           ? const Center(child: CircularProgressIndicator())
           : Image.file(File(data.$1), fit: BoxFit.contain, semanticLabel: widget.label,
               errorBuilder: (_, error, stack) => failure()));
+    },
+  ));
+}
+
+class CourseInteractiveImageCard extends StatefulWidget {
+  const CourseInteractiveImageCard({super.key, required this.source, required this.resolvePath, required this.label,
+    required this.mediaConfig, required this.onActivate, required this.interactionEnabled});
+  final String source, label, mediaConfig;
+  final Future<String> Function() resolvePath;
+  final Future<void> Function(CourseImageHotspot hotspot) onActivate;
+  final bool interactionEnabled;
+  @override
+  State<CourseInteractiveImageCard> createState() => _CourseInteractiveImageCardState();
+}
+
+class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard> {
+  late Future<(String, double)> _image = _load();
+  late CourseImageInteractionConfig? _config = _parseConfig();
+  String? _selected;
+  int _activation = 0;
+
+  CourseImageInteractionConfig? _parseConfig() {
+    try { return CourseImageInteractionConfig.parse(widget.mediaConfig); }
+    on FormatException { return null; }
+  }
+
+  Future<(String, double)> _load() async {
+    final path = await widget.resolvePath();
+    final codec = await ui.instantiateImageCodec(await File(path).readAsBytes(), targetWidth: 64);
+    try {
+      final frame = await codec.getNextFrame();
+      final ratio = frame.image.width / frame.image.height;
+      frame.image.dispose();
+      return (path, ratio);
+    } finally { codec.dispose(); }
+  }
+  @override
+  void didUpdateWidget(CourseInteractiveImageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.source != oldWidget.source) _image = _load();
+    if (widget.mediaConfig != oldWidget.mediaConfig) {
+      _config = _parseConfig();
+      _selected = null;
+    }
+  }
+
+  Color _color(String value) => Color(int.parse(value.substring(1), radix: 16) | 0xFF000000);
+
+  void _activate(CourseImageHotspot hotspot) {
+    setState(() { _selected = hotspot.id; _activation++; });
+    if (widget.interactionEnabled) unawaited(widget.onActivate(hotspot));
+  }
+
+  Widget _interactiveImage(String path, double ratio) => AspectRatio(
+    aspectRatio: ratio,
+    child: LayoutBuilder(builder: (context, constraints) => Stack(fit: StackFit.expand, children: [
+      Image.file(File(path), fit: BoxFit.contain, semanticLabel: widget.label),
+      for (final hotspot in _config!.hotspots) _hotspot(hotspot, constraints),
+    ])),
+  );
+
+  Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints) {
+    final selected = _selected == hotspot.id;
+    final bounds = hotspot.bounds;
+    final color = _color(hotspot.color);
+    return Positioned(
+      left: constraints.maxWidth * bounds.x,
+      top: constraints.maxHeight * bounds.y,
+      width: constraints.maxWidth * bounds.width,
+      height: constraints.maxHeight * bounds.height,
+      child: Semantics(
+        button: true,
+        enabled: widget.interactionEnabled,
+        selected: selected,
+        label: '${hotspot.semanticLabel}，点击播放读音',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _activate(hotspot),
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey('${hotspot.id}:$selected:$_activation'),
+            tween: Tween(begin: 0, end: selected ? 1 : 0),
+            duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero : const Duration(milliseconds: 520),
+            curve: Curves.easeOut,
+            builder: (context, progress, child) => Transform.scale(
+              scale: selected ? 1 + math.sin(progress * math.pi) * .025 : 1,
+              child: AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero : const Duration(milliseconds: 180),
+                decoration: BoxDecoration(
+                  color: selected ? color.withValues(alpha: .10) : Colors.transparent,
+                  border: Border.all(color: selected ? color : Colors.transparent, width: 3),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: selected
+                    ? [BoxShadow(color: color.withValues(alpha: .35), blurRadius: 12, spreadRadius: 2)]
+                    : const [],
+                ),
+                child: selected ? Align(alignment: Alignment.topLeft, child: Container(
+                  margin: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(color: color.withValues(alpha: .92), borderRadius: BorderRadius.circular(6)),
+                  child: Text(hotspot.label, style: const TextStyle(color: Colors.white, fontSize: 12,
+                    fontWeight: FontWeight.w700, height: 1.2)),
+                )) : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => _MediaCard(child: FutureBuilder<(String, double)>(
+    future: _image,
+    builder: (context, snapshot) {
+      Widget failure() => Padding(padding: const EdgeInsets.all(20), child: Column(children: [
+        const Text('插图暂时无法显示'),
+        TextButton(onPressed: () => setState(() => _image = _load()), child: const Text('重试')),
+      ]));
+      if (snapshot.hasError) return failure();
+      final data = snapshot.data;
+      return AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
+          ? const Center(child: CircularProgressIndicator())
+          : _config == null
+            ? const Center(child: Text('互动插图配置无效'))
+            : _interactiveImage(data.$1, data.$2));
     },
   ));
 }

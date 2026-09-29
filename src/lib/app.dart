@@ -22,6 +22,7 @@ import 'notice/feature/notice_service.dart';
 import 'notice/feature/notice_ui.dart';
 import 'developer_tip/feature/developer_tip.dart';
 import 'basic_knowledge/feature/basic_knowledge.dart';
+import 'course/feature/image_interaction_config.dart';
 import 'course/feature/video_controller.dart';
 import 'course/feature/media_widgets.dart';
 
@@ -1314,6 +1315,28 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, Ro
         if (mounted) setState(() { _batchStartId = startId; batchMode = false; });
       });
   }
+  Future<void> _playInteractiveImageAudio(RowData row, CourseImageHotspot hotspot) async {
+    if (_playbackLocked || widget.app.resources.unavailable.contains(bookId) || widget.app.resources.activeBook == bookId) return;
+    await _runPlaybackAction(() async {
+      await _video.stop();
+      if (playback.active) await playback.stop();
+      final path = await widget.app.resources.audioPath(bookId, hotspot.audioSource);
+      if (!mounted || widget.app.resources.unavailable.contains(bookId)) return;
+      await playback.start({
+        'lesson': identity,
+        'title': hotspot.label,
+        'words': false,
+        'batch': false,
+        'speed': widget.app.speed,
+        'repeat': 1,
+        'intervalSteps': 0,
+        'startIndex': 0,
+        'clips': [
+          {'id': 'interactive_image:${row['id']}:${hotspot.id}', 'path': path},
+        ],
+      });
+    });
+  }
   Future<void> _load() async {
     try {
       final lesson = await widget.app.store.db.query('yzc_lessons', where: 'id=? AND textbook_id=?', whereArgs: [widget.lesson['id'], bookId]);
@@ -1811,6 +1834,19 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, Ro
           widgets.add(CourseImageCard(key: ValueKey('image:${row['id']}:${textOf(row, 'media_src')}'),
             source: textOf(row, 'media_src'), label: category == '05' ? '对话插图' : '课文插图',
             resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'image')));
+          continue;
+        }
+        if (mediaType == 'interactive_image') {
+          widgets.add(CourseInteractiveImageCard(
+            key: ValueKey('interactive_image:${row['id']}:${textOf(row, 'media_src')}'),
+            source: textOf(row, 'media_src'),
+            label: category == '05' ? '互动对话插图' : '互动课文插图',
+            mediaConfig: textOf(row, 'media_config'),
+            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'interactive_image'),
+            onActivate: (hotspot) => _playInteractiveImageAudio(row, hotspot),
+            interactionEnabled: !_playbackLocked && !widget.app.resources.unavailable.contains(bookId) &&
+              widget.app.resources.activeBook != bookId,
+          ));
           continue;
         }
         if (mediaType == 'video') {
