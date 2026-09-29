@@ -40,14 +40,10 @@ class _CourseImageCardState extends State<CourseImageCard> {
       ]));
       if (snapshot.hasError) return failure();
       final data = snapshot.data;
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
+      return AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
           ? const Center(child: CircularProgressIndicator())
           : Image.file(File(data.$1), fit: BoxFit.contain, semanticLabel: widget.label,
-              errorBuilder: (_, error, stack) => failure())),
-        Padding(padding: const EdgeInsets.all(12), child: Text(widget.label,
-          style: Theme.of(context).textTheme.bodySmall)),
-      ]);
+              errorBuilder: (_, error, stack) => failure()));
     },
   ));
 }
@@ -74,19 +70,17 @@ class CourseVideoCard extends StatelessWidget {
     builder: (context, _) {
       final selected = controller.rowId == id && controller.hasMedia;
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (selected)
-          AspectRatio(aspectRatio: controller.aspectRatio.clamp(.6, 2.0).toDouble(),
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: selected
+          ? AspectRatio(aspectRatio: controller.aspectRatio.clamp(.6, 2.0).toDouble(),
             child: CourseVideoSurface(controller: controller, onRetry: onPlay,
               onFullscreen: () => openCourseVideoFullscreen(context, controller)))
-        else
-          AspectRatio(aspectRatio: 16 / 9, child: ColoredBox(color: Colors.black87,
+          : AspectRatio(aspectRatio: 16 / 9, child: ColoredBox(color: Colors.black87,
             child: Center(child: TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: Colors.white),
               onPressed: enabled && !controller.busy ? onPlay : null,
               icon: const Icon(Icons.play_circle_fill, size: 44),
               label: Text(controller.busy ? '准备中' : '点击播放'),
-            )))),
-        const Padding(padding: EdgeInsets.all(12), child: Text('课程视频')),
+            ))))),
         if (!selected && controller.error != null)
           Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Text(controller.error!)),
       ]);
