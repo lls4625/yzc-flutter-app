@@ -198,12 +198,15 @@ class Resources extends ChangeNotifier {
       operationId = await _beginOperation(id, 'delete');
       await _recoverBook(id);
       final installed = await installation(id);
-      if (installed == null || installed['status'] != 'ready') throw StateError('内容未安装或状态异常');
-      final folder = textOf(installed, 'folder');
-      safeName(folder);
-      await store.write(() => store.db.update('yzc_resource_operation', {
-        'folder': folder, 'update_time': nowMs(),
-      }, where: 'id=?', whereArgs: [operationId]));
+      final descriptors = await store.db.query('yzc_resource',
+        columns: ['folder'], where: 'textbook_id=?', whereArgs: [id], limit: 1);
+      final folder = textOf(installed ?? (descriptors.isEmpty ? const <String, Object?>{} : descriptors.single), 'folder');
+      if (folder.isNotEmpty) {
+        safeName(folder);
+        await store.write(() => store.db.update('yzc_resource_operation', {
+          'folder': folder, 'update_time': nowMs(),
+        }, where: 'id=?', whereArgs: [operationId]));
+      }
       unavailable.add(id);
       blockedHere = true;
       await playback.blockBook(id);
@@ -241,9 +244,11 @@ class Resources extends ChangeNotifier {
 
   Future<void> _finishDelete(RowData operation) async {
     final id = textOf(operation, 'textbook_id'), folder = textOf(operation, 'folder');
-    safeName(folder);
-    final directory = Directory('${store.root.path}/resources/$folder');
-    if (await directory.exists()) await directory.delete(recursive: true);
+    if (folder.isNotEmpty) {
+      safeName(folder);
+      final directory = Directory('${store.root.path}/resources/$folder');
+      if (await directory.exists()) await directory.delete(recursive: true);
+    }
     await store.write(() => store.db.update('yzc_resource_operation', {
       'status': 'success', 'phase': 'done', 'error': null,
       'update_time': nowMs(), 'finish_time': nowMs(),

@@ -28,14 +28,31 @@ class StudyResources extends ChangeNotifier {
   Set<String> _invalidRemoteHashes = {};
   final Map<String, String> _installedDates = {};
   final Set<String> _available = {}, _cleanup = {};
+  bool hasPublishedCatalog = false;
   Future<void>? _checking;
   Map<String, int> questionCounts = {};
   final Map<String, ({int audio, int images})> attachmentCounts = {};
   String infoError = '';
   bool get ready => _available.isNotEmpty;
-  List<String> get publishedLevels => _remote.keys.toList(growable: false);
+  bool hasLocalData(String level) {
+    final id = level.toLowerCase();
+    return _installed.containsKey(id) || _available.contains(id) ||
+        _cleanup.contains(id) || questionCounts.containsKey(id.toUpperCase());
+  }
+  List<String> get visibleLevels {
+    final remote = hasPublishedCatalog
+        ? _remote.keys.toList(growable: false)
+        : <String>[];
+    final remoteIds = remote.toSet();
+    return <String>[
+      ...remote,
+      for (final level in levels)
+        if (hasLocalData(level) && !remoteIds.contains(level)) level,
+    ];
+  }
   bool get hasUpdate => levels.any(hasLevelUpdate);
   bool isReady(String level) => _available.contains(level.toLowerCase());
+  bool isPublished(String level) => hasPublishedCatalog && _remote.containsKey(level.toLowerCase());
   bool hasInvalidHash(String level) => _invalidRemoteHashes.contains(level.toLowerCase());
   bool canDownload(String level) {
     final id = level.toLowerCase();
@@ -58,6 +75,7 @@ class StudyResources extends ChangeNotifier {
     if (!errorNeedsRecheck) return;
     _remote = {};
     _invalidRemoteHashes = {};
+    hasPublishedCatalog = false;
     try {
       final status = await const MethodChannel('yuzhichu/device')
           .invokeMapMethod<String, Object?>('networkStatus')
@@ -310,9 +328,7 @@ class StudyResources extends ChangeNotifier {
         if (bytes.length > 1024 * 1024) throw const FormatException('自习资源目录过大');
       }
       final text = utf8.decode(bytes);
-      if (_catalogDescriptors(text).rows.length != levels.length) {
-        throw const FormatException('自习资源目录必须包含 n1～n5 五个级别');
-      }
+      _catalogDescriptors(text);
       return text;
     } finally { client.close(force: true); }
   }
@@ -325,6 +341,7 @@ class StudyResources extends ChangeNotifier {
     checking = true; error = ''; permissionError = false; errorNeedsRecheck = false;
     _remote = {};
     _invalidRemoteHashes = {};
+    hasPublishedCatalog = false;
     notifyListeners();
     try {
       await _restoreReceipts();
@@ -332,11 +349,18 @@ class StudyResources extends ChangeNotifier {
       final catalog = _catalogDescriptors(await _fetchManifest());
       _remote = catalog.rows;
       _invalidRemoteHashes = catalog.invalidHashes;
+      hasPublishedCatalog = true;
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'selfstudy', operation: '检查资源更新', context: {'base_url': StudyResourceConfig.baseUrl});
-      error = ready ? '暂时无法检查更新，已下载资源仍可使用。' : '无法获取自习资源，请检查网络后重试。';
+      final hasLocal = levels.any(hasLocalData);
+      error = ready
+          ? '暂时无法检查更新，已下载资源仍可使用。'
+          : hasLocal
+              ? '暂时无法检查更新，本地资源仍可管理。'
+              : '无法获取自习资源，请检查网络后重试。';
       _remote = {};
       _invalidRemoteHashes = {};
+      hasPublishedCatalog = false;
       await _networkFailure(e);
       errorNeedsRecheck = true;
     } finally { checking = false; notifyListeners(); }
@@ -368,11 +392,13 @@ class StudyResources extends ChangeNotifier {
       final catalog = _catalogDescriptors(manifest);
       _remote = catalog.rows;
       _invalidRemoteHashes = catalog.invalidHashes;
+      hasPublishedCatalog = true;
       if (_invalidRemoteHashes.contains(level)) {
         _report('资源信息校验失败', 1);
         return;
       }
-      final descriptor = _remote[level]!;
+      final descriptor = _remote[level];
+      if (descriptor == null) throw StateError('${level.toUpperCase()} 资源已从服务器移除');
       final catalogHash = descriptor['sha256'];
       diagnostics['catalog_sha256'] = catalogHash;
       if (isReady(level) && (catalogHash == null || catalogHash == _installed[level]?['sha256'])) {

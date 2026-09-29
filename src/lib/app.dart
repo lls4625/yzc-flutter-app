@@ -842,13 +842,11 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     final localById = {for (final row in rows) textOf(row, 'id'): row};
     final published = widget.app.resources.publishedTextbooks;
     final publishedIds = {for (final row in published) textOf(row, 'id')};
-    final combined = widget.app.resources.hasPublishedCatalog
-        ? <RowData>[
-            ...published,
-            for (final row in rows)
-              if (!publishedIds.contains(textOf(row, 'id'))) row,
-          ]
-        : <RowData>[];
+    final combined = <RowData>[
+      if (widget.app.resources.hasPublishedCatalog) ...published,
+      for (final row in rows)
+        if (!publishedIds.contains(textOf(row, 'id'))) row,
+    ];
     final installs = await widget.app.resources.installations();
     final counts = await widget.app.store.db.rawQuery('SELECT textbook_id,COUNT(*) count FROM yzc_lessons GROUP BY textbook_id');
     if (mounted && (checkRevision == null || _checkCurrent(checkRevision))) setState(() {
@@ -997,6 +995,21 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     final missing = !ready;
     final disabled = _operationBusy;
     final canDownload = _canDownload(book);
+    final removable = localBooks.containsKey(id) || installed.containsKey(id);
+    final String statusText;
+    if (localOnly) {
+      statusText = ready
+          ? '本地数据，服务器已删除，可离线使用'
+          : '本地资源异常，服务器已删除，可删除本地数据';
+    } else if (ready) {
+      statusText = '可离线使用';
+    } else if (installed[id]?['status'] == 'broken') {
+      statusText = resource.hasPublishedCatalog && remote != null
+          ? '音频缺失或资源需修复，请重新下载'
+          : '本地资源异常，可删除本地数据';
+    } else {
+      statusText = '选择后下载';
+    }
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: StudyCard(child: StudyInkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: disabled || (!ready && !(missing && canDownload && !fetching)) ? null : () => _select(id),
@@ -1026,9 +1039,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
               Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
                 resource.activeBook == id
                   ? '${switch (resource.stage) { 'catalog' => '获取内容信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
-                  : localOnly
-                    ? '本地数据，服务器已删除，请自行处理本地数据'
-                    : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}${ready ? '可离线使用' : installed[id]?['status'] == 'broken' ? '音频缺失或资源需修复，请重新下载' : '选择后下载'}',
+                  : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}$statusText',
                 style: Theme.of(context).textTheme.labelMedium,
               ))]),
             ],
@@ -1059,7 +1070,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
           color: Theme.of(context).colorScheme.primary,
           onPressed: canDownload ? () => _download(id) : null,
         )),
-        if (ready) Positioned(bottom: 7, right: 7, child: StudyIconButton(
+        if (removable) Positioned(bottom: 7, right: 7, child: StudyIconButton(
           tooltip: '删除本地内容',
           icon: const Icon(Icons.delete_outline),
           color: Theme.of(context).colorScheme.error,

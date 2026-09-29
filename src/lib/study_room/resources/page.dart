@@ -139,7 +139,9 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
     final update = resources.hasLevelUpdate(level);
     final invalidHash = resources.hasInvalidHash(level);
     final operating = resources.busy && resources.activeLevel == level;
-    final removable = ready || resources.installedAt(level) != null || resources.needsCleanup(level);
+    final removable = resources.hasLocalData(level);
+    final canDownload = resources.canDownload(level);
+    final localOnly = resources.hasPublishedCatalog && !resources.isPublished(level) && removable;
     final counts = resources.attachmentCounts[level];
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: StudyCard(
       child: Stack(children: [
@@ -159,7 +161,12 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
                   const SizedBox(height: 6),
                   Text(operating ? '${resources.message}${resources.progress == null ? '' : ' ${(resources.progress! * 100).round()}%'}'
                     : resources.checking ? '检查更新中'
-                    : !ready ? (resources.installedAt(level) != null ? '资源缺失，请重新下载' : '未下载')
+                    : !ready ? (removable
+                        ? (localOnly
+                            ? '本地资源异常，服务器已移除，可删除本地数据'
+                            : canDownload ? '本地资源异常，可重新下载或删除' : '本地资源异常，可删除本地数据')
+                        : '未下载')
+                    : localOnly ? '本地资源，服务器已移除 · 可离线使用'
                     : update ? '有可用更新' : '已下载 · 可离线使用',
                     style: TextStyle(color: colors.primary)),
                 ],
@@ -204,12 +211,12 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
             ))),
           ),
         )),
-        if (!operating && !invalidHash && !_resourceBusy && resources.canDownload(level) && (!ready || update))
+        if (!operating && !invalidHash && !_resourceBusy && canDownload && (!ready || update))
           Positioned(top: 7, right: 7, child: StudyIconButton(
             tooltip: update ? '更新题库' : '下载题库',
             icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
             color: colors.primary,
-            onPressed: resources.canDownload(level) ? () => _install(level) : null,
+            onPressed: canDownload ? () => _install(level) : null,
           )),
         if (removable) Positioned(bottom: 7, right: 7, child: StudyIconButton(
           tooltip: '删除本地题库', icon: const Icon(Icons.delete_outline), color: colors.error,
@@ -223,6 +230,7 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
   Widget build(BuildContext context) {
     final resources = widget.host.resources;
     return AnimatedBuilder(animation: resources, builder: (context, _) {
+      final visibleLevels = resources.visibleLevels;
       return PopScope(
         canPop: !_operationBusy,
         onPopInvokedWithResult: (didPop, result) {
@@ -255,7 +263,10 @@ class _StudyResourcePageState extends State<StudyResourcePage> with WidgetsBindi
                     child: Text(resources.errorNeedsRecheck || resources.infoError.isNotEmpty ? '重新检查' : '关闭')),
                 ])),
               )),
-            for (final level in resources.publishedLevels) _levelCard(level, resources),
+            if (!resources.checking && visibleLevels.isEmpty &&
+                resources.error.isEmpty && resources.infoError.isEmpty)
+              const Padding(padding: EdgeInsets.all(24), child: Text('暂无自习资源目录，可刷新获取。')),
+            for (final level in visibleLevels) _levelCard(level, resources),
             const SizedBox(height: 14),
             const Text('按需下载 N1～N5 题库，J练习与J测试共用对应级别资源。更新或删除仅影响该级别，保留作答历史和错题记录。'),
           ])),
