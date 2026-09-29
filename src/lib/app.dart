@@ -1076,7 +1076,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _operationBusy && !_leaving) showResourceWait(context, _operationLabel);
       },
-      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('选择内容'),
+      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('内容资源'),
         leading: StudyIconButton(tooltip: '返回', onPressed: _back,
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20)),
         actions: [StudyIconButton(tooltip: _operationBusy ? '正在$_operationLabel' : fetching ? '正在检查内容' : '刷新内容',
