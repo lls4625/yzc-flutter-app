@@ -22,12 +22,15 @@ import 'notice/feature/notice_service.dart';
 import 'notice/feature/notice_ui.dart';
 import 'developer_tip/feature/developer_tip.dart';
 import 'basic_knowledge/feature/basic_knowledge.dart';
+import 'course/feature/video_controller.dart';
+import 'course/feature/media_widgets.dart';
 
 import 'study_room/study_room_module.dart';
 import 'study_room/resources/manager.dart';
 import 'study_room/resources/page.dart';
 
 final reviewRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+final courseRouteObserver = RouteObserver<PageRoute<dynamic>>();
 
 class AppController extends ChangeNotifier {
   AppController(this.store, this.resources);
@@ -143,7 +146,7 @@ class StudyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: app, builder: (_, __) => MaterialApp(
     title: '语之初', debugShowCheckedModeBanner: false,
-    navigatorObservers: [reviewRouteObserver],
+    navigatorObservers: [reviewRouteObserver, courseRouteObserver],
     theme: studyTheme(Brightness.light),
     darkTheme: studyTheme(Brightness.dark),
     themeMode: switch (textOf(app.settings, 'theme')) { 'light' => ThemeMode.light, 'dark' => ThemeMode.dark, _ => ThemeMode.system },
@@ -1206,8 +1209,15 @@ class LessonPage extends StatefulWidget {
   @override
   State<LessonPage> createState() => _LessonPageState();
 }
-class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
+class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, RouteAware {
+  PageRoute<dynamic>? _courseRoute;
   final playback = IosLessonPlayback.instance;
+  final _video = CourseVideoController();
+  final _lessonScroll = ScrollController();
+  final _mediaViewport = GlobalKey();
+  final _videoAnchors = <String, GlobalKey>{};
+  bool _showVideoBar = false, _visibilityScheduled = false;
+  String _videoUiState = '';
   final anchors = <String, GlobalKey>{};
   List<List<RowData>> rows = [[], [], [], []];
   Set<String> completedTabs = {};
@@ -1229,11 +1239,69 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState(); WidgetsBinding.instance.addObserver(this);
+    _video.addListener(_videoChanged);
+    _lessonScroll.addListener(_scheduleVideoVisibility);
     playback.addListener(_playChanged); widget.app.addListener(_settingsChanged); widget.app.resources.addListener(_resourceChanged);
     if (owns && playback.active) { tab = playback.words ? 0 : 1; batchMode = playback.batch; }
     unawaited(_load());
     unawaited(perform(context, playback.refresh));
     unawaited(perform(context, () async { await widget.app.store.remember(widget.book, widget.lesson); await widget.app.reload(); }));
+  }
+  void _videoChanged() {
+    if (!mounted) return;
+    final state = '${_video.rowId}:${_video.status}:${_video.fullscreen}:${_video.busy}';
+    if (_videoUiState != state) setState(() => _videoUiState = state);
+    _scheduleVideoVisibility();
+  }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _courseRoute) {
+      courseRouteObserver.unsubscribe(this);
+      _courseRoute = route;
+      courseRouteObserver.subscribe(this, route);
+    }
+  }
+  @override
+  void didPushNext() {
+    if (!_video.fullscreen) unawaited(perform(context, _video.stop));
+  }
+  @override
+  void didPop() { unawaited(perform(context, _video.stop)); }
+  void _scheduleVideoVisibility() {
+    if (!mounted || _visibilityScheduled) return;
+    _visibilityScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _visibilityScheduled = false;
+      if (!mounted) return;
+      var show = false;
+      if (tab == 1 && _video.active && !_video.fullscreen) {
+        final card = _videoAnchors[_video.rowId]?.currentContext?.findRenderObject();
+        final viewport = _mediaViewport.currentContext?.findRenderObject();
+        if (card is RenderBox && viewport is RenderBox && card.hasSize && viewport.hasSize) {
+          final top = card.localToGlobal(Offset.zero).dy;
+          final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+          show = top + card.size.height <= viewportTop || top >= viewportTop + viewport.size.height;
+        }
+      }
+      if (show != _showVideoBar) setState(() => _showVideoBar = show);
+    });
+  }
+  void _locateVideo() {
+    final target = _videoAnchors[_video.rowId]?.currentContext;
+    if (target != null) unawaited(Scrollable.ensureVisible(target,
+      duration: const Duration(milliseconds: 250), alignment: .2));
+  }
+  Future<void> _startVideo(RowData row) async {
+    if (_playbackLocked || widget.app.resources.unavailable.contains(bookId) || widget.app.resources.activeBook == bookId) return;
+    await _video.play(id: textOf(row, 'id'), book: bookId,
+      resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'video'),
+      beforePlay: () async {
+        final startId = owns ? playback.playingId ?? playback.queuedId : _batchStartId;
+        await playback.stop();
+        if (mounted) setState(() { _batchStartId = startId; batchMode = false; });
+      });
   }
   Future<void> _load() async {
     try {
@@ -1328,6 +1396,11 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _playbackCooldownTimer?.cancel();
+    courseRouteObserver.unsubscribe(this);
+    _video.removeListener(_videoChanged);
+    _video.dispose();
+    _lessonScroll.removeListener(_scheduleVideoVisibility);
+    _lessonScroll.dispose();
     playback.removeListener(_playChanged); widget.app.removeListener(_settingsChanged); widget.app.resources.removeListener(_resourceChanged);
     WidgetsBinding.instance.removeObserver(this); super.dispose();
   }
@@ -1362,6 +1435,7 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
   void _changeTab(int? value) {
     if (value == null || value < 0 || value >= 4 || value == tab || batch) return;
     unawaited(_runPlaybackAction(() async {
+      await _video.stop();
       if (owns) await playback.stop();
       if (mounted) setState(() { tab = value; batchMode = false; });
     }));
@@ -1409,6 +1483,7 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
     if (tab > 1) return;
     final words = tab == 0;
     await _runPlaybackAction(() async {
+      await _video.stop();
       final stopRevision = playback.stopRevision;
       final startId = all ? _batchStartId ??
         (owns && playback.active ? playback.playingId ?? playback.queuedId : null) : null;
@@ -1416,6 +1491,7 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
       // Keep the complete queue. Native playback starts at startIndex and wraps
       // back to its first item, rather than looping a truncated tail segment.
       for (final row in items) {
+        if (!words && textOf(row, 'media_type').isNotEmpty && row['media_type'] != 'text') continue;
         final file = textOf(row, 'phonetic');
         if (file.isEmpty && all) continue;
         if (file.isEmpty) throw StateError('本条暂无音频');
@@ -1616,7 +1692,11 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
               child: KeyedSubtree(key: ValueKey<int>(tab), child: _guardPlaybackTouches(_body())),
             )),
       ]),
-      bottomNavigationBar: tab == 3 ? null : SafeArea(top: false, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: _guardPlaybackTouches(_bottomControls()))),
+      bottomNavigationBar: tab == 3 ? null : SafeArea(top: false, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (_showVideoBar && _video.active && !_video.fullscreen)
+          CourseVideoBar(controller: _video, onLocate: _locateVideo),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: _guardPlaybackTouches(_bottomControls())),
+      ])),
     );
   }
 
@@ -1715,6 +1795,24 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
           widgets.add(_heading(switch (category) { '01' => '文型', '02' => '例句', '03' => '应用课文', '05' => '对话', '06' => '课文', _ => category }));
         }
         previousCategory = category;
+        final mediaType = textOf(row, 'media_type');
+        if (mediaType == 'image') {
+          widgets.add(CourseImageCard(key: ValueKey('image:${row['id']}:${textOf(row, 'media_src')}'),
+            source: textOf(row, 'media_src'), label: category == '05' ? '对话插图' : '课文插图',
+            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'image')));
+          continue;
+        }
+        if (mediaType == 'video') {
+          final id = textOf(row, 'id');
+          widgets.add(CourseVideoCard(key: _videoAnchors.putIfAbsent(id, GlobalKey.new),
+            controller: _video, id: id, onPlay: () => _startVideo(row),
+            enabled: !_playbackLocked && !widget.app.resources.unavailable.contains(bookId) && widget.app.resources.activeBook != bookId));
+          continue;
+        }
+        if (mediaType.isNotEmpty && mediaType != 'text') {
+          widgets.add(_card(child: const Text('此课文媒体类型暂不支持')));
+          continue;
+        }
         if (category == '03') {
           final id = itemId(row);
           widgets.add(Padding(key: anchors.putIfAbsent(id, GlobalKey.new), padding: const EdgeInsets.symmetric(vertical: 20), child: StudyInkWell(
@@ -1728,7 +1826,8 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
         }
         final group = <RowData>[row];
         if (category == '02' && textOf(row, 'org').isNotEmpty) {
-          while (i + 1 < rows[1].length && rows[1][i + 1]['category'] == category && rows[1][i + 1]['org'] == row['org']) {
+          while (i + 1 < rows[1].length && rows[1][i + 1]['category'] == category && rows[1][i + 1]['org'] == row['org'] &&
+              (textOf(rows[1][i + 1], 'media_type').isEmpty || rows[1][i + 1]['media_type'] == 'text')) {
             group.add(rows[1][++i]);
           }
         }
@@ -1739,7 +1838,12 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
     }
     if (tab > 1) return ListView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), children: widgets);
     // Mount every anchor for the native background playback queue.
-    return SingleChildScrollView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widgets));
+    if (tab == 0) return SingleChildScrollView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widgets));
+    return NotificationListener<ScrollMetricsNotification>(onNotification: (_) { _scheduleVideoVisibility(); return false; },
+      child: SingleChildScrollView(key: _mediaViewport, controller: _lessonScroll,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widgets)));
   }
 
   Widget _grammarBody() {
@@ -1833,7 +1937,7 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver {
     ));
   }
 
-  bool get _canPlay => !batch && !_playbackLocked && !widget.app.resources.unavailable.contains(bookId);
+  bool get _canPlay => !batch && !_playbackLocked && !_video.busy && !widget.app.resources.unavailable.contains(bookId);
   Widget _utterance(RowData row) {
     final id = itemId(row);
     return StudyInkWell(key: anchors.putIfAbsent(id, GlobalKey.new),

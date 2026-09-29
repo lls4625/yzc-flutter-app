@@ -18,6 +18,17 @@ void safeName(String name) {
   if (name.isEmpty || name == '.' || name == '..' || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('\u0000') || name.startsWith('.')) throw const FormatException('资源文件名无效');
 }
 
+String textbookMediaFilename(String source, String type) {
+  final parts = source.split('/');
+  if (parts.length != 2 || parts.first != 'mp3') throw const FormatException('教材媒体必须位于 mp3 文件夹');
+  final filename = parts.last;
+  safeName(filename);
+  final extension = filename.split('.').last.toLowerCase();
+  final allowed = switch (type) { 'image' => {'png', 'jpg', 'jpeg', 'webp'}, 'video' => {'mp4'}, _ => <String>{} };
+  if (!allowed.contains(extension)) throw const FormatException('教材媒体类型或格式不受支持');
+  return filename;
+}
+
 class Resources extends ChangeNotifier {
   Resources(this.store);
   final AppStore store;
@@ -76,6 +87,20 @@ class Resources extends ChangeNotifier {
     final folder = textOf(row, 'folder'); safeName(folder);
     final path = '${store.root.path}/resources/$folder/mp3/$filename';
     if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载教材');
+    return path;
+  }
+  Future<String> mediaPath(String book, String source, String type) async {
+    final filename = textbookMediaFilename(source, type);
+    if (unavailable.contains(book) || activeBook == book) throw StateError('教材正在同步或需要修复');
+    final row = await installation(book);
+    if (row == null || row['status'] != 'ready') throw StateError('请先下载教材');
+    final folder = textOf(row, 'folder'); safeName(folder);
+    final root = Directory('${store.root.path}/resources/$folder/mp3');
+    final file = File('${root.path}/$filename');
+    if (!await file.exists()) throw StateError('媒体文件缺失，请重新下载教材');
+    final rootPath = await root.resolveSymbolicLinks();
+    final path = await file.resolveSymbolicLinks();
+    if (File(path).parent.path != rootPath) throw const FormatException('教材媒体路径无效');
     return path;
   }
   Future<Object?> _json(String name) async {
@@ -521,6 +546,16 @@ class Resources extends ChangeNotifier {
       }
       if (questions.length < 200) break;
     }
+    for (var offset = 0; ; offset += 200) {
+      final rows = await source.query('yzc_content', orderBy: 'id', limit: 200, offset: offset);
+      for (final row in rows) {
+        final type = textOf(row, 'media_type');
+        if (type.isEmpty || type == 'text') continue;
+        final filename = textbookMediaFilename(textOf(row, 'media_src'), type);
+        if (!await File('$folder/mp3/$filename').exists()) throw FormatException('缺少课文媒体 $filename');
+      }
+      if (rows.length < 200) break;
+    }
     return tables;
   }
   Future<void> _copyAudio(Directory from, Directory to) async {
@@ -528,7 +563,7 @@ class Resources extends ChangeNotifier {
     int total = 0, copied = 0;
     for (final file in files) { total += await file.length(); }
     final capacity = await const MethodChannel('yuzhichu/device').invokeMethod<int>('freeSpace');
-    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步音频的空间不足');
+    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步教材资源的空间不足');
     await to.create(recursive: true);
     await _excludeDownloadsFromBackup();
     for (final file in files) {
@@ -538,12 +573,12 @@ class Resources extends ChangeNotifier {
         await for (final bytes in file.openRead()) {
           sink.add(bytes); copied += bytes.length;
           await sink.flush();
-          report('sync', total == 0 ? .6 : .6 * copied / total, '复制音频 $copied/$total 字节');
+          report('sync', total == 0 ? .6 : .6 * copied / total, '复制教材资源 $copied/$total 字节');
         }
         await sink.flush();
       } finally { await sink.close(); }
     }
-    report('sync', .6, '音频已就位');
+    report('sync', .6, '教材资源已就位');
   }
   Future<void> _excludeDownloadsFromBackup() async {
     if (Platform.isIOS) {

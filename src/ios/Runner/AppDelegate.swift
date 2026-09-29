@@ -10,6 +10,7 @@ import NaturalLanguage
   // TODO: Replace this development placeholder with the App Store numeric app ID before release.
   private static let appStoreAppID = "0000000000"
   private var lessonPlayback: LessonPlayback?
+  private var courseVideo: CourseVideoPlayback?
   private var practiceSpeech: PracticeSpeech?
   private var studyRoomPurchase: StudyRoomPurchase?
   private var developerTipPurchase: DeveloperTipPurchase?
@@ -28,6 +29,18 @@ import NaturalLanguage
     developerTipPurchase = DeveloperTipPurchase(messenger: engineBridge.applicationRegistrar.messenger())
     lessonPlayback = LessonPlayback(messenger: engineBridge.applicationRegistrar.messenger())
     practiceSpeech = PracticeSpeech(messenger: engineBridge.applicationRegistrar.messenger())
+    let video = CourseVideoPlayback(messenger: engineBridge.applicationRegistrar.messenger())
+    courseVideo = video
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CourseVideo") {
+      registrar.register(CourseVideoViewFactory(video), withId: "yuzhichu/course_video_surface")
+    }
+    video.beforePlay = { [weak self] in
+      self?.lessonPlayback?.stopForVideo()
+      self?.practiceSpeech?.stopForVideo()
+    }
+    lessonPlayback?.beforeAudioStart = { [weak video] in video?.stop() }
+    lessonPlayback?.onBookBlocked = { [weak video] book in video?.blockBook(book) }
+    lessonPlayback?.onBookUnblocked = { [weak video] book in video?.unblockBook(book) }
     dictationTokenizerChannel = FlutterMethodChannel(name: "yuzhichu/dictation_tokenizer", binaryMessenger: engineBridge.applicationRegistrar.messenger())
     dictationTokenizerChannel?.setMethodCallHandler { call, result in
       guard call.method == "tokenize" else { result(FlutterMethodNotImplemented); return }
@@ -136,6 +149,7 @@ import NaturalLanguage
 
 /// Receives only the highlighted material, never the complete question.
 private final class PracticeSpeech: NSObject, AVSpeechSynthesizerDelegate {
+  func stopForVideo() { stop() }
   private let channel: FlutterMethodChannel
   private var synthesizer: AVSpeechSynthesizer?
   private var lastUtterance: AVSpeechUtterance?
@@ -257,8 +271,297 @@ private final class PracticeSpeech: NSObject, AVSpeechSynthesizerDelegate {
   }
 }
 
+// Course feature video transport. No demo queues or data enter this player.
+private final class CourseVideoPlayback {
+  let player = AVPlayer()
+  var beforePlay: (() -> Void)?
+  private let channel: FlutterMethodChannel
+  private var owner = "", rowID = "", book = ""
+  private var status = "idle", errorMessage: String?
+  private var wantsPlayback = false
+  private var speedSteps = 20, revision = 0, generation = 0, seekRevision = 0
+  private var blockedBooks = Set<String>()
+  private var itemObservation: NSKeyValueObservation?
+  private var playbackObservation: NSKeyValueObservation?
+  private var timeObserver: Any?
+  private var loadTimeout: Timer?
+  private var observers: [NSObjectProtocol] = []
+  private let surfaces = NSHashTable<CourseVideoLayerView>.weakObjects()
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "yuzhichu/course_video", binaryMessenger: messenger)
+    player.actionAtItemEnd = .pause
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self, let args = call.arguments as? [String: Any],
+            let incomingOwner = args["owner"] as? String else { result(nil); return }
+      do {
+        if call.method == "load" {
+          try self.load(args, owner: incomingOwner)
+        } else {
+          // Late disposal of another course must never stop the new course.
+          guard incomingOwner == self.owner else { result(nil); return }
+          switch call.method {
+          case "pause": self.pause()
+          case "resume": try self.resume()
+          case "stop": self.stop()
+          case "speed":
+            self.speedSteps = min(60, max(10, args["speedSteps"] as? Int ?? 20))
+            if self.wantsPlayback && self.status == "ready" {
+              self.player.rate = Float(self.speedSteps) / 20
+            }
+            self.publish()
+          case "seek":
+            if let seconds = args["seconds"] as? NSNumber { self.seek(seconds.doubleValue) }
+          default: result(FlutterMethodNotImplemented); return
+          }
+        }
+        result(self.snapshot())
+      } catch {
+        if call.method == "load", incomingOwner == self.owner { self.fail(error.localizedDescription) }
+        result(FlutterError(code: "course_video", message: error.localizedDescription, details: nil))
+      }
+    }
+    playbackObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+      DispatchQueue.main.async { self?.publish() }
+    }
+    timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] _ in
+      guard let self = self, self.status != "idle" else { return }
+      self.publish()
+    }
+    let center = NotificationCenter.default
+    observers.append(center.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
+      guard let self = self, let item = note.object as? AVPlayerItem,
+            item === self.player.currentItem else { return }
+      self.wantsPlayback = false
+      self.player.pause()
+      self.status = "ended"
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      self.publish()
+    })
+    observers.append(center.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: nil, queue: .main) { [weak self] note in
+      guard let self = self, let item = note.object as? AVPlayerItem,
+            item === self.player.currentItem else { return }
+      self.fail("视频播放失败，请重新打开")
+    })
+    for name in [UIApplication.didEnterBackgroundNotification, UIApplication.willResignActiveNotification] {
+      observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.pause() })
+    }
+    observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+      if let value = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+         value == AVAudioSession.InterruptionType.began.rawValue { self?.pause() }
+    })
+    observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+      if let value = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+         value == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue { self?.pause() }
+    })
+    observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.fail("系统媒体服务已重置，请重新打开视频")
+    })
+  }
+
+  private func load(_ args: [String: Any], owner: String) throws {
+    guard let path = args["path"] as? String, let id = args["id"] as? String,
+          let book = args["book"] as? String, !blockedBooks.contains(book) else {
+      throw videoError("教材正在更新，暂时无法播放")
+    }
+    let support = try FileManager.default.url(for: .applicationSupportDirectory,
+      in: .userDomainMask, appropriateFor: nil, create: false)
+    let root = support.appendingPathComponent("v3.1/resources").resolvingSymlinksInPath().standardizedFileURL
+    let url = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+    guard url.path.hasPrefix(root.path + "/"), url.deletingLastPathComponent().lastPathComponent == "mp3",
+          url.pathExtension.lowercased() == "mp4", FileManager.default.fileExists(atPath: url.path) else {
+      throw videoError("视频文件缺失或路径无效，请重新下载教材")
+    }
+    stop()
+    self.owner = owner; rowID = id; self.book = book
+    speedSteps = min(60, max(10, args["speedSteps"] as? Int ?? 20))
+    status = "loading"; errorMessage = nil
+    beforePlay?()
+    try activateSession()
+    wantsPlayback = UIApplication.shared.applicationState == .active
+    let item = AVPlayerItem(url: url)
+    item.audioTimePitchAlgorithm = .spectral
+    player.replaceCurrentItem(with: item)
+    refreshSurfaces()
+    let current = generation
+    loadTimeout = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
+      guard let self = self, current == self.generation, self.status == "loading" else { return }
+      self.fail("视频准备超时，请重试")
+    }
+    itemObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+      DispatchQueue.main.async {
+        guard let self = self, current == self.generation,
+              item === self.player.currentItem, self.status != "error" else { return }
+        if item.status == .readyToPlay {
+          self.loadTimeout?.invalidate(); self.loadTimeout = nil
+          self.status = "ready"
+          if self.wantsPlayback { self.player.playImmediately(atRate: Float(self.speedSteps) / 20) }
+          self.publish()
+        } else if item.status == .failed {
+          self.fail("视频格式无法播放或文件已损坏，请重新下载教材")
+        }
+      }
+    }
+    publish()
+  }
+
+  private func activateSession() throws {
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.playback, mode: .moviePlayback, options: [])
+    try session.setActive(true)
+  }
+  private func pause() {
+    guard status != "idle" else { return }
+    wantsPlayback = false
+    player.pause()
+    publish()
+  }
+  private func resume() throws {
+    guard player.currentItem != nil, !blockedBooks.contains(book), status != "error",
+          UIApplication.shared.applicationState == .active else { return }
+    beforePlay?()
+    try activateSession()
+    wantsPlayback = true
+    if status == "ended" {
+      status = "ready"
+      seek(0)
+    } else if status == "ready" { player.playImmediately(atRate: Float(speedSteps) / 20) }
+    publish()
+  }
+  private func seek(_ seconds: Double) {
+    guard seconds.isFinite, status == "ready" || status == "ended" else { return }
+    let duration = player.currentItem?.duration.seconds ?? 0
+    guard duration.isFinite, duration > 0 else { return }
+    seekRevision += 1
+    let currentSeek = seekRevision, current = generation
+    status = "ready"
+    player.pause()
+    player.seek(to: CMTime(seconds: min(duration, max(0, seconds)), preferredTimescale: 600),
+      toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+      DispatchQueue.main.async {
+        guard let self = self, finished, current == self.generation, currentSeek == self.seekRevision else { return }
+        if self.wantsPlayback { self.player.playImmediately(atRate: Float(self.speedSteps) / 20) }
+        self.publish()
+      }
+    }
+  }
+  func stop() {
+    let hadItem = player.currentItem != nil
+    generation += 1; seekRevision += 1
+    wantsPlayback = false
+    player.pause()
+    loadTimeout?.invalidate(); loadTimeout = nil
+    itemObservation = nil
+    player.currentItem?.cancelPendingSeeks()
+    player.replaceCurrentItem(with: nil)
+    status = "idle"; rowID = ""; errorMessage = nil
+    if hadItem { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+    publish()
+  }
+  func blockBook(_ book: String) {
+    blockedBooks.insert(book)
+    if self.book == book { stop() }
+  }
+  func unblockBook(_ book: String) { blockedBooks.remove(book) }
+  private func fail(_ message: String) {
+    guard status != "idle" else { return }
+    loadTimeout?.invalidate(); loadTimeout = nil
+    wantsPlayback = false; player.pause()
+    errorMessage = message; status = "error"
+    publish()
+  }
+  private func snapshot() -> [String: Any] {
+    let rawDuration = player.currentItem?.duration.seconds ?? 0
+    let rawPosition = player.currentTime().seconds
+    let size = player.currentItem?.presentationSize ?? .zero
+    var state: [String: Any] = ["owner": owner, "revision": revision, "status": status,
+      "playing": wantsPlayback, "speedSteps": speedSteps,
+      "position": rawPosition.isFinite ? max(0, rawPosition) : 0,
+      "duration": rawDuration.isFinite ? max(0, rawDuration) : 0,
+      "aspectRatio": size.width > 0 && size.height > 0 ? size.width / size.height : 16.0 / 9.0]
+    if !rowID.isEmpty { state["id"] = rowID }
+    if let error = errorMessage { state["error"] = error }
+    return state
+  }
+  private func publish() {
+    revision += 1
+    if !owner.isEmpty { channel.invokeMethod("state", arguments: snapshot()) }
+  }
+  private func videoError(_ message: String) -> NSError {
+    NSError(domain: "CourseVideo", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+  }
+  func attach(_ surface: CourseVideoLayerView) {
+    surfaces.add(surface)
+    surface.onWindowChanged = { [weak self] in self?.refreshSurfaces() }
+    refreshSurfaces()
+  }
+  func detach(_ surface: CourseVideoLayerView) {
+    surface.videoLayer.player = nil
+    surfaces.remove(surface)
+    refreshSurfaces()
+  }
+  private func refreshSurfaces() {
+    let available = surfaces.allObjects.filter { $0.owner == owner && $0.window != nil }
+    let selected = available.first(where: { $0.fullscreen }) ?? available.first
+    for surface in surfaces.allObjects { surface.videoLayer.player = surface === selected ? player : nil }
+  }
+  deinit {
+    loadTimeout?.invalidate()
+    if let observer = timeObserver { player.removeTimeObserver(observer) }
+    for observer in observers { NotificationCenter.default.removeObserver(observer) }
+  }
+}
+
+private final class CourseVideoLayerView: UIView {
+  let owner: String
+  let fullscreen: Bool
+  var onWindowChanged: (() -> Void)?
+  override class var layerClass: AnyClass { AVPlayerLayer.self }
+  var videoLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+  init(frame: CGRect, owner: String, fullscreen: Bool) {
+    self.owner = owner; self.fullscreen = fullscreen
+    super.init(frame: frame)
+    backgroundColor = .black
+    isUserInteractionEnabled = false
+    videoLayer.videoGravity = .resizeAspect
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+  override func didMoveToWindow() { super.didMoveToWindow(); onWindowChanged?() }
+}
+
+private final class CourseVideoNativeView: NSObject, FlutterPlatformView {
+  private let surface: CourseVideoLayerView
+  private let playback: CourseVideoPlayback
+  init(frame: CGRect, args: [String: Any], playback: CourseVideoPlayback) {
+    self.playback = playback
+    surface = CourseVideoLayerView(frame: frame, owner: args["owner"] as? String ?? "",
+      fullscreen: args["fullscreen"] as? Bool ?? false)
+    super.init()
+    playback.attach(surface)
+  }
+  func view() -> UIView { surface }
+  deinit { playback.detach(surface) }
+}
+
+private final class CourseVideoViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let playback: CourseVideoPlayback
+  init(_ playback: CourseVideoPlayback) { self.playback = playback; super.init() }
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol { FlutterStandardMessageCodec.sharedInstance() }
+  func create(withFrame frame: CGRect, viewIdentifier viewId: Int64, arguments args: Any?) -> FlutterPlatformView {
+    CourseVideoNativeView(frame: frame, args: args as? [String: Any] ?? [:], playback: playback)
+  }
+}
+
 /// App-owned playback: Flutter pages only submit queues and observe state.
 private final class LessonPlayback {
+  var beforeAudioStart: (() -> Void)?
+  var onBookBlocked: ((String) -> Void)?
+  var onBookUnblocked: ((String) -> Void)?
+  func stopForVideo() {
+    commandRevision += 1 // Invalidate delayed audio starts as well as the queue.
+    player.volume = 1
+    stop()
+  }
   private struct Clip {
     let id: String
     let path: String
@@ -314,6 +617,7 @@ private final class LessonPlayback {
         case "blockBook":
           if let args = call.arguments as? [String: Any], let book = args["book"] as? String {
             self.blockedBooks.insert(book)
+            self.onBookBlocked?(book)
             if self.lesson.hasPrefix(book + ":") {
               self.smoothCommand(FlutterMethodCall(methodName: "stop", arguments: nil), result: result)
               return
@@ -322,6 +626,7 @@ private final class LessonPlayback {
         case "unblockBook":
           if let args = call.arguments as? [String: Any], let book = args["book"] as? String {
             self.blockedBooks.remove(book)
+            self.onBookUnblocked?(book)
           }
         case "start", "stop":
           self.smoothCommand(call, result: result)
@@ -420,6 +725,7 @@ private final class LessonPlayback {
   }
 
   private func activateSession() throws {
+    beforeAudioStart?()
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playback, mode: .spokenAudio, options: [])
     try session.setActive(true)
@@ -702,6 +1008,7 @@ private final class LessonPlayback {
   }
 
   private func stop(deactivate: Bool = true, completed: String? = nil) {
+    let hadAudio = !clips.isEmpty
     completedClipId = completed
     generation += 1
     wantsPlayback = false
@@ -719,7 +1026,7 @@ private final class LessonPlayback {
     preparing = false
     gapRemaining = nil
     errorMessage = nil
-    if deactivate {
+    if deactivate && hadAudio {
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
     publish()
