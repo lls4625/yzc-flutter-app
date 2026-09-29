@@ -1816,7 +1816,9 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, Ro
         if (mediaType == 'video') {
           final id = textOf(row, 'id');
           widgets.add(CourseVideoCard(key: _videoAnchors.putIfAbsent(id, GlobalKey.new),
-            controller: _video, id: id, onPlay: () => _startVideo(row),
+            controller: _video, id: id, source: textOf(row, 'media_src'),
+            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'video'),
+            onPlay: () => _startVideo(row),
             enabled: !_playbackLocked && !widget.app.resources.unavailable.contains(bookId) && widget.app.resources.activeBook != bookId));
           continue;
         }

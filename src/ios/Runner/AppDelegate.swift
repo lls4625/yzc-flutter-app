@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import CoreImage
 import MediaPlayer
 import Network
 import NaturalLanguage
@@ -287,6 +288,8 @@ private final class CourseVideoPlayback {
   private var loadTimeout: Timer?
   private var observers: [NSObjectProtocol] = []
   private let surfaces = NSHashTable<CourseVideoLayerView>.weakObjects()
+  private let posterQueue = DispatchQueue(label: "yuzhichu.course-video-poster", qos: .utility)
+  private let posterImageContext = CIContext(options: [.cacheIntermediates: false])
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: "yuzhichu/course_video", binaryMessenger: messenger)
@@ -294,6 +297,15 @@ private final class CourseVideoPlayback {
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self, let args = call.arguments as? [String: Any],
             let incomingOwner = args["owner"] as? String else { result(nil); return }
+      if call.method == "poster" {
+        do {
+          let url = try self.validatedVideoURL(args)
+          self.poster(for: url) { value in result(value) }
+        } catch {
+          result(FlutterError(code: "course_video_poster", message: error.localizedDescription, details: nil))
+        }
+        return
+      }
       do {
         if call.method == "load" {
           try self.load(args, owner: incomingOwner)
@@ -360,18 +372,11 @@ private final class CourseVideoPlayback {
   }
 
   private func load(_ args: [String: Any], owner: String) throws {
-    guard let path = args["path"] as? String, let id = args["id"] as? String,
-          let book = args["book"] as? String, !blockedBooks.contains(book) else {
+    guard let id = args["id"] as? String, let book = args["book"] as? String,
+          !blockedBooks.contains(book) else {
       throw videoError("内容正在更新，暂时无法播放")
     }
-    let support = try FileManager.default.url(for: .applicationSupportDirectory,
-      in: .userDomainMask, appropriateFor: nil, create: false)
-    let root = support.appendingPathComponent("v3.1/resources").resolvingSymlinksInPath().standardizedFileURL
-    let url = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
-    guard url.path.hasPrefix(root.path + "/"), url.deletingLastPathComponent().lastPathComponent == "mp3",
-          url.pathExtension.lowercased() == "mp4", FileManager.default.fileExists(atPath: url.path) else {
-      throw videoError("视频文件缺失或路径无效，请重新下载内容")
-    }
+    let url = try validatedVideoURL(args)
     stop()
     self.owner = owner; rowID = id; self.book = book
     speedSteps = min(60, max(10, args["speedSteps"] as? Int ?? 20))
@@ -403,6 +408,83 @@ private final class CourseVideoPlayback {
       }
     }
     publish()
+  }
+
+  private func validatedVideoURL(_ args: [String: Any]) throws -> URL {
+    guard let path = args["path"] as? String else {
+      throw videoError("视频文件缺失或路径无效，请重新下载内容")
+    }
+    let support = try FileManager.default.url(for: .applicationSupportDirectory,
+      in: .userDomainMask, appropriateFor: nil, create: false)
+    let root = support.appendingPathComponent("v3.1/resources").resolvingSymlinksInPath().standardizedFileURL
+    let url = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+    guard url.path.hasPrefix(root.path + "/"), url.deletingLastPathComponent().lastPathComponent == "mp3",
+          url.pathExtension.lowercased() == "mp4", FileManager.default.fileExists(atPath: url.path) else {
+      throw videoError("视频文件缺失或路径无效，请重新下载内容")
+    }
+    return url
+  }
+
+  private func poster(for videoURL: URL, completion: @escaping ([String: Any]) -> Void) {
+    posterQueue.async { [weak self] in
+      guard let self = self else { return }
+      do {
+        let directory = videoURL.deletingLastPathComponent()
+          .appendingPathComponent(".video_posters", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let output = directory.appendingPathComponent(videoURL.lastPathComponent + ".jpg")
+        if let cached = UIImage(contentsOfFile: output.path), cached.size.width > 0, cached.size.height > 0 {
+          DispatchQueue.main.async {
+            completion(["path": output.path, "aspectRatio": cached.size.width / cached.size.height])
+          }
+          return
+        }
+        try? FileManager.default.removeItem(at: output)
+        let asset = AVURLAsset(url: videoURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 1280, height: 1280)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let duration = asset.duration.seconds
+        let candidates = [0.0, 0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0]
+          .filter { !duration.isFinite || duration <= 0 || $0 < duration }
+        var fallback: CGImage?
+        var selected: CGImage?
+        for seconds in candidates {
+          guard let image = try? generator.copyCGImage(
+            at: CMTime(seconds: seconds, preferredTimescale: 600), actualTime: nil) else { continue }
+          if fallback == nil { fallback = image }
+          if self.isNonBlack(image) { selected = image; break }
+        }
+        guard let image = selected ?? fallback,
+              let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.84) else {
+          throw self.videoError("无法从视频中提取预览图")
+        }
+        try data.write(to: output, options: .atomic)
+        DispatchQueue.main.async {
+          completion(["path": output.path, "aspectRatio": CGFloat(image.width) / CGFloat(image.height)])
+        }
+      } catch {
+        DispatchQueue.main.async {
+          completion(["error": error.localizedDescription])
+        }
+      }
+    }
+  }
+
+  private func isNonBlack(_ image: CGImage) -> Bool {
+    let input = CIImage(cgImage: image)
+    guard let filter = CIFilter(name: "CIAreaAverage", parameters: [
+      kCIInputImageKey: input,
+      kCIInputExtentKey: CIVector(cgRect: input.extent),
+    ]), let average = filter.outputImage else { return true }
+    var pixel = [UInt8](repeating: 0, count: 4)
+    posterImageContext.render(average, toBitmap: &pixel, rowBytes: 4,
+      bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8,
+      colorSpace: CGColorSpaceCreateDeviceRGB())
+    let luminance = 0.2126 * Double(pixel[0]) + 0.7152 * Double(pixel[1]) + 0.0722 * Double(pixel[2])
+    return luminance >= 9
   }
 
   private func activateSession() throws {

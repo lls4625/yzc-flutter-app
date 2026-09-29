@@ -91,6 +91,26 @@ class CourseVideoController extends ChangeNotifier {
     await _invoke('load', {'id': id, 'book': book, 'path': path, 'speedSteps': speedSteps});
   });
 
+  Future<(String, double)?> poster(Future<String> Function() resolvePath) async {
+    try {
+      final path = await resolvePath();
+      if (_disposed) return null;
+      final result = await _channel.invokeMapMethod<String, Object?>('poster', {
+        'owner': owner,
+        'path': path,
+      });
+      final posterPath = result?['path'] as String?;
+      final ratio = (result?['aspectRatio'] as num?)?.toDouble();
+      final nativeError = result?['error'] as String?;
+      if (nativeError != null && nativeError.isNotEmpty) throw StateError(nativeError);
+      if (posterPath == null || posterPath.isEmpty || ratio == null || !ratio.isFinite || ratio <= 0) return null;
+      return (posterPath, ratio);
+    } catch (e, stack) {
+      SystemErrors.record(e, stack, module: 'course_video', operation: '生成视频预览图');
+      return null;
+    }
+  }
+
   Future<void> toggle() => _action(() => _invoke(playing ? 'pause' : 'resume'));
   Future<void> seek(double seconds) => _action(() => _invoke('seek', {'seconds': seconds}));
   Future<void> changeSpeed(int delta) => _action(() async {

@@ -57,30 +57,53 @@ class _MediaCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(14), clipBehavior: Clip.antiAlias, child: child));
 }
 
-class CourseVideoCard extends StatelessWidget {
+class CourseVideoCard extends StatefulWidget {
   const CourseVideoCard({super.key, required this.controller, required this.id,
-    required this.onPlay, required this.enabled});
+    required this.source, required this.resolvePath, required this.onPlay, required this.enabled});
   final CourseVideoController controller;
-  final String id;
+  final String id, source;
+  final Future<String> Function() resolvePath;
   final Future<void> Function() onPlay;
   final bool enabled;
   @override
+  State<CourseVideoCard> createState() => _CourseVideoCardState();
+}
+
+class _CourseVideoCardState extends State<CourseVideoCard> {
+  late Future<(String, double)?> _poster = widget.controller.poster(widget.resolvePath);
+  @override
+  void didUpdateWidget(CourseVideoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.source != oldWidget.source || (!oldWidget.enabled && widget.enabled)) {
+      _poster = widget.controller.poster(widget.resolvePath);
+    }
+  }
+  @override
   Widget build(BuildContext context) => _MediaCard(child: AnimatedBuilder(
-    animation: controller,
+    animation: widget.controller,
     builder: (context, _) {
-      final selected = controller.rowId == id && controller.hasMedia;
+      final controller = widget.controller;
+      final selected = controller.rowId == widget.id && controller.hasMedia;
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         ClipRRect(borderRadius: BorderRadius.circular(14), child: selected
           ? AspectRatio(aspectRatio: controller.aspectRatio.clamp(.6, 2.0).toDouble(),
-            child: CourseVideoSurface(controller: controller, onRetry: onPlay,
+            child: CourseVideoSurface(controller: controller, onRetry: widget.onPlay,
               onFullscreen: () => openCourseVideoFullscreen(context, controller)))
-          : AspectRatio(aspectRatio: 16 / 9, child: ColoredBox(color: Colors.black87,
-            child: Center(child: TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
-              onPressed: enabled && !controller.busy ? onPlay : null,
-              icon: const Icon(Icons.play_circle_fill, size: 44),
-              label: Text(controller.busy ? '准备中' : '点击播放'),
-            ))))),
+          : FutureBuilder<(String, double)?>(future: _poster, builder: (context, snapshot) {
+              final poster = snapshot.data;
+              return AspectRatio(aspectRatio: (poster?.$2 ?? 16 / 9).clamp(.6, 2.0).toDouble(),
+                child: ColoredBox(color: Colors.black87, child: Stack(fit: StackFit.expand, children: [
+                  if (poster != null)
+                    Image.file(File(poster.$1), fit: BoxFit.contain,
+                      errorBuilder: (_, error, stack) => const SizedBox.shrink()),
+                  Center(child: TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: Colors.white),
+                    onPressed: widget.enabled && !controller.busy ? widget.onPlay : null,
+                    icon: const Icon(Icons.play_circle_fill, size: 44),
+                    label: Text(controller.busy ? '准备中' : '点击播放'),
+                  )),
+                ])));
+            })),
         if (!selected && controller.error != null)
           Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Text(controller.error!)),
       ]);
