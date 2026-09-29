@@ -20,7 +20,7 @@ class _GrammarLookupEntryState extends State<GrammarLookupEntry> {
   bool _opening = false;
   static const title = '查文法';
   static const caption = '日语文法、中文解释';
-  static const description = '在已安装的教材文法表中快速查找。';
+  static const description = '在已安装的内容文法表中快速查找。';
   static const icon = Icons.menu_book_outlined;
   static const colors = [Color(0xFF665D78), Color(0xFF40384F)];
 

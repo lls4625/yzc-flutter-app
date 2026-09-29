@@ -127,14 +127,14 @@ class ListeningCatalog {
     ),
   );
   Future<String> version(String book) => _read((db) async {
-    if (host.isBookUnavailable(book)) throw StateError('教材正在同步或需要修复');
+    if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
     final rows = await db.query(
       'yzc_resource_install',
       columns: ['job_id', 'install_time'],
       where: 'textbook_id=? AND status=?',
       whereArgs: [book, 'ready'],
     );
-    if (rows.length != 1) throw StateError('教材已不可用，请重新选择');
+    if (rows.length != 1) throw StateError('内容已不可用，请重新选择');
     final stamp = jsonEncode(rows.single);
     if (_versions[book] != stamp) _audioFolders.remove(book);
     _versions[book] = stamp;
@@ -147,7 +147,7 @@ class ListeningCatalog {
   ) => _read((db) {
     if (!{'yzc_words', 'yzc_content'}.contains(table))
       throw ArgumentError('未知内容类型');
-    if (host.isBookUnavailable(book)) throw StateError('教材正在同步或需要修复');
+    if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
     return db.query(
       table,
       where: 'textbook_id=? AND lessons_id=?',
@@ -169,7 +169,7 @@ class ListeningCatalog {
     }
 
     safeName(filename);
-    if (host.isBookUnavailable(book)) throw StateError('教材正在同步或需要修复');
+    if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
     // The preparation version is checked before and after building a queue.
     // Resolve its directory once, rather than opening SQLite for every clip.
     final folder =
@@ -180,13 +180,13 @@ class ListeningCatalog {
             where: 'textbook_id=? AND status=?',
             whereArgs: [book, 'ready'],
           );
-          if (rows.length != 1) throw StateError('请先下载教材');
+          if (rows.length != 1) throw StateError('请先下载内容');
           return textOf(rows.single, 'folder');
         });
     safeName(folder);
     _audioFolders[book] = folder;
     final path = '${host.rootPath}/resources/$folder/mp3/$filename';
-    if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载教材');
+    if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载内容');
     return path;
   }
 }

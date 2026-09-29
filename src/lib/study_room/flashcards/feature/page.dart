@@ -76,7 +76,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
         builder: (dialogContext) => GlassAlertDialog(
           title: Row(
             children: [
-              const Expanded(child: Text('选择教材')),
+              const Expanded(child: Text('选择内容')),
               const SizedBox(width: 12),
               StudyIconButton(
                 tooltip: '关闭',
@@ -89,7 +89,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (c.books.isEmpty) const Text('暂无可用教材，请先在教材库完成下载。'),
+              if (c.books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
               for (final row in c.books) ...[
                 if (row != c.books.first) const SizedBox(height: 12),
                 Semantics(
@@ -134,7 +134,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
         return '${book['textbook']} ${book['volume'] ?? ''}'.trim();
       }
     }
-    return '请通过右上角教材图标选择教材';
+    return '请通过右上角内容图标选择内容';
   }
 
   Widget _heading(String text) => Padding(
@@ -191,7 +191,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
               final heading =
                   TextPainter(
                     text: TextSpan(
-                      text: '本教材课程 · 点击勾选 / 再次点击取消',
+                      text: '本内容课程 · 点击勾选 / 再次点击取消',
                       style: DefaultTextStyle.of(context).style,
                     ),
                     textDirection: Directionality.of(context),
@@ -223,7 +223,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          child: Text('本教材课程 · 点击勾选 / 再次点击取消'),
+                          child: Text('本内容课程 · 点击勾选 / 再次点击取消'),
                         ),
                         Expanded(
                           child: c.lessons.isEmpty
@@ -231,8 +231,8 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                                   padding: const EdgeInsets.all(20),
                                   child: Text(
                                     c.books.isEmpty
-                                        ? '暂无可用的已安装教材，请先在教材库下载，再重新进入闪卡复习。'
-                                        : '请选择包含单词的教材。',
+                                        ? '暂无可用的已安装内容，请先在内容库下载，再重新进入闪卡复习。'
+                                        : '请选择包含单词的内容。',
                                   ),
                                 )
                               : Padding(
@@ -644,7 +644,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
           actions: [
             if (c.stage == FlashStage.setup)
               StudyIconButton(
-                tooltip: '选择教材',
+                tooltip: '选择内容',
                 onPressed: c.busy || _choosingBook || _confirming
                     ? null
                     : _chooseBook,
@@ -678,7 +678,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                   if (c.resourceBlocked)
                     const Padding(
                       padding: EdgeInsets.all(12),
-                      child: Text('教材正在更新或需要修复，请处理完成后重新进入闪卡复习。'),
+                      child: Text('内容正在更新或需要修复，请处理完成后重新进入闪卡复习。'),
                     ),
                   if (c.error != null && c.stage != FlashStage.setup)
                     Padding(

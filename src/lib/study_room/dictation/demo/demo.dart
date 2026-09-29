@@ -30,7 +30,7 @@ class DictationDemoCatalog {
     final book = Map<String, Object?>.from(data['book'] as Map);
     final lesson = Map<String, Object?>.from(data['lesson'] as Map);
     if (book['id'] == null || lesson['id'] == null) {
-      throw StateError('听写演示教材信息不完整');
+      throw StateError('听写演示内容信息不完整');
     }
     final samples = [
       ...(data['words'] as List),
@@ -66,7 +66,7 @@ class DictationDemoCatalog {
   Future<void> _requireBook(String book) async {
     await load();
     if ((_data!['book'] as Map)['id'].toString() != book) {
-      throw StateError('仅可使用内置听写演示教材');
+      throw StateError('仅可使用内置听写演示内容');
     }
   }
 

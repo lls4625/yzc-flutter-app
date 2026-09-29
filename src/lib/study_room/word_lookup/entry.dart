@@ -20,7 +20,7 @@ class _WordLookupEntryState extends State<WordLookupEntry> {
   bool _opening = false;
   static const title = '查单词';
   static const caption = '假名、汉字、中文释义';
-  static const description = '在已安装的教材单词表中快速查找。';
+  static const description = '在已安装的内容单词表中快速查找。';
   static const icon = Icons.manage_search_rounded;
   static const colors = [Color(0xFF7B6045), Color(0xFF4C3928)];
 

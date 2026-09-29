@@ -127,7 +127,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
               final heading =
                   TextPainter(
                     text: TextSpan(
-                      text: '本教材课程 · 点击勾选 / 再次点击取消',
+                      text: '本内容课程 · 点击勾选 / 再次点击取消',
                       style: DefaultTextStyle.of(context).style,
                     ),
                     textDirection: Directionality.of(context),
@@ -159,7 +159,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          child: Text('本教材课程 · 点击勾选 / 再次点击取消'),
+                          child: Text('本内容课程 · 点击勾选 / 再次点击取消'),
                         ),
                         Expanded(
                           child: c.lessons.isEmpty

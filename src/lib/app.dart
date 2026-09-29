@@ -211,7 +211,7 @@ class _WelcomeState extends State<Welcome> {
     const SizedBox(height: 28),
     Text('语言之初，\n从这里生长。', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700, height: 1.18)),
     const SizedBox(height: 14),
-    Text('从一本教材、一段声音开始，让词汇、语法与表达慢慢生根。', style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    Text('从一本内容、一段声音开始，让词汇、语法与表达慢慢生根。', style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     const Spacer(),
     Text('$_secondsRemaining 秒后自动进入', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
     const SizedBox(height: 22),
@@ -502,9 +502,9 @@ class _HomePanelState extends State<HomePanel> {
     final textbookProgress = lessons.isEmpty ? 0.0 : completed / lessons.length;
     final waiting = error == null && !hasCurrentSnapshot;
     final unavailable = !resourceReady || widget.app.resources.unavailable.contains(_loadedBookId);
-    final studyHint = waiting ? '正在读取所选教材…' : error != null && !hasCurrentSnapshot ? '学习数据读取失败，请重试'
-      : book == null ? '请选择教材开始学习' : unavailable ? '教材资源不可用，请前往教材选择页处理'
-      : current == null ? '本教材暂无课程，请前往教材选择页' : '';
+    final studyHint = waiting ? '正在读取所选内容…' : error != null && !hasCurrentSnapshot ? '学习数据读取失败，请重试'
+      : book == null ? '请选择内容开始学习' : unavailable ? '内容资源不可用，请前往内容选择页处理'
+      : current == null ? '本内容暂无课程，请前往内容选择页' : '';
     return PageBody(
       children: [
         Row(
@@ -567,7 +567,7 @@ class _HomePanelState extends State<HomePanel> {
               ),
               const SizedBox(height: 6),
               Text(
-                waiting ? '正在读取所选教材…' : current == null ? '请选择教材开始学习' : textOf(current, 'title'),
+                waiting ? '正在读取所选内容…' : current == null ? '请选择内容开始学习' : textOf(current, 'title'),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontFamily: waiting || current == null ? 'PingFang SC' : 'Hiragino Sans', locale: waiting || current == null ? const Locale('zh', 'CN') : const Locale('ja', 'JP'),
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -607,7 +607,7 @@ class _HomePanelState extends State<HomePanel> {
                 ],
               ),
               const SizedBox(height: 18),
-              const Text('教材进度', style: TextStyle(color: Colors.white70)),
+              const Text('内容进度', style: TextStyle(color: Colors.white70)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -644,10 +644,10 @@ class _HomePanelState extends State<HomePanel> {
               child: QuickCard(
                 icon: Icons.play_arrow_rounded,
                 title: waiting ? '正在加载' : error != null && !hasCurrentSnapshot ? '暂不可用'
-                    : studyHint.isNotEmpty ? '选择教材' : canResume ? '继续学习' : '开始学习',
+                    : studyHint.isNotEmpty ? '选择内容' : canResume ? '继续学习' : '开始学习',
                 subtitle: studyHint.isNotEmpty
                     ? studyHint
-                    : current == null ? '请选择教材开始学习' : '第 ${intOf(current, 'num')} 课 · ${textOf(current, 'title')}',
+                    : current == null ? '请选择内容开始学习' : '第 ${intOf(current, 'num')} 课 · ${textOf(current, 'title')}',
                 subtitleColor: Colors.grey,
                 subtitleMaxLines: 1,
                 onTap: () => perform(context, _continue),
@@ -877,12 +877,12 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       if (!_checkCurrent(revision)) return;
       await _local(checkRevision: revision);
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '刷新教材目录');
+      SystemErrors.record(e, stack, module: 'app', operation: '刷新内容目录');
       if (!_checkCurrent(revision)) return;
       widget.app.resources.clearPublishedTextbooks();
       await _local(checkRevision: revision);
       if (_isNetworkError(e) && !(await _checkConnection(checkRevision: revision))) return;
-      if (_checkCurrent(revision)) _showOperationError('教材目录更新失败', e);
+      if (_checkCurrent(revision)) _showOperationError('内容目录更新失败', e);
     } finally { _finishFetching(); }
   }
   String _errorDetail(Object error) => userError(error, fallback: '处理失败');
@@ -890,8 +890,8 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       error is HandshakeException || error is TimeoutException;
   void _showOperationError(String title, Object cause) {
     setState(() {
-      error = cause is StateError && cause.message == '教材资源包更新失败'
-          ? '教材资源包更新失败' : '$title：${_errorDetail(cause)}';
+      error = cause is StateError && cause.message == '内容资源包更新失败'
+          ? '内容资源包更新失败' : '$title：${_errorDetail(cause)}';
       _errorNeedsRecheck = _isNetworkError(cause);
       permissionError = false;
     });
@@ -925,13 +925,13 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
         await widget.app.store.selectBook(id);
         await widget.app.reload();
       } finally { await _local(); }
-      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('教材已安装，可离线学习')));
+      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('内容已安装，可离线学习')));
       if (_pageCurrent && select) await _leaveAfterOperation();
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '下载教材');
+      SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
       if (!mounted) return;
       if (_isNetworkError(e) && !(await _checkConnection())) return;
-      if (_pageCurrent) _showOperationError('教材下载失败', e);
+      if (_pageCurrent) _showOperationError('内容下载失败', e);
     } finally { _finishOperation(); }
   }
   Future<void> _select(String id) async {
@@ -943,7 +943,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       return;
     }
     ++_checkRevision;
-    setState(() { selecting = true; _operationLabel = '教材切换'; });
+    setState(() { selecting = true; _operationLabel = '内容切换'; });
     try {
     await perform(context, () async {
       await widget.app.store.selectBook(id);
@@ -959,8 +959,8 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     try {
     final id = textOf(book, 'id');
     final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
-      title: const Text('删除本地教材？'),
-      content: Text('将删除“${textOf(book, 'textbook')} · ${textOf(book, 'volume')}”的单元、课程、单词、课文、文法、练习和音频。练习、复习及学习记录会保留。删除后只能下载服务器仍提供的教材；服务器已移除的教材将无法再次下载。'),
+      title: const Text('删除本地内容？'),
+      content: Text('将删除“${textOf(book, 'textbook')} · ${textOf(book, 'volume')}”的单元、课程、单词、课文、文法、练习和音频。练习、复习及学习记录会保留。删除后只能下载服务器仍提供的内容；服务器已移除的内容将无法再次下载。'),
       actions: [
         StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
         StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('删除')),
@@ -975,14 +975,14 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       } finally {
         await _local();
       }
-      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地教材资源已删除，学习记录已保留')));
+      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地内容资源已删除，学习记录已保留')));
     });
     } finally { _finishOperation(); }
   }
   Widget _bookCard(RowData book, Resources resource) {
     final id = textOf(book, 'id');
     final textbook = textOf(book, 'textbook').trim();
-    final displayTextbook = textbook.isEmpty ? '教材' : textbook;
+    final displayTextbook = textbook.isEmpty ? '内容' : textbook;
     final coverParts = displayTextbook.split(RegExp(r'\s*[-－—–]\s*')).where((part) => part.isNotEmpty).toList();
     final coverTitleLines = coverParts.length <= 2
         ? coverParts
@@ -1025,7 +1025,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
               const SizedBox(height: 7),
               Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
                 resource.activeBook == id
-                  ? '${switch (resource.stage) { 'catalog' => '获取教材信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
+                  ? '${switch (resource.stage) { 'catalog' => '获取内容信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
                   : localOnly
                     ? '本地数据，服务器已删除，请自行处理本地数据'
                     : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}${ready ? '可离线使用' : installed[id]?['status'] == 'broken' ? '音频缺失或资源需修复，请重新下载' : '选择后下载'}',
@@ -1038,29 +1038,29 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
           ])),
         ])),
         if (operating) Positioned(top: 7, right: 7, child: Semantics(
-          label: '正在处理教材',
+          label: '正在处理内容',
           child: SizedBox(width: 48, height: 48, child: Center(child: IconTheme(
             data: IconThemeData(color: Theme.of(context).colorScheme.primary),
             child: const ResourceActivityIcon(checking: true),
           ))),
         )),
         if (!operating && invalidHash) Positioned(top: 7, right: 7, child: Tooltip(
-          message: '教材校验错误',
+          message: '内容校验错误',
           child: Semantics(
-            label: '教材校验错误',
+            label: '内容校验错误',
             child: SizedBox(width: 48, height: 48, child: Center(child: Icon(
               Icons.error_outline, color: Theme.of(context).colorScheme.error,
             ))),
           ),
         )),
         if (!operating && !invalidHash && !_resourceBusy && canDownload && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
-          tooltip: update ? '更新教材' : '下载教材',
+          tooltip: update ? '更新内容' : '下载内容',
           icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
           color: Theme.of(context).colorScheme.primary,
           onPressed: canDownload ? () => _download(id) : null,
         )),
         if (ready) Positioned(bottom: 7, right: 7, child: StudyIconButton(
-          tooltip: '删除本地教材',
+          tooltip: '删除本地内容',
           icon: const Icon(Icons.delete_outline),
           color: Theme.of(context).colorScheme.error,
           onPressed: disabled || fetching ? null : () => _remove(book),
@@ -1076,22 +1076,22 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _operationBusy && !_leaving) showResourceWait(context, _operationLabel);
       },
-      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('选择教材'),
+      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('选择内容'),
         leading: StudyIconButton(tooltip: '返回', onPressed: _back,
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20)),
-        actions: [StudyIconButton(tooltip: _operationBusy ? '正在$_operationLabel' : fetching ? '正在检查教材' : '刷新教材',
+        actions: [StudyIconButton(tooltip: _operationBusy ? '正在$_operationLabel' : fetching ? '正在检查内容' : '刷新内容',
           onPressed: _resourceBusy ? null : _refresh,
           icon: ResourceActivityIcon(checking: _resourceBusy))]), body: ListView(padding: const EdgeInsets.all(20), children: [
       Text('从哪里开始？', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 6),
-      Text('可随时切换教材，学习记录会分别保留。', style: Theme.of(context).textTheme.bodyLarge),
+      Text('可随时切换内容，学习记录会分别保留。', style: Theme.of(context).textTheme.bodyLarge),
       const SizedBox(height: 20),
       if (error != null) StudyCard(child: Padding(padding: const EdgeInsets.all(12), child: Row(
         crossAxisAlignment: CrossAxisAlignment.center, children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(error!),
             if (installed.values.any((row) => row['status'] == 'ready'))
-              const Padding(padding: EdgeInsets.only(top: 8), child: Text('本地教材可继续离线学习。')),
+              const Padding(padding: EdgeInsets.only(top: 8), child: Text('本地内容可继续离线学习。')),
             if (permissionError) StudyButton.text(onPressed: _operationBusy ? null : _openNetworkSettings, child: const Text('前往设置')),
           ])),
           const SizedBox(width: 12),
@@ -1101,7 +1101,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
           ),
         ],
       ))),
-      if (!fetching && books.isEmpty && error == null) const Padding(padding: EdgeInsets.all(24), child: Text('暂无教材目录，可刷新获取。')),
+      if (!fetching && books.isEmpty && error == null) const Padding(padding: EdgeInsets.all(24), child: Text('暂无内容目录，可刷新获取。')),
       for (final book in books) _bookCard(book, resource),
     ])));
   });
@@ -1140,11 +1140,11 @@ class _CoursePanelState extends State<CoursePanel> {
       const SizedBox(height: 80),
       Icon(Icons.menu_book_outlined, size: 74, color: Theme.of(context).colorScheme.outlineVariant),
       const SizedBox(height: 22),
-      Text('还没有选择教材', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w600)),
+      Text('还没有选择内容', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
-      Text('选择一本教材，从第一课开始建立自己的语言小径。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      Text('选择一本内容，从第一课开始建立自己的语言小径。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       const SizedBox(height: 26),
-      StudyButton.filledIcon(onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.add), label: const Text('选择教材')),
+      StudyButton.filledIcon(onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.add), label: const Text('选择内容')),
     ]);
     final book = books.single;
     final currentLessonId = positions.isEmpty ? '' : textOf(positions.single, 'lessons_id');
@@ -1190,8 +1190,8 @@ class _CoursePanelState extends State<CoursePanel> {
       Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
         child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${textOf(book, 'textbook')} · ${textOf(book, 'volume')}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4), Text('${lessons.length} 课 · ${widget.app.resources.unavailable.contains(bookId) ? '教材资源需要重新下载' : '课文与单词录音已就绪'}'),
-      ])), StudyIconButton.filledTonal(tooltip: '切换教材', onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.swap_horiz))])),
+        const SizedBox(height: 4), Text('${lessons.length} 课 · ${widget.app.resources.unavailable.contains(bookId) ? '内容资源需要重新下载' : '课文与单词录音已就绪'}'),
+      ])), StudyIconButton.filledTonal(tooltip: '切换内容', onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.swap_horiz))])),
       Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
         for (var i = 0; i < units.length; i++) unitCard(units[i], lessonsByUnit[units[i]['id']] ?? [],
           currentLesson.isEmpty ? i == 0 : !currentLessonIsUngrouped && units[i]['id'] == currentUnitId),
@@ -1306,7 +1306,7 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, Ro
   Future<void> _load() async {
     try {
       final lesson = await widget.app.store.db.query('yzc_lessons', where: 'id=? AND textbook_id=?', whereArgs: [widget.lesson['id'], bookId]);
-      if (lesson.isEmpty) throw StateError('原课程已不在当前教材中，学习历史已保留');
+      if (lesson.isEmpty) throw StateError('原课程已不在当前内容中，学习历史已保留');
       final result = await Future.wait([for (final table in ['yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question']) widget.app.store.content(table, bookId, textOf(widget.lesson, 'id'))]);
       final progress = await widget.app.store.progress(bookId);
       final history = await widget.app.store.history();
@@ -1678,10 +1678,10 @@ class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, Ro
             onChanged: _changeTab,
           ),
         )),
-        if (blocked) const Padding(padding: EdgeInsets.all(12), child: Text('教材正在同步或需要重新下载，暂时无法播放。')),
+        if (blocked) const Padding(padding: EdgeInsets.all(12), child: Text('内容正在同步或需要重新下载，暂时无法播放。')),
         Expanded(child: loading ? const Center(child: StudyCircularProgressIndicator()) : error != null
           ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('课程内容读取失败，请重新读取；如仍失败，请重新下载教材', textAlign: TextAlign.center),
+              const Text('课程内容读取失败，请重新读取；如仍失败，请重新下载内容', textAlign: TextAlign.center),
               const SizedBox(height: 16), StudyButton.filled(onPressed: _load, child: const Text('重新读取')),
             ]))) : GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -2888,7 +2888,7 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         context,
         icon: Icons.copyright_outlined,
         title: '内容与版权',
-        subtitle: '教材内容来源于网络资源，如有问题请联系作者。',
+        subtitle: '内容内容来源于网络资源，如有问题请联系作者。',
       ),
       const SizedBox(height: 10),
       _settingCard(
@@ -2902,8 +2902,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
       _settingCard(
         context,
         icon: Icons.menu_book_outlined,
-        title: '教材资源',
-        subtitle: '下载与更新教材资源',
+        title: '内容资源',
+        subtitle: '下载与更新内容资源',
         onTap: () => openPage(context, LibraryPage(app)),
       ),
       const SizedBox(height: 10),
@@ -2920,8 +2920,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         icon: Icons.delete_outline,
         iconSize: 32,
         iconColor: Colors.red,
-        title: '清空 教材学习记录',
-        subtitle: '删除本机教材学习记录，并重置外观和每日目标。',
+        title: '清空 内容学习记录',
+        subtitle: '删除本机内容学习记录，并重置外观和每日目标。',
         showChevron: false,
         onTap: () => _confirmReset(context),
       ),
@@ -3027,8 +3027,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
   }
   Future<void> _confirmReset(BuildContext context) async {
     final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
-      title: const Text('清空 教材学习记录？'),
-      content: const Text('当前用户的教材课程进度、学习时长、答题记录、复习卡片和上次学习位置将被删除，无法撤销。外观恢复为跟随系统，每日目标恢复为 10 分钟。已下载教材、用户身份、字体大小和自习室记录保留。'),
+      title: const Text('清空 内容学习记录？'),
+      content: const Text('当前用户的内容课程进度、学习时长、答题记录、复习卡片和上次学习位置将被删除，无法撤销。外观恢复为跟随系统，每日目标恢复为 10 分钟。已下载内容、用户身份、字体大小和自习室记录保留。'),
       actions: [
         StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
         StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('确认清空')),

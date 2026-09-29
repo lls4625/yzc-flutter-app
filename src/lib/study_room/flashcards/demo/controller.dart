@@ -228,7 +228,7 @@ class FlashDemoController extends ChangeNotifier {
 
   bool validateSelection() {
     final message = bookId.isEmpty
-        ? '请先选择教材。'
+        ? '请先选择内容。'
         : lessonIds.isEmpty
         ? '请先选择需要复习的课程。'
         : null;

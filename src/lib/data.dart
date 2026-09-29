@@ -237,7 +237,7 @@ class AppStore {
   Future<List<RowData>> lessons(String book) => db.query('yzc_lessons', where: 'textbook_id = ?', whereArgs: [book], orderBy: 'num IS NULL, num, id');
   Future<List<RowData>> content(String table, String book, String lesson) {
     if (table == 'yzc_ai_question') return _questions(db, book, lesson);
-    if (!{'yzc_words', 'yzc_content', 'yzc_grammar'}.contains(table)) throw ArgumentError('未知教材表');
+    if (!{'yzc_words', 'yzc_content', 'yzc_grammar'}.contains(table)) throw ArgumentError('未知内容表');
     return db.query(table, where: 'textbook_id = ? AND lessons_id = ?', whereArgs: [book, lesson],
       orderBy: '${table == 'yzc_content' ? 'category IS NULL, category, ' : ''}sort IS NULL, sort, id');
   }

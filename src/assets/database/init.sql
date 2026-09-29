@@ -1,9 +1,9 @@
--- 仅在本地数据库不存在时执行；不用于 APP 升级或教材资源更新。
+-- 仅在本地数据库不存在时执行；不用于 APP 升级或内容资源更新。
 -- 每条语句以行末分号结束；不使用触发器或跨行字符串。
 -- 基础配置由字段 DEFAULT 提供，用户身份及设备信息在首次安装时生成。
 -- 所有主键 id 显式非空；表间关系由应用字段关联处理，不使用数据库外键。
 
--- 基础五表来自 resources/database/data.sqlite；不含教材或用户存量数据。
+-- 基础五表来自 resources/database/data.sqlite；不含内容或用户存量数据。
 
 CREATE TABLE `yzc_content` (
   `id` varchar(64) NOT NULL,
@@ -122,7 +122,7 @@ CREATE INDEX `yzc_words_idx_unit_id` ON `yzc_words` (`unit_id` ASC);
 
 CREATE INDEX `yzc_words_idx_word` ON `yzc_words` (`word` ASC);
 
--- APP 自有结构；教材包不能执行或覆盖这些定义。
+-- APP 自有结构；内容包不能执行或覆盖这些定义。
 CREATE TABLE yzc_user (
  id varchar(64) NOT NULL PRIMARY KEY, name varchar(200),
  device_type varchar(64), device_model varchar(200), os_name varchar(64), os_ver varchar(64),
@@ -158,7 +158,7 @@ CREATE TABLE yzc_user_position (
  textbook_id varchar(64), last_textbook_id varchar(64), lessons_id varchar(64), lesson varchar(64),
  textbook varchar(64), title varchar(200), open_time bigint, create_time bigint, update_time bigint
 );
--- 每本教材分别记忆阅读位置；关系由应用代码维护。
+-- 每本内容分别记忆阅读位置；关系由应用代码维护。
 CREATE TABLE yzc_user_book_position (
  user_id TEXT NOT NULL,
  textbook_id TEXT NOT NULL,

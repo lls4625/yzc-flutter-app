@@ -147,7 +147,7 @@ class _GrammarLookupPageState extends State<GrammarLookupPage> {
   }
 
   Widget _treeBody(List<GrammarLookupRow> rows, GrammarLookupRow match) {
-    if (rows.isEmpty) return const Text('教材内容已变化，请重新查询。');
+    if (rows.isEmpty) return const Text('内容内容已变化，请重新查询。');
     final rootId = _text(match, 'id');
     final children = <String, List<GrammarLookupRow>>{};
     for (final row in rows) {
@@ -367,7 +367,7 @@ class _GrammarLookupPageState extends State<GrammarLookupPage> {
                       child: Padding(
                         padding: EdgeInsets.all(28),
                         child: Text(
-                          '输入日语句型或中文含义\n例如：必须、不必、即使……也……\n查询已导入教材中的文法',
+                          '输入日语句型或中文含义\n例如：必须、不必、即使……也……\n查询已导入内容中的文法',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -397,7 +397,7 @@ class _GrammarLookupPageState extends State<GrammarLookupPage> {
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                               if (!_meaningsAvailable)
-                                const Text('中文含义资料暂不可用，当前使用教材正文匹配。'),
+                                const Text('中文含义资料暂不可用，当前使用内容正文匹配。'),
                               if (usages.length > 1)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),

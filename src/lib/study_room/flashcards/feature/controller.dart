@@ -206,7 +206,7 @@ class FlashController extends ChangeNotifier {
   }
 
   Future<void> _loadSelectedWords() async {
-    if (bookId.isEmpty) throw StateError('请先选择教材。');
+    if (bookId.isEmpty) throw StateError('请先选择内容。');
     if (lessonIds.isEmpty) throw StateError('请先选择需要复习的课程。');
     final result = await catalog.words(bookId, lessonIds);
     words = result.words;
@@ -250,7 +250,7 @@ class FlashController extends ChangeNotifier {
 
   bool validateSelection() {
     final message = bookId.isEmpty
-        ? '请先选择教材。'
+        ? '请先选择内容。'
         : lessonIds.isEmpty
         ? '请先选择需要复习的课程。'
         : null;
@@ -298,7 +298,7 @@ class FlashController extends ChangeNotifier {
     _requirePermission();
     if (await catalog.version(session!.words.first.bookId) !=
             session!.version) {
-      throw StateError('教材版本已变化，请返回设置放弃草稿，重新选择课程');
+      throw StateError('内容版本已变化，请返回设置放弃草稿，重新选择课程');
     }
   }
 

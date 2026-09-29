@@ -300,7 +300,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
           builder: (dialogContext) => GlassAlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('选择教材')),
+                const Expanded(child: Text('选择内容')),
                 const SizedBox(width: 12),
                 StudyIconButton(
                   tooltip: '关闭',
@@ -313,7 +313,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (books.isEmpty) const Text('暂无可用教材，请先在教材库完成下载。'),
+                if (books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
                 for (final row in books) ...[
                   if (row != books.first) const SizedBox(height: 12),
                   Semantics(
@@ -467,7 +467,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
         title: const Text('课程排序'),
         actions: [
           StudyIconButton(
-            tooltip: '选择教材',
+            tooltip: '选择内容',
             onPressed: loading || confirming || choosingBook
                 ? null
                 : _chooseBook,
@@ -514,12 +514,12 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('请先选择本次听写的教材'),
+                  const Text('请先选择本次听写的内容'),
                   StudyButton.filled(
                     onPressed: () async {
                       await _chooseBook();
                     },
-                    child: const Text('选择教材'),
+                    child: const Text('选择内容'),
                   ),
                 ],
               ),
@@ -565,11 +565,11 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  child: const Text('本教材课程 · 点击勾选 / 再次点击取消'),
+                  child: const Text('本内容课程 · 点击勾选 / 再次点击取消'),
                 ),
                 Expanded(
                   child: cards.isEmpty
-                      ? const Center(child: Text('本教材暂无课程'))
+                      ? const Center(child: Text('本内容暂无课程'))
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final columns = constraints.maxWidth >= 320 ? 6 : 4;

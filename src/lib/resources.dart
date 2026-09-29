@@ -20,12 +20,12 @@ void safeName(String name) {
 
 String textbookMediaFilename(String source, String type) {
   final parts = source.split('/');
-  if (parts.length != 2 || parts.first != 'mp3') throw const FormatException('教材媒体必须位于 mp3 文件夹');
+  if (parts.length != 2 || parts.first != 'mp3') throw const FormatException('内容媒体必须位于 mp3 文件夹');
   final filename = parts.last;
   safeName(filename);
   final extension = filename.split('.').last.toLowerCase();
   final allowed = switch (type) { 'image' => {'png', 'jpg', 'jpeg', 'webp'}, 'video' => {'mp4'}, _ => <String>{} };
-  if (!allowed.contains(extension)) throw const FormatException('教材媒体类型或格式不受支持');
+  if (!allowed.contains(extension)) throw const FormatException('内容媒体类型或格式不受支持');
   return filename;
 }
 
@@ -81,26 +81,26 @@ class Resources extends ChangeNotifier {
   });
   Future<String> audioPath(String book, String filename) async {
     safeName(filename);
-    if (unavailable.contains(book)) throw StateError('教材正在同步或需要修复');
+    if (unavailable.contains(book)) throw StateError('内容正在同步或需要修复');
     final row = await installation(book);
-    if (row == null || row['status'] != 'ready') throw StateError('请先下载教材');
+    if (row == null || row['status'] != 'ready') throw StateError('请先下载内容');
     final folder = textOf(row, 'folder'); safeName(folder);
     final path = '${store.root.path}/resources/$folder/mp3/$filename';
-    if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载教材');
+    if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载内容');
     return path;
   }
   Future<String> mediaPath(String book, String source, String type) async {
     final filename = textbookMediaFilename(source, type);
-    if (unavailable.contains(book) || activeBook == book) throw StateError('教材正在同步或需要修复');
+    if (unavailable.contains(book) || activeBook == book) throw StateError('内容正在同步或需要修复');
     final row = await installation(book);
-    if (row == null || row['status'] != 'ready') throw StateError('请先下载教材');
+    if (row == null || row['status'] != 'ready') throw StateError('请先下载内容');
     final folder = textOf(row, 'folder'); safeName(folder);
     final root = Directory('${store.root.path}/resources/$folder/mp3');
     final file = File('${root.path}/$filename');
-    if (!await file.exists()) throw StateError('媒体文件缺失，请重新下载教材');
+    if (!await file.exists()) throw StateError('媒体文件缺失，请重新下载内容');
     final rootPath = await root.resolveSymbolicLinks();
     final path = await file.resolveSymbolicLinks();
-    if (File(path).parent.path != rootPath) throw const FormatException('教材媒体路径无效');
+    if (File(path).parent.path != rootPath) throw const FormatException('内容媒体路径无效');
     return path;
   }
   Future<Object?> _json(String name) async {
@@ -121,21 +121,21 @@ class Resources extends ChangeNotifier {
   }
   Future<List<RowData>> refreshTextbooks() async {
     final json = await _json('yzc_textbook.json');
-    if (json is! List) throw const FormatException('教材目录必须是数组');
+    if (json is! List) throw const FormatException('内容目录必须是数组');
     final columns = await store.db.rawQuery('PRAGMA table_info(yzc_textbook)');
     final keys = columns.map((r) => r['name'] as String).toSet();
     final rows = <String, RowData>{};
     final invalidHashes = <String>{};
     for (final entry in json) {
       if (entry is! Map || entry['id'] is! String || (entry['id'] as String).isEmpty || rows.containsKey(entry['id'])) {
-        throw const FormatException('教材 ID 必须为唯一字符串');
+        throw const FormatException('内容 ID 必须为唯一字符串');
       }
       final id = entry['id'] as String;
       final row = <String, Object?>{};
       for (final key in keys) {
         final value = entry[key];
         if (key != 'sha256' && value != null && (key == 'sort' ? value is! int : value is! String)) {
-          throw FormatException('教材字段 $key 类型错误');
+          throw FormatException('内容字段 $key 类型错误');
         }
         row[key] = value;
       }
@@ -161,7 +161,7 @@ class Resources extends ChangeNotifier {
     final id = textOf(textbook, 'id');
     final file = textbook['resource_file'];
     if (file is! String || !file.endsWith('.zip')) {
-      throw const FormatException('教材 resource_file 必须是 ZIP 文件名');
+      throw const FormatException('内容 resource_file 必须是 ZIP 文件名');
     }
     safeName(file);
     if (file.contains(RegExp(r'[%?#]'))) throw const FormatException('资源文件名不能含 URL 转义或查询字符');
@@ -175,9 +175,9 @@ class Resources extends ChangeNotifier {
     };
     await store.write(() async {
       final old = await store.db.query('yzc_resource_install', where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id]);
-      if (old.isNotEmpty) throw const FormatException('目录名已被其他教材使用');
+      if (old.isNotEmpty) throw const FormatException('目录名已被其他内容使用');
       final reserved = await store.db.query('yzc_resource', columns: ['id'], where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id], limit: 1);
-      if (reserved.isNotEmpty) throw const FormatException('目录名已被其他教材资源描述使用');
+      if (reserved.isNotEmpty) throw const FormatException('目录名已被其他内容资源描述使用');
       final previous = await store.db.query('yzc_resource', where: 'textbook_id=?', whereArgs: [id]);
       row['id'] = previous.isEmpty ? store.newId() : previous.single['id'];
       final count = await store.db.update('yzc_resource', row, where: 'textbook_id=?', whereArgs: [id]);
@@ -187,9 +187,9 @@ class Resources extends ChangeNotifier {
   }
 
   Future<void> remove(String id) async {
-    if (activeBook != null) throw StateError('请等待当前教材任务完成');
+    if (activeBook != null) throw StateError('请等待当前内容任务完成');
     activeBook = id;
-    report('delete', null, '正在删除教材资源');
+    report('delete', null, '正在删除内容资源');
     final playback = IosLessonPlayback.instance;
     String? operationId;
     bool committed = false;
@@ -198,7 +198,7 @@ class Resources extends ChangeNotifier {
       operationId = await _beginOperation(id, 'delete');
       await _recoverBook(id);
       final installed = await installation(id);
-      if (installed == null || installed['status'] != 'ready') throw StateError('教材未安装或状态异常');
+      if (installed == null || installed['status'] != 'ready') throw StateError('内容未安装或状态异常');
       final folder = textOf(installed, 'folder');
       safeName(folder);
       await store.write(() => store.db.update('yzc_resource_operation', {
@@ -218,9 +218,9 @@ class Resources extends ChangeNotifier {
       }));
       committed = true;
       await _finishDelete({'id': operationId, 'textbook_id': id, 'folder': folder});
-      report('delete', 1, '教材资源已删除');
+      report('delete', 1, '内容资源已删除');
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'textbook', operation: '删除教材', context: {'textbook_id': id, 'operation_id': operationId, 'stage': stage});
+      SystemErrors.record(e, stack, module: 'textbook', operation: '删除内容', context: {'textbook_id': id, 'operation_id': operationId, 'stage': stage});
       if (operationId != null) {
         if (committed) {
           await store.write(() => store.db.update('yzc_resource_operation', {
@@ -260,17 +260,17 @@ class Resources extends ChangeNotifier {
     for (final job in pending) {
       try { await _recoverJob(job); }
       catch (cleanupError, cleanupStack) {
-        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _markBroken(job); rethrow;
       }
       final current = (await store.db.query('yzc_resource_job', columns: ['phase'], where: 'id=?', whereArgs: [job['id']])).single;
-      if (!['done', 'failed'].contains(current['phase'])) throw StateError('上次教材任务尚未清理完成，请重试');
+      if (!['done', 'failed'].contains(current['phase'])) throw StateError('上次内容任务尚未清理完成，请重试');
     }
   }
 
   Future<void> download(String id) async {
-    if (activeBook != null) throw StateError('请等待当前教材任务完成');
-    activeBook = id; report('catalog', null, '获取教材信息');
+    if (activeBook != null) throw StateError('请等待当前内容任务完成');
+    activeBook = id; report('catalog', null, '获取内容信息');
     RowData? job;
     Database? source;
     String? operationId;
@@ -282,7 +282,7 @@ class Resources extends ChangeNotifier {
       // Refresh availability without overwriting the installed textbook or its hash.
       final books = await refreshTextbooks();
       if (!books.any((b) => b['id'] == id && b['sfky'] == '1') || hasInvalidPublishedTextbookHash(id)) {
-        throw StateError('本次目录中教材不存在或不可下载');
+        throw StateError('本次目录中内容不存在或不可下载');
       }
       final remoteBook = books.firstWhere((book) => book['id'] == id);
       final descriptor = await _descriptor(remoteBook);
@@ -291,7 +291,7 @@ class Resources extends ChangeNotifier {
         'folder': descriptor['folder'], 'update_time': nowMs(),
       }, where: 'id=?', whereArgs: [operationId]));
       final old = await installation(id);
-      if (old != null && old['folder'] != descriptor['folder']) throw StateError('教材目录名发生变化，请先确认资源映射');
+      if (old != null && old['folder'] != descriptor['folder']) throw StateError('内容目录名发生变化，请先确认资源映射');
       final folder = textOf(descriptor, 'folder');
       final staging = '${store.root.path}/staging/$jobId';
       final backup = '${store.root.path}/backups/$jobId/$folder/mp3';
@@ -315,7 +315,7 @@ class Resources extends ChangeNotifier {
       try {
         tables = await _validate(sourceDatabase, id, '$staging/extracted/$folder');
       } on FormatException catch (e, stack) {
-        SystemErrors.record(e, stack, module: 'textbook', operation: '校验教材数据', context: {...diagnostics, 'operation_id': operationId, 'stage': 'validate'});
+        SystemErrors.record(e, stack, module: 'textbook', operation: '校验内容数据', context: {...diagnostics, 'operation_id': operationId, 'stage': 'validate'});
         rethrow;
       }
       await _phase(jobId, 'prepared');
@@ -377,21 +377,21 @@ class Resources extends ChangeNotifier {
       unavailable.remove(id);
       await playback.unblockBook(id);
       try { await _cleanup(job); } catch (cleanupError, cleanupStack) {
-        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _phase(jobId, 'cleanup_pending');
       }
       report('sync', 1, '安装完成');
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'textbook', operation: '下载并安装教材', context: {...diagnostics, 'operation_id': operationId, 'stage': stage, 'detail': detail, 'job_id': job?['id']});
+      SystemErrors.record(e, stack, module: 'textbook', operation: '下载并安装内容', context: {...diagnostics, 'operation_id': operationId, 'stage': stage, 'detail': detail, 'job_id': job?['id']});
       try { await source?.close(); } catch (cleanupError, cleanupStack) {
-        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
       }
       source = null;
       if (operationId != null) await _failOperation(operationId, e);
       if (job != null) {
         try { await _recoverJob((await store.db.query('yzc_resource_job', where: 'id=?', whereArgs: [job['id']])).single); }
         catch (cleanupError, cleanupStack) {
-          SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+          SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
           await _markBroken(job);
         }
       }
@@ -469,12 +469,12 @@ class Resources extends ChangeNotifier {
 
   Future<List<String>> _validate(Database source, String id, String folder) async {
     final integrity = await source.rawQuery('PRAGMA quick_check');
-    if (integrity.length != 1 || integrity.single.values.single != 'ok') throw const FormatException('教材 SQLite 损坏');
+    if (integrity.length != 1 || integrity.single.values.single != 'ok') throw const FormatException('内容 SQLite 损坏');
     final schema = await source.rawQuery("SELECT name,type FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'");
     final names = schema.where((r) => r['type'] == 'table').map((r) => textOf(r, 'name')).toSet();
     const tables = textbookContentTables;
     final allowed = {'yzc_textbook', ...tables};
-    if (!names.containsAll(allowed)) throw const FormatException('教材数据库缺少必需数据表');
+    if (!names.containsAll(allowed)) throw const FormatException('内容数据库缺少必需数据表');
     if (schema.any((r) => !['table', 'index'].contains(r['type']) || (r['type'] == 'table' && !allowed.contains(r['name'])))) throw const FormatException('资源数据库含未约定结构');
     final sourceColumns = <String, List<RowData>>{};
     for (final table in ['yzc_textbook', ...tables]) {
@@ -495,10 +495,10 @@ class Resources extends ChangeNotifier {
       }
     }
     final books = await source.query('yzc_textbook');
-    if (books.length != 1 || books.single['id'] != id) throw const FormatException('包内教材 ID 不匹配');
+    if (books.length != 1 || books.single['id'] != id) throw const FormatException('包内内容 ID 不匹配');
     for (final table in tables) {
       final wrong = Sqflite.firstIntValue(await source.rawQuery('SELECT COUNT(*) FROM $table WHERE textbook_id IS NULL OR textbook_id<>? OR id IS NULL OR id=?', [id, ''])) ?? 0;
-      if (wrong > 0) throw FormatException('$table 含其他教材或无效 ID');
+      if (wrong > 0) throw FormatException('$table 含其他内容或无效 ID');
       final columns = sourceColumns[table]!;
       // SQLite VARCHAR/INT affinity does not enforce value types by itself.
       for (var offset = 0; ; offset += 200) {
@@ -563,7 +563,7 @@ class Resources extends ChangeNotifier {
     int total = 0, copied = 0;
     for (final file in files) { total += await file.length(); }
     final capacity = await const MethodChannel('yuzhichu/device').invokeMethod<int>('freeSpace');
-    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步教材资源的空间不足');
+    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步内容资源的空间不足');
     await to.create(recursive: true);
     await _excludeDownloadsFromBackup();
     for (final file in files) {
@@ -573,12 +573,12 @@ class Resources extends ChangeNotifier {
         await for (final bytes in file.openRead()) {
           sink.add(bytes); copied += bytes.length;
           await sink.flush();
-          report('sync', total == 0 ? .6 : .6 * copied / total, '复制教材资源 $copied/$total 字节');
+          report('sync', total == 0 ? .6 : .6 * copied / total, '复制内容资源 $copied/$total 字节');
         }
         await sink.flush();
       } finally { await sink.close(); }
     }
-    report('sync', .6, '教材资源已就位');
+    report('sync', .6, '内容资源已就位');
   }
   Future<void> _excludeDownloadsFromBackup() async {
     if (Platform.isIOS) {
@@ -597,7 +597,7 @@ class Resources extends ChangeNotifier {
     final jobs = await store.db.query('yzc_resource_job', where: 'phase NOT IN (?,?)', whereArgs: ['done', 'failed'], orderBy: 'create_time');
     for (final job in jobs) {
       try { await _recoverJob(job); } catch (cleanupError, cleanupStack) {
-        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _markBroken(job);
       }
     }
@@ -609,7 +609,7 @@ class Resources extends ChangeNotifier {
           await _finishDelete(operation);
           await IosLessonPlayback.instance.unblockBook(id);
         } catch (e, stack) {
-          SystemErrors.record(e, stack, module: 'textbook', operation: '恢复教材删除', context: {'textbook_id': id, 'operation_id': operation['id']});
+          SystemErrors.record(e, stack, module: 'textbook', operation: '恢复内容删除', context: {'textbook_id': id, 'operation_id': operation['id']});
           unavailable.add(id);
           await store.write(() => store.db.update('yzc_resource_operation', {
             'error': e.toString(), 'update_time': nowMs(),
@@ -641,7 +641,7 @@ class Resources extends ChangeNotifier {
       final target = Directory('${store.root.path}/resources/$folder/mp3');
       if (!await target.exists()) { unavailable.add(id); throw StateError('新版音频丢失，请重新下载'); }
       try { await _cleanup(job); } catch (cleanupError, cleanupStack) {
-        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '教材恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
+        SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _phase(textOf(job, 'id'), 'cleanup_pending');
       }
       unavailable.remove(id);
@@ -667,7 +667,7 @@ class Resources extends ChangeNotifier {
     }
     final staging = Directory(textOf(job, 'staging'));
     if (await staging.exists()) await staging.delete(recursive: true);
-    await _failOperation(textOf(job, 'id'), '安装中断，已恢复原教材状态');
+    await _failOperation(textOf(job, 'id'), '安装中断，已恢复原内容状态');
     await _phase(textOf(job, 'id'), 'failed'); unavailable.remove(id);
     if (installed?['status'] == 'broken') unavailable.add(id);
     await IosLessonPlayback.instance.unblockBook(id);

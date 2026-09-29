@@ -135,7 +135,7 @@ class _DictationPageState extends State<_DictationPage> with WidgetsBindingObser
         }
       }
       if (questions.isEmpty) throw StateError('所选课程没有同时包含原文和音频的条目');
-      if (version != await catalog.version(_bookId)) throw StateError('教材已更新，请重新读取');
+      if (version != await catalog.version(_bookId)) throw StateError('内容已更新，请重新读取');
       if (!_current(epoch)) return;
       if (_randomOrder) questions.shuffle(Random());
       _questions = questions;
@@ -158,7 +158,7 @@ class _DictationPageState extends State<_DictationPage> with WidgetsBindingObser
   Future<bool> _play(int epoch) async {
     if (!_current(epoch)) return false;
     if (_version != await widget.controller.catalog.version(_bookId)) {
-      throw StateError('教材已更新，请返回课程选择页重新开始');
+      throw StateError('内容已更新，请返回课程选择页重新开始');
     }
     if (!_current(epoch)) return false;
     final id = '$_identity:$epoch:$_round:${DateTime.now().microsecondsSinceEpoch}';

@@ -513,7 +513,7 @@ class _DictationDemoPageState extends State<DictationDemoPage>
                   const SizedBox(height: 8),
                   Text(_failure ?? (!c.guided
                       ? '可以选课、排序、设置规则和练习听写。仅使用内置样例，不保存学习记录。'
-                      : !_ready ? '正在读取内置教材与样例音频。' : _description.text)),
+                      : !_ready ? '正在读取内置内容与样例音频。' : _description.text)),
                   const SizedBox(height: 10),
                   if (c.guided && _ready) ...[
                     LinearProgressIndicator(value: (_step.index + 1) / _TourStep.values.length),

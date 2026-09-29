@@ -41,7 +41,7 @@ class _ResultViewState extends State<ResultView> {
       if (a.questions.any((q) => q.listening))
         Text('听力适配：${(a.progress['synthetic_audio'] as List? ?? []).length} 题请求合成朗读，'
           '${(a.progress['text_help'] as List? ?? []).length} 题查看文字稿；不代表真实听辨能力。'),
-      const Text('原创模拟与教材练习，尚待教研审校；结果不作 J 合格判定。'),
+      const Text('原创模拟与内容练习，尚待教研审校；结果不作 J 合格判定。'),
       const SizedBox(height: 16),
       ExpansionTile(title: const Text('题型表现'), children: [
         for (final entry in byType.entries) ListTile(

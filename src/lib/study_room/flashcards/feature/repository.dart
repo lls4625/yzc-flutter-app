@@ -13,7 +13,7 @@ class FlashCatalog {
   final StudyRoomHost host;
 
   Future<String> pronunciation(FlashWord word) => _read((db) async {
-    if (host.isBookUnavailable(word.bookId)) throw StateError('教材暂不可用');
+    if (host.isBookUnavailable(word.bookId)) throw StateError('内容暂不可用');
     final rows = await db.query(
       'yzc_words',
       columns: ['phonetic'],
@@ -76,13 +76,13 @@ class FlashCatalog {
   );
 
   Future<String> _version(DatabaseExecutor db, String book) async {
-    if (host.isBookUnavailable(book)) throw StateError('教材正在更新或需要修复，请稍后重新选择');
+    if (host.isBookUnavailable(book)) throw StateError('内容正在更新或需要修复，请稍后重新选择');
     final rows = await db.rawQuery(
       '''SELECT b.ver,i.job_id,i.install_time FROM yzc_textbook b
       JOIN yzc_resource_install i ON i.textbook_id=b.id WHERE b.id=? AND i.status='ready' ''',
       [book],
     );
-    if (rows.length != 1) throw StateError('教材已不可用，请重新选择已安装教材');
+    if (rows.length != 1) throw StateError('内容已不可用，请重新选择已安装内容');
     return jsonEncode(rows.single);
   }
 
@@ -133,7 +133,7 @@ class FlashCatalog {
       return (words: words, version: stamp, skipped: skipped);
     }, exclusive: false);
     if (await _version(db, book) != result.version)
-      throw StateError('教材已更新，请重新载入单词');
+      throw StateError('内容已更新，请重新载入单词');
     return result;
   });
 }

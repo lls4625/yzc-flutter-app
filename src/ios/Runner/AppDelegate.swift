@@ -362,7 +362,7 @@ private final class CourseVideoPlayback {
   private func load(_ args: [String: Any], owner: String) throws {
     guard let path = args["path"] as? String, let id = args["id"] as? String,
           let book = args["book"] as? String, !blockedBooks.contains(book) else {
-      throw videoError("教材正在更新，暂时无法播放")
+      throw videoError("内容正在更新，暂时无法播放")
     }
     let support = try FileManager.default.url(for: .applicationSupportDirectory,
       in: .userDomainMask, appropriateFor: nil, create: false)
@@ -370,7 +370,7 @@ private final class CourseVideoPlayback {
     let url = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
     guard url.path.hasPrefix(root.path + "/"), url.deletingLastPathComponent().lastPathComponent == "mp3",
           url.pathExtension.lowercased() == "mp4", FileManager.default.fileExists(atPath: url.path) else {
-      throw videoError("视频文件缺失或路径无效，请重新下载教材")
+      throw videoError("视频文件缺失或路径无效，请重新下载内容")
     }
     stop()
     self.owner = owner; rowID = id; self.book = book
@@ -398,7 +398,7 @@ private final class CourseVideoPlayback {
           if self.wantsPlayback { self.player.playImmediately(atRate: Float(self.speedSteps) / 20) }
           self.publish()
         } else if item.status == .failed {
-          self.fail("视频格式无法播放或文件已损坏，请重新下载教材")
+          self.fail("视频格式无法播放或文件已损坏，请重新下载内容")
         }
       }
     }
@@ -769,9 +769,9 @@ private final class LessonPlayback {
             FileManager.default.fileExists(atPath: file) else { return nil }
       return Clip(id: id, path: file)
     }
-    guard newClips.count == rows.count else { throw playbackError("音频文件缺失，请重新下载教材") }
+    guard newClips.count == rows.count else { throw playbackError("音频文件缺失，请重新下载内容") }
     guard !blockedBooks.contains(where: { newLesson.hasPrefix($0 + ":") }) else {
-      throw playbackError("教材正在更新，暂时不能播放")
+      throw playbackError("内容正在更新，暂时不能播放")
     }
     try activateSession()
     interrupted = false
@@ -830,7 +830,7 @@ private final class LessonPlayback {
               prepared === self.currentClip || prepared === self.nextClip else { return }
         guard asset.statusOfValue(forKey: "duration", error: nil) == .loaded,
               asset.statusOfValue(forKey: "tracks", error: nil) == .loaded else {
-          prepared.error = "音频时长或音轨读取失败，请检查教材资源"
+          prepared.error = "音频时长或音轨读取失败，请检查内容资源"
           if prepared === self.currentClip { self.installPreparedClip(prepared) }
           return
         }
@@ -883,7 +883,7 @@ private final class LessonPlayback {
         guard let self = self, token == self.generation,
               item === self.currentClip?.item, item === self.player.currentItem else { return }
         if item.status == .failed {
-          self.fail("音频读取失败，请检查教材资源后重新开始")
+          self.fail("音频读取失败，请检查内容资源后重新开始")
           return
         }
         guard item.status == .readyToPlay, self.preparing else { return }
@@ -961,7 +961,7 @@ private final class LessonPlayback {
   private func resume() throws {
     guard !clips.isEmpty else { return }
     guard !blockedBooks.contains(where: { lesson.hasPrefix($0 + ":") }) else {
-      throw playbackError("教材正在更新，暂时不能播放")
+      throw playbackError("内容正在更新，暂时不能播放")
     }
     try activateSession()
     interrupted = false

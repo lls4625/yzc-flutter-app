@@ -1,6 +1,6 @@
 import 'resource_password.dart';
 
-/// 教材专用配置；下载地址和 ZIP 密码密文必须对应同一批资源包。
+/// 内容专用配置；下载地址和 ZIP 密码密文必须对应同一批资源包。
 class ResourceConfig {
 //   static const baseUrl = 'https://yzc-1256369926.cos.ap-shanghai.myqcloud.com/yzc/textbook/';
   static const baseUrl = 'http://10.0.0.212:8080/textbook/';
@@ -11,7 +11,7 @@ class ResourceConfig {
     try {
       return await restoreResourcePassword(passwordCiphertext);
     } catch (_) {
-      throw StateError('教材资源包密码密文配置无效，请检查本模块配置');
+      throw StateError('内容资源包密码密文配置无效，请检查本模块配置');
     }
   }
 
@@ -20,7 +20,7 @@ class ResourceConfig {
     if (uri == null || !['http', 'https'].contains(uri.scheme) ||
         uri.host.isEmpty || uri.hasQuery || uri.hasFragment ||
         uri.userInfo.isNotEmpty) {
-      throw StateError('教材资源包下载地址无效');
+      throw StateError('内容资源包下载地址无效');
     }
     return uri.replace(path: uri.path.endsWith('/') ? uri.path : uri.path + '/');
   }

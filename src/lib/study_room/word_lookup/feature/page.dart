@@ -211,7 +211,7 @@ class _WordLookupPageState extends State<WordLookupPage> {
       if (_loading) const LinearProgressIndicator(minHeight: 2),
       Expanded(child: _controller.text.trim().isEmpty
         ? const Center(child: Padding(padding: EdgeInsets.all(28),
-            child: Text('查询已安装教材中的单词\n支持假名、汉字和中文释义', textAlign: TextAlign.center)))
+            child: Text('查询已安装内容中的单词\n支持假名、汉字和中文释义', textAlign: TextAlign.center)))
         : _error != null ? Center(child: Text(_error!))
         : !_loading && _rows.isEmpty ? const Center(child: Text('没有找到匹配的单词'))
         : ListView(padding: const EdgeInsets.fromLTRB(12, 8, 12, 24), children: [

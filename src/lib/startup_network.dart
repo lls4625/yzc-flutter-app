@@ -36,36 +36,36 @@ class StartupNetwork {
       uri = ResourceConfig.base.resolve('yzc_textbook.json');
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'network', operation: '网络检查与设置', context: {'base_url': ResourceConfig.baseUrl});
-      return const StartupNetworkResult(false, '教材服务地址无效', '请联系维护者检查教材服务配置。');
+      return const StartupNetworkResult(false, '内容服务地址无效', '请联系维护者检查内容服务配置。');
     }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
     try {
       await _readCatalog(client, uri).timeout(const Duration(seconds: 12));
-      return const StartupNetworkResult(true, '教材服务已连接', '可以获取教材目录和下载教材。');
+      return const StartupNetworkResult(true, '内容服务已连接', '可以获取内容目录和下载内容。');
     } on HttpException catch (e, stack) {
       SystemErrors.record(e, stack, module: 'network', operation: '网络检查与设置', context: {'base_url': ResourceConfig.baseUrl});
-      return const StartupNetworkResult(false, '教材服务暂时不可用', '已连接到服务，但未能获取教材目录。请稍后重试或联系维护者。', networkError: true);
+      return const StartupNetworkResult(false, '内容服务暂时不可用', '已连接到服务，但未能获取内容目录。请稍后重试或联系维护者。', networkError: true);
     } on FormatException catch (e, stack) {
       SystemErrors.record(e, stack, module: 'network', operation: '网络检查与设置', context: {'base_url': ResourceConfig.baseUrl});
-      return const StartupNetworkResult(false, '教材目录暂时不可用', '服务返回的目录格式异常，请稍后重试或联系维护者。');
+      return const StartupNetworkResult(false, '内容目录暂时不可用', '服务返回的目录格式异常，请稍后重试或联系维护者。');
     } on HandshakeException catch (e, stack) {
       SystemErrors.record(e, stack, module: 'network', operation: '网络检查与设置', context: {'base_url': ResourceConfig.baseUrl});
-      return const StartupNetworkResult(false, '无法安全连接教材服务', '请联系维护者检查服务证书。', networkError: true);
+      return const StartupNetworkResult(false, '无法安全连接内容服务', '请联系维护者检查服务证书。', networkError: true);
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'network', operation: '网络检查与设置', context: {'base_url': ResourceConfig.baseUrl});
       final status = await _status();
       if (status['status'] == 'unavailable' &&
           (status['reason'] == 'wifiDenied' || status['reason'] == 'cellularDenied')) {
         return const StartupNetworkResult(false, '当前网络访问受限',
-          '请检查系统设置中“语之初”的无线数据设置，或切换到可用的 Wi-Fi。已下载教材可继续离线使用。',
+          '请检查系统设置中“语之初”的无线数据设置，或切换到可用的 Wi-Fi。已下载内容可继续离线使用。',
           permissionDenied: true, networkError: true);
       }
       if (status['status'] == 'unavailable') {
-        return const StartupNetworkResult(false, '网络不可用，无法连接教材服务器',
-          '请检查 Wi-Fi 或蜂窝网络后重试。已下载教材可继续离线使用。', networkError: true);
+        return const StartupNetworkResult(false, '网络不可用，无法连接内容服务器',
+          '请检查 Wi-Fi 或蜂窝网络后重试。已下载内容可继续离线使用。', networkError: true);
       }
-      return const StartupNetworkResult(false, '教材服务器连接异常',
-        '请检查网络连接，稍后重试。已下载教材可继续离线使用。', networkError: true);
+      return const StartupNetworkResult(false, '内容服务器连接异常',
+        '请检查网络连接，稍后重试。已下载内容可继续离线使用。', networkError: true);
     } finally {
       client.close(force: true);
     }

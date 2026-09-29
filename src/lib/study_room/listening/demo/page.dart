@@ -319,7 +319,7 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
           builder: (dialogContext) => GlassAlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('选择教材')),
+                const Expanded(child: Text('选择内容')),
                 const SizedBox(width: 12),
                 StudyIconButton(
                   tooltip: '关闭',
@@ -332,7 +332,7 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (books.isEmpty) const Text('暂无可用教材，请先在教材库完成下载。'),
+                if (books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
                 for (final row in books) ...[
                   if (row != books.first) const SizedBox(height: 12),
                   Semantics(
@@ -417,7 +417,7 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
         leading: BackButton(onPressed: widget.controller.closeAction),
         actions: [
           StudyIconButton(
-            tooltip: '选择教材',
+            tooltip: '选择内容',
             onPressed: loading || confirming || choosingBook
                 ? null
                 : _chooseBook,
@@ -465,12 +465,12 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('请先选择本次收听的教材'),
+                  const Text('请先选择本次收听的内容'),
                   StudyButton.filled(
                     onPressed: () async {
                       await _chooseBook();
                     },
-                    child: const Text('选择教材'),
+                    child: const Text('选择内容'),
                   ),
                 ],
               ),
@@ -512,12 +512,12 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                     vertical: 12,
                   ),
                   child: Text(
-                    '本教材课程 · 点击勾选 / 再次点击取消',
+                    '本内容课程 · 点击勾选 / 再次点击取消',
                   ),
                 ),
                 Expanded(
                   child: SizedBox(key: widget.targets.selection, child: cards.isEmpty
-                      ? const Center(child: Text('本教材暂无课程'))
+                      ? const Center(child: Text('本内容暂无课程'))
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final columns = constraints.maxWidth >= 320 ? 6 : 4;
@@ -788,9 +788,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
         setState(() => prepared++);
       }
       if (nextClips.isEmpty) throw StateError('所选课程暂无可播放音频');
-      if (resourceBlocked) throw StateError('教材正在同步或需要修复');
+      if (resourceBlocked) throw StateError('内容正在同步或需要修复');
       if (contentVersion != await widget.controller.catalog.version(bookId)) {
-        throw StateError('教材已更新，请重新准备播放');
+        throw StateError('内容已更新，请重新准备播放');
       }
       if (!mounted) return;
       setState(() {
@@ -852,7 +852,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
     final generation = widget.controller.playbackGeneration;
     if (!mounted) return;
     if (preparedVersion != await widget.controller.catalog.version(bookId)) {
-      if (mounted) setState(() => error = '教材已更新，请重新准备播放');
+      if (mounted) setState(() => error = '内容已更新，请重新准备播放');
       return;
     }
     if (!mounted ||
@@ -865,7 +865,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
     await playback.start({
       'lesson': identity,
       'title': '${listeningDemoText(widget.book, 'textbook')} ${listeningDemoText(widget.book, 'volume')} · 磨耳朵',
-      'albumTitle': '磨耳朵 · 全教材循环',
+      'albumTitle': '磨耳朵 · 全内容循环',
       'words': sections[section].card.words,
       'batch': !single,
       'speed': speed,
@@ -1388,7 +1388,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                 if (blocked)
                   const Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('教材正在同步或需要修复，暂时无法播放。'),
+                    child: Text('内容正在同步或需要修复，暂时无法播放。'),
                   ),
                 if (playbackError != null)
                   Padding(
