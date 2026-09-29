@@ -456,6 +456,12 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
           ]),
         ],
       ),
+      BasicKnowledgeTopic(
+        id: 'onomatopoeia',
+        title: '拟声拟态词',
+        subtitle: '声音、动作、状态与心情',
+        icon: Icons.bubble_chart_outlined,
+      ),
     ],
   ),
   BasicKnowledgeCategory(
@@ -899,12 +905,6 @@ const basicKnowledgeCategories = <BasicKnowledgeCategory>[
             BasicKnowledgeItem('天气输出', '每天用 4～6 句描述当前天气、体感、最高最低温、明日变化及一项准备。检查振假名、形容词活用和气象动词搭配。'),
           ]),
         ],
-      ),
-      BasicKnowledgeTopic(
-        id: 'onomatopoeia',
-        title: '拟声拟态词',
-        subtitle: '声音、动作、状态与心情',
-        icon: Icons.bubble_chart_outlined,
       ),
     ],
   ),
