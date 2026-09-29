@@ -22,6 +22,9 @@ CREATE TABLE `yzc_content` (
   `jlpt` varchar(64) NULL DEFAULT NULL,
   `rate` varchar(64) NULL DEFAULT NULL,
   `ver` varchar(64) NULL DEFAULT NULL,
+  `media_type` varchar(32) NOT NULL DEFAULT 'text',
+  `media_src` text NULL,
+  `media_config` text NULL,
   PRIMARY KEY (`id`)
 );
 
@@ -182,7 +185,8 @@ CREATE TABLE yzc_user_question (
  ver varchar(64), type varchar(64), relation varchar(64),
  content text, definition text, answer varchar(64),
  textbook varchar(64), title varchar(200), create_time bigint, update_time bigint,
- options text
+ options text,
+ media_json text NULL
 );
 CREATE TABLE yzc_user_practice_item (
  id varchar(64) NOT NULL PRIMARY KEY, user_id varchar(64),
@@ -262,7 +266,8 @@ CREATE TABLE yzc_ai_question (
  relation varchar(64),
  jlpt varchar(64),
  ver varchar(64),
- sort int
+ sort int,
+ media_json text NULL
 );
 CREATE INDEX yzc_ai_question_idx_lesson_relation ON yzc_ai_question(textbook_id,lessons_id,relation,sort);
 
