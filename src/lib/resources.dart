@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:math';
-import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -12,70 +10,12 @@ import 'config.dart';
 import 'data.dart';
 import 'ios_lesson_playback.dart';
 import 'ai_question.dart';
+import 'resource_archive_extractor.dart';
 import 'system_errors.dart';
 
 const textbookContentTables = ['yzc_unit', 'yzc_lessons', 'yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question'];
 void safeName(String name) {
   if (name.isEmpty || name == '.' || name == '..' || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('\u0000') || name.startsWith('.')) throw const FormatException('资源文件名无效');
-}
-
-// Runs in a worker isolate; no SQLite or platform channels in this isolate.
-void _extractTextbookWorker(List<Object> args) {
-  final port = args[0] as SendPort;
-  final zip = args[1] as String, destination = args[2] as String, folder = args[3] as String;
-  InputFileStream? input;
-  try {
-    input = InputFileStream(zip);
-    final decoder = ZipDecoder();
-    final archive = decoder.decodeBuffer(input, password: args[4] as String);
-    if (archive.files.length != decoder.directory.fileHeaders.length) throw const FormatException('ZIP 含重复条目');
-    final seen = <String>{};
-    int total = 0;
-    bool database = false;
-    for (final file in archive.files) {
-      var name = file.name;
-      if (name.endsWith('/')) name = name.substring(0, name.length - 1);
-      final parts = name.split('/');
-      if (file.isSymbolicLink || parts.any((p) => p.isEmpty || p == '.' || p == '..' || p.contains('\\') || p.contains(':') || p.startsWith('.')) || parts.first != folder || !seen.add(name.toLowerCase())) throw FormatException('ZIP 目录不安全或含重复路径：$name，要求根目录 $folder');
-      if (!file.isFile) {
-        if (name != folder && name != '$folder/mp3') throw FormatException('ZIP 含多余目录：$name');
-        continue;
-      }
-      if (name == '$folder/data.sqlite') { database = true; }
-      else if (parts.length != 3 || parts[1] != 'mp3' || !parts.last.toLowerCase().endsWith('.mp3')) { throw FormatException('教材包只能含 mp3/ 和 data.sqlite，发现 $name'); }
-      // Bound individual allocations made by archive 3's decompressor.
-      if (file.size < 0 || file.size > 256 * 1024 * 1024) throw FormatException('单文件超过 256 MB 限制：$name，大小 ${file.size}');
-      total += file.size;
-      if (total > 4 * 1024 * 1024 * 1024) throw const FormatException('教材解压体积超过 4 GB 限制');
-    }
-    if (!database) throw const FormatException('教材包缺少 data.sqlite');
-    final capacity = args[5] as int;
-    if (capacity >= 0 && capacity < total * 2 + 512 * 1024 * 1024) {
-      throw FormatException('解压及同步所需存储空间不足：可用 $capacity，需要 ${total * 2 + 512 * 1024 * 1024}');
-    }
-    Directory('$destination/$folder/mp3').createSync(recursive: true);
-    int written = 0;
-    for (final file in archive.files.where((f) => f.isFile)) {
-      final bytes = file.content as List<int>;
-      if (bytes.length != file.size || (file.crc32 != null && getCrc32(bytes) != file.crc32)) throw FormatException('ZIP 内容校验失败：${file.name}，声明大小 ${file.size}，实际大小 ${bytes.length}，声明 CRC ${file.crc32}，实际 CRC ${getCrc32(bytes)}');
-      final output = File('$destination/${file.name}');
-      output.parent.createSync(recursive: true);
-      final sink = output.openSync(mode: FileMode.write);
-      try {
-        for (var start = 0; start < bytes.length; start += 65536) {
-          final end = min(start + 65536, bytes.length);
-          sink.writeFromSync(bytes, start, end);
-          written += end - start;
-          port.send({'progress': total == 0 ? 1.0 : written / total});
-        }
-        sink.flushSync();
-      } finally { sink.closeSync(); }
-      file.clear();
-    }
-    port.send({'done': true});
-  } catch (e, stack) {
-    port.send({'error': e.toString(), 'stack': stack.toString()});
-  } finally { input?.closeSync(); }
 }
 
 class Resources extends ChangeNotifier {
@@ -493,7 +433,7 @@ class Resources extends ChangeNotifier {
     final exitSubscription = exits.listen((_) { Future<void>.delayed(const Duration(milliseconds: 100), () { if (!done.isCompleted) done.completeError(StateError('解压进程意外退出')); }); });
     Isolate? worker;
     try {
-      worker = await Isolate.spawn(_extractTextbookWorker, <Object>[messages.sendPort, zip, destination, folder, password, capacity ?? -1], onError: errors.sendPort, onExit: exits.sendPort);
+      worker = await Isolate.spawn(extractResourceArchiveWorker, <Object>[messages.sendPort, zip, destination, folder, password, capacity ?? -1], onError: errors.sendPort, onExit: exits.sendPort);
       await done.future;
     } finally {
       worker?.kill(priority: Isolate.immediate);
