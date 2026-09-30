@@ -77,6 +77,7 @@ class AppStore {
     await _prepareSystemErrorSchema();
     SystemErrors.attach(db);
     await _prepareStudySchema();
+    await _prepareCourseMediaSchema();
     final studyMigration = StudyLocalMigration(db, root.path);
     await studyMigration.prepareSchema();
     await db.transaction((tx) async {
@@ -134,6 +135,20 @@ class AppStore {
     });
     SystemErrors.userId = userId;
     await studyMigration.migrate();
+  }
+
+  Future<void> _prepareCourseMediaSchema() async {
+    await db.transaction((tx) async {
+      for (final table in const ['yzc_words', 'yzc_grammar', 'yzc_ai_question', 'yzc_user_question']) {
+        final columns = await tx.rawQuery('PRAGMA table_info($table)');
+        final names = columns.map((column) => column['name']).toSet();
+        if (!names.contains('media_type')) {
+          await tx.execute("ALTER TABLE $table ADD COLUMN media_type varchar(32) NOT NULL DEFAULT 'text'");
+        }
+        if (!names.contains('media_src')) await tx.execute('ALTER TABLE $table ADD COLUMN media_src text NULL');
+        if (!names.contains('media_config')) await tx.execute('ALTER TABLE $table ADD COLUMN media_config text NULL');
+      }
+    });
   }
 
   Future<void> _prepareSystemErrorSchema() async {
@@ -363,13 +378,13 @@ class AppStore {
       final snapshot = newId();
       final books = review ? <RowData>[] : await tx.query('yzc_textbook', where: 'id=?', whereArgs: [q['textbook_id']]);
       final lessons = review ? <RowData>[] : await tx.query('yzc_lessons', where: 'id=? AND textbook_id=?', whereArgs: [q['lessons_id'], q['textbook_id']]);
-      await tx.insert('yzc_user_question', {'id': snapshot, 'user_id': userId, 'textbook_id': q['textbook_id'], 'lessons_id': q['lessons_id'], 'question_id': review ? q['question_id'] : q['id'], 'ver': q['ver'], 'type': q['type'] ?? 'ai', 'relation': q['relation'], 'content': q['content'], 'definition': q['definition'], 'options': encodeQuestionOptions(options), 'answer': q['answer'], 'textbook': review ? q['textbook'] : (books.isEmpty ? null : books.single['textbook']), 'title': review ? q['title'] : (lessons.isEmpty ? null : lessons.single['title']), 'create_time': time, 'update_time': time});
+      await tx.insert('yzc_user_question', {'id': snapshot, 'user_id': userId, 'textbook_id': q['textbook_id'], 'lessons_id': q['lessons_id'], 'question_id': review ? q['question_id'] : q['id'], 'ver': q['ver'], 'type': q['type'] ?? 'ai', 'relation': q['relation'], 'content': q['content'], 'definition': q['definition'], 'options': encodeQuestionOptions(options), 'answer': q['answer'], 'media_json': q['media_json'], 'media_type': textOf(q, 'media_type').isEmpty ? 'text' : q['media_type'], 'media_src': q['media_src'], 'media_config': q['media_config'], 'textbook': review ? q['textbook'] : (books.isEmpty ? null : books.single['textbook']), 'title': review ? q['title'] : (lessons.isEmpty ? null : lessons.single['title']), 'create_time': time, 'update_time': time});
       await tx.insert('yzc_user_practice_item', {'id': newId(), 'user_id': userId, 'practice_id': session, 'question_id': snapshot, 'sort': i, 'create_time': time, 'update_time': time});
     }
     return session;
   }));
 
-  Future<List<RowData>> practiceItems(String id) => db.rawQuery('SELECT i.*,q.content,q.definition,q.relation,q.answer correct_answer,q.textbook_id,q.lessons_id,q.question_id source_id FROM yzc_user_practice_item i JOIN yzc_user_question q ON q.id=i.question_id AND q.user_id=i.user_id WHERE i.user_id=? AND i.practice_id=? ORDER BY i.sort', [userId, id]);
+  Future<List<RowData>> practiceItems(String id) => db.rawQuery('SELECT i.*,q.content,q.definition,q.relation,q.answer correct_answer,q.textbook_id,q.lessons_id,q.question_id source_id,q.media_json,q.media_type,q.media_src,q.media_config FROM yzc_user_practice_item i JOIN yzc_user_question q ON q.id=i.question_id AND q.user_id=i.user_id WHERE i.user_id=? AND i.practice_id=? ORDER BY i.sort', [userId, id]);
   Future<List<RowData>> options(String snapshot) async {
     final rows = await db.query('yzc_user_question', where: 'id=? AND user_id=?', whereArgs: [snapshot, userId]);
     if (rows.isEmpty) throw StateError('练习快照不存在');

@@ -28,6 +28,7 @@ String textbookMediaFilename(String source, String type) {
   final allowed = switch (type) {
     'image' || 'interactive_image' => {'png', 'jpg', 'jpeg', 'webp'},
     'video' => {'mp4'},
+    'audio' => {'mp3'},
     _ => <String>{},
   };
   if (!allowed.contains(extension)) throw const FormatException('内容媒体类型或格式不受支持');
@@ -556,28 +557,30 @@ class Resources extends ChangeNotifier {
       }
       if (questions.length < 200) break;
     }
-    for (var offset = 0; ; offset += 200) {
-      final rows = await source.query('yzc_content', orderBy: 'id', limit: 200, offset: offset);
-      for (final row in rows) {
-        final type = textOf(row, 'media_type');
-        if (type.isEmpty || type == 'text') continue;
-        final filename = textbookMediaFilename(textOf(row, 'media_src'), type);
-        if (!await File('$folder/mp3/$filename').exists()) throw FormatException('缺少课文媒体 $filename');
-        final mediaConfig = textOf(row, 'media_config');
-        if (type == 'image' && mediaConfig.trim().isNotEmpty) {
-          throw FormatException('普通图片 ${row['id']} 不能包含互动配置');
-        }
-        if (type == 'interactive_image') {
-          final config = CourseImageInteractionConfig.parse(mediaConfig);
-          if (config == null) throw FormatException('互动图片 ${row['id']} 缺少有效配置');
-          for (final hotspot in config.hotspots) {
-            if (!await File('$folder/mp3/${hotspot.audioSource}').exists()) {
-              throw FormatException('互动图片 ${row['id']} 缺少音频 ${hotspot.audioSource}');
+    for (final table in const ['yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question']) {
+      for (var offset = 0; ; offset += 200) {
+        final rows = await source.query(table, orderBy: 'id', limit: 200, offset: offset);
+        for (final row in rows) {
+          final type = textOf(row, 'media_type');
+          if (type.isEmpty || type == 'text') continue;
+          final filename = textbookMediaFilename(textOf(row, 'media_src'), type);
+          if (!await File('$folder/mp3/$filename').exists()) throw FormatException('$table 缺少媒体 $filename');
+          final mediaConfig = textOf(row, 'media_config');
+          if ((type == 'image' || type == 'audio' || type == 'video') && mediaConfig.trim().isNotEmpty) {
+            throw FormatException('$table 普通媒体 ${row['id']} 不能包含互动配置');
+          }
+          if (type == 'interactive_image') {
+            final config = CourseImageInteractionConfig.parse(mediaConfig);
+            if (config == null) throw FormatException('$table 互动图片 ${row['id']} 缺少有效配置');
+            for (final hotspot in config.hotspots) {
+              if (!await File('$folder/mp3/${hotspot.audioSource}').exists()) {
+                throw FormatException('$table 互动图片 ${row['id']} 缺少音频 ${hotspot.audioSource}');
+              }
             }
           }
         }
+        if (rows.length < 200) break;
       }
-      if (rows.length < 200) break;
     }
     return tables;
   }

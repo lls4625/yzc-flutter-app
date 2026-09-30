@@ -25,15 +25,16 @@ import 'basic_knowledge/feature/basic_knowledge.dart';
 import 'course/feature/image_interaction_config.dart';
 import 'course/feature/video_controller.dart';
 import 'course/feature/media_widgets.dart';
+import 'course/feature/host.dart';
+import 'course/feature/page.dart';
 
 import 'study_room/study_room_module.dart';
 import 'study_room/resources/manager.dart';
 import 'study_room/resources/page.dart';
 
 final reviewRouteObserver = RouteObserver<ModalRoute<dynamic>>();
-final courseRouteObserver = RouteObserver<PageRoute<dynamic>>();
 
-class AppController extends ChangeNotifier {
+class AppController extends ChangeNotifier implements CourseTabHost {
   AppController(this.store, this.resources);
   final AppStore store;
   late final notices = NoticeService(store);
@@ -147,7 +148,7 @@ class StudyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: app, builder: (_, __) => MaterialApp(
     title: '语之初', debugShowCheckedModeBanner: false,
-    navigatorObservers: [reviewRouteObserver, courseRouteObserver],
+    navigatorObservers: [reviewRouteObserver],
     theme: studyTheme(Brightness.light),
     darkTheme: studyTheme(Brightness.dark),
     themeMode: switch (textOf(app.settings, 'theme')) { 'light' => ThemeMode.light, 'dark' => ThemeMode.dark, _ => ThemeMode.system },
@@ -486,7 +487,9 @@ class _HomePanelState extends State<HomePanel> {
     if (installed?['status'] != 'ready' || widget.app.resources.unavailable.contains(book['id'])) {
       openPage(context, LibraryPage(widget.app));
     } else {
-      openPage(context, LessonPage(widget.app, book, current));
+      openPage(context, CourseLessonPage(widget.app, book, current,
+        openPractice: (context, id) => Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)))));
     }
   }
   @override
@@ -1164,7 +1167,9 @@ class _CoursePanelState extends State<CoursePanel> {
     final currentUnitId = currentLesson.isEmpty ? null : currentLesson.single['unit_id'];
     Widget lessonTile(RowData lesson) {
       final done = lessonPercent(progress, textOf(lesson, 'id')) == 100;
-      return StudyInkWell(onTap: () => openPage(context, LessonPage(widget.app, book, lesson)), child: Padding(
+      return StudyInkWell(onTap: () => openPage(context, CourseLessonPage(widget.app, book, lesson,
+        openPractice: (context, id) => Navigator.of(context).push<void>(
+          MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)))))), child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [
           SizedBox(width: 66, child: Text('第${lesson['num'] ?? lesson['lesson'] ?? ''}课', style: TextStyle(fontWeight: FontWeight.w600, color: done ? Colors.green : null))),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1212,797 +1217,6 @@ class _CoursePanelState extends State<CoursePanel> {
       ])),
     ]));
   });
-}
-
-class LessonPage extends StatefulWidget {
-  const LessonPage(this.app, this.book, this.lesson, {super.key});
-  final AppController app;
-  final RowData book, lesson;
-  @override
-  State<LessonPage> createState() => _LessonPageState();
-}
-class _LessonPageState extends State<LessonPage> with WidgetsBindingObserver, RouteAware {
-  PageRoute<dynamic>? _courseRoute;
-  final playback = IosLessonPlayback.instance;
-  final _video = CourseVideoController();
-  final _lessonScroll = ScrollController();
-  final _mediaViewport = GlobalKey();
-  final _videoAnchors = <String, GlobalKey>{};
-  bool _showVideoBar = false, _visibilityScheduled = false;
-  String _videoUiState = '';
-  final anchors = <String, GlobalKey>{};
-  List<List<RowData>> rows = [[], [], [], []];
-  Set<String> completedTabs = {};
-  final Set<String> expandedGrammar = {};
-  List<RowData> pending = [];
-  int tab = 0, repeat = 1, interval = 0;
-  bool loading = true, busy = false, completing = false, batchMode = false, stopping = false;
-  bool _startingBatch = false, _playbackCoolingDown = false;
-  String? _batchStartId;
-  double _tabDragDistance = 0;
-  int? _tabDragOrigin;
-  Timer? _playbackCooldownTimer;
-  bool get _playbackLocked => busy || stopping || _playbackCoolingDown;
-  String? error, _lastPlaying, _lastError;
-  String get bookId => textOf(widget.book, 'id');
-  String get identity => '$bookId:${widget.lesson['id']}';
-  bool get owns => playback.lesson == identity;
-  bool get batch => owns && playback.active && playback.batch;
-  @override
-  void initState() {
-    super.initState(); WidgetsBinding.instance.addObserver(this);
-    _video.addListener(_videoChanged);
-    _lessonScroll.addListener(_scheduleVideoVisibility);
-    playback.addListener(_playChanged); widget.app.addListener(_settingsChanged); widget.app.resources.addListener(_resourceChanged);
-    if (owns && playback.active) { tab = playback.words ? 0 : 1; batchMode = playback.batch; }
-    unawaited(_load());
-    unawaited(perform(context, playback.refresh));
-    unawaited(perform(context, () async { await widget.app.store.remember(widget.book, widget.lesson); await widget.app.reload(); }));
-  }
-  void _videoChanged() {
-    if (!mounted) return;
-    final state = '${_video.rowId}:${_video.status}:${_video.fullscreen}:${_video.busy}';
-    if (_videoUiState != state) setState(() => _videoUiState = state);
-    _scheduleVideoVisibility();
-  }
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute<dynamic> && route != _courseRoute) {
-      courseRouteObserver.unsubscribe(this);
-      _courseRoute = route;
-      courseRouteObserver.subscribe(this, route);
-    }
-  }
-  @override
-  void didPushNext() {
-    if (!_video.fullscreen) unawaited(perform(context, _video.stop));
-  }
-  @override
-  void didPop() { unawaited(perform(context, _video.stop)); }
-  void _scheduleVideoVisibility() {
-    if (!mounted || _visibilityScheduled) return;
-    _visibilityScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _visibilityScheduled = false;
-      if (!mounted) return;
-      var show = false;
-      if (tab == 1 && _video.active && !_video.fullscreen) {
-        final card = _videoAnchors[_video.rowId]?.currentContext?.findRenderObject();
-        final viewport = _mediaViewport.currentContext?.findRenderObject();
-        if (card is RenderBox && viewport is RenderBox && card.hasSize && viewport.hasSize) {
-          final top = card.localToGlobal(Offset.zero).dy;
-          final viewportTop = viewport.localToGlobal(Offset.zero).dy;
-          show = top + card.size.height <= viewportTop || top >= viewportTop + viewport.size.height;
-        }
-      }
-      if (show != _showVideoBar) setState(() => _showVideoBar = show);
-    });
-  }
-  void _locateVideo() {
-    final target = _videoAnchors[_video.rowId]?.currentContext;
-    if (target != null) unawaited(Scrollable.ensureVisible(target,
-      duration: const Duration(milliseconds: 250), alignment: .2));
-  }
-  Future<void> _startVideo(RowData row) async {
-    if (_playbackLocked || widget.app.resources.unavailable.contains(bookId) || widget.app.resources.activeBook == bookId) return;
-    await _video.play(id: textOf(row, 'id'), book: bookId,
-      resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'video'),
-      beforePlay: () async {
-        final startId = owns ? playback.playingId ?? playback.queuedId : _batchStartId;
-        await playback.stop();
-        if (mounted) setState(() { _batchStartId = startId; batchMode = false; });
-      });
-  }
-  Future<void> _playInteractiveImageAudio(RowData row, CourseImageHotspot hotspot) async {
-    if (_playbackLocked || widget.app.resources.unavailable.contains(bookId) || widget.app.resources.activeBook == bookId) return;
-    await _runPlaybackAction(() async {
-      await _video.stop();
-      if (playback.active) await playback.stop();
-      final path = await widget.app.resources.audioPath(bookId, hotspot.audioSource);
-      if (!mounted || widget.app.resources.unavailable.contains(bookId)) return;
-      await playback.start({
-        'lesson': identity,
-        'title': hotspot.label,
-        'words': false,
-        'batch': false,
-        'speed': widget.app.speed,
-        'repeat': 1,
-        'intervalSteps': 0,
-        'startIndex': 0,
-        'clips': [
-          {'id': 'interactive_image:${row['id']}:${hotspot.id}', 'path': path},
-        ],
-      });
-    });
-  }
-  Future<void> _load() async {
-    try {
-      final lesson = await widget.app.store.db.query('yzc_lessons', where: 'id=? AND textbook_id=?', whereArgs: [widget.lesson['id'], bookId]);
-      if (lesson.isEmpty) throw StateError('原课程已不在当前内容中，学习历史已保留');
-      final result = await Future.wait([for (final table in ['yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question']) widget.app.store.content(table, bookId, textOf(widget.lesson, 'id'))]);
-      final progress = await widget.app.store.progress(bookId);
-      final history = await widget.app.store.history();
-      if (mounted) setState(() {
-        rows = result; loading = false; error = null;
-        completedTabs = progress.where((r) => r['lessons_id'] == widget.lesson['id']).map((r) => textOf(r, 'category')).toSet();
-        pending = history.where((r) => r['type'] != 'review' && r['status'] != 'complete' && r['textbook_id'] == bookId && r['lessons_id'] == widget.lesson['id']).toList();
-      });
-    } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '读取课程', hint: userError(e, fallback: '课程读取失败'), context: {'textbook_id': bookId, 'lesson_id': widget.lesson['id']});
-      if (mounted) setState(() { loading = false; error = userError(e, fallback: '课程读取失败'); });
-    }
-  }
-  bool _updating = false;
-  void _resourceChanged() {
-    if (widget.app.resources.activeBook == bookId) _updating = true;
-    if (_updating && widget.app.resources.activeBook == null) { _updating = false; unawaited(_load()); }
-    if (mounted) setState(() {});
-  }
-  void _settingsChanged() { if (mounted) setState(() {}); }
-  void _playChanged() {
-    if (!mounted) return;
-    setState(() {
-      if (owns && playback.batch && playback.active) {
-        tab = playback.words ? 0 : 1; repeat = playback.repeat; interval = playback.intervalSteps; batchMode = true;
-        // The native queue advances to the first clip after the last one,
-        // including while it is waiting for the configured interval.
-        _batchStartId = playback.playingId ?? playback.queuedId ?? _batchStartId;
-      }
-    });
-    if (owns && playback.error != null && playback.error != _lastError) {
-      _lastError = playback.error;
-      SystemErrors.record(StateError(playback.error!), StackTrace.current,
-        module: 'audio', operation: '课程音频状态异常', hint: '音频播放失败',
-        context: {'textbook_id': bookId, 'lesson_id': widget.lesson['id'], 'playing_id': playback.playingId, 'stack_origin': '原生状态回调，不含原生堆栈'});
-      ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text(userError(StateError(playback.error!), fallback: '音频播放失败'))));
-    }
-    final id = owns ? playback.playingId : null;
-    if (batch && id != _lastPlaying) {
-      if (id != null) _ensurePlayingItemVisible(id);
-    }
-    _lastPlaying = id;
-  }
-
-  void _ensurePlayingItemVisible(String id) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Native callbacks can arrive quickly when clips are short. Re-check the
-      // identity after layout so an obsolete callback never scrolls to a prior item.
-      if (!mounted || !batch || playback.playingId != id || ModalRoute.of(context)?.isCurrent != true) return;
-      final target = anchors[id]?.currentContext;
-      if (target == null) return;
-      final scrollable = Scrollable.maybeOf(target);
-      final targetBox = target.findRenderObject();
-      final viewportBox = scrollable?.context.findRenderObject();
-      if (scrollable == null || targetBox is! RenderBox || viewportBox is! RenderBox) return;
-
-      final targetTop = targetBox.localToGlobal(Offset.zero).dy;
-      final targetBottom = targetTop + targetBox.size.height;
-      final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
-      final viewportBottom = viewportTop + viewportBox.size.height;
-      // Keep a small reading margin rather than forcing every item to the center.
-      const readingMargin = 12.0;
-      final safeTop = viewportTop + readingMargin;
-      final safeBottom = viewportBottom - readingMargin;
-      if (safeBottom <= safeTop) return;
-
-      final position = scrollable.position;
-      double destination = position.pixels;
-      if (targetBox.size.height >= safeBottom - safeTop) {
-        // A long text cannot fit entirely; its beginning is the most useful anchor.
-        destination += targetTop - safeTop;
-      } else if (targetTop < safeTop) {
-        destination += targetTop - safeTop;
-      } else if (targetBottom > safeBottom) {
-        destination += targetBottom - safeBottom;
-      } else {
-        return;
-      }
-      destination = destination.clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
-      if ((destination - position.pixels).abs() < .5) return;
-      unawaited(position.animateTo(destination,
-        duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic));
-    });
-  }
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) { if (state == AppLifecycleState.resumed) unawaited(perform(context, playback.refresh)); }
-  @override
-  void dispose() {
-    _playbackCooldownTimer?.cancel();
-    courseRouteObserver.unsubscribe(this);
-    _video.removeListener(_videoChanged);
-    _video.dispose();
-    _lessonScroll.removeListener(_scheduleVideoVisibility);
-    _lessonScroll.dispose();
-    playback.removeListener(_playChanged); widget.app.removeListener(_settingsChanged); widget.app.resources.removeListener(_resourceChanged);
-    WidgetsBinding.instance.removeObserver(this); super.dispose();
-  }
-  String itemId(RowData row) => '${tab == 0 ? 'word' : 'content'}:${row['id']}';
-  Widget _guardPlaybackTouches(Widget child) => Listener(
-    behavior: HitTestBehavior.translucent,
-    onPointerDown: (_) { if (_playbackLocked) _extendPlaybackCooldown(); },
-    onPointerUp: (_) { if (_playbackLocked) _extendPlaybackCooldown(); },
-    child: child,
-  );
-  void _extendPlaybackCooldown() {
-    if (!mounted) return;
-    _playbackCooldownTimer?.cancel();
-    setState(() => _playbackCoolingDown = true);
-    _playbackCooldownTimer = Timer(const Duration(milliseconds: 400), () {
-      if (mounted) setState(() => _playbackCoolingDown = false);
-    });
-  }
-  Future<void> _runPlaybackAction(Future<void> Function() action, {bool startingBatch = false, bool ending = false}) async {
-    if (!mounted) return;
-    if (_playbackLocked) { _extendPlaybackCooldown(); return; }
-    setState(() { busy = true; _startingBatch = startingBatch; stopping = ending; });
-    try {
-      await perform(context, action);
-    } finally {
-      if (mounted) {
-        setState(() { busy = false; _startingBatch = false; stopping = false; });
-        _extendPlaybackCooldown();
-      }
-    }
-  }
-  void _changeTab(int? value) {
-    if (value == null || value < 0 || value >= 4 || value == tab || batch) return;
-    unawaited(_runPlaybackAction(() async {
-      await _video.stop();
-      if (owns) await playback.stop();
-      if (mounted) setState(() { tab = value; batchMode = false; });
-    }));
-  }
-  void _startTabDrag(DragStartDetails details) {
-    _tabDragDistance = 0;
-    _tabDragOrigin = batch || _playbackLocked ? null : tab;
-  }
-  void _cancelTabDrag() {
-    _tabDragDistance = 0;
-    _tabDragOrigin = null;
-  }
-  void _endTabDrag(DragEndDetails details) {
-    final origin = _tabDragOrigin;
-    final distance = _tabDragDistance;
-    final velocity = details.primaryVelocity ?? 0;
-    _cancelTabDrag();
-    if (origin == null || origin != tab || batch || _playbackLocked) return;
-    final threshold = math.min(80.0, MediaQuery.sizeOf(context).width * .18);
-    final fastSwipe = distance.abs() >= 24 && velocity.abs() >= 500 && distance * velocity > 0;
-    if (distance.abs() < threshold && !fastSwipe) return;
-    _changeTab(origin + (distance < 0 ? 1 : -1));
-  }
-  Future<void> _endPlayback() => _runPlaybackAction(() async {
-    final startId = owns && playback.active
-      ? playback.playingId ?? playback.queuedId ?? _batchStartId : _batchStartId;
-    if (owns && playback.active) await playback.stop();
-    if (mounted) setState(() => _batchStartId = startId);
-  }, ending: true);
-  Future<void> _changeBatchMode(bool enabled) => _runPlaybackAction(() async {
-    final typePrefix = tab == 0 ? 'word:' : 'content:';
-    final activeId = playback.playingId ?? playback.queuedId;
-    final activeStartId = enabled && owns && playback.active && activeId?.startsWith(typePrefix) == true
-      ? activeId : null;
-    final savedStartId = _batchStartId?.startsWith(typePrefix) == true ? _batchStartId : null;
-    final startId = activeStartId ?? savedStartId;
-    if (owns) await playback.stop();
-    if (mounted && !(owns && playback.active)) setState(() {
-      batchMode = enabled;
-      _batchStartId = enabled ? startId : null;
-      if (enabled) { repeat = 1; interval = 0; }
-    });
-  });
-  Future<void> _play(List<RowData> items, bool all) async {
-    if (tab > 1) return;
-    final words = tab == 0;
-    await _runPlaybackAction(() async {
-      await _video.stop();
-      final stopRevision = playback.stopRevision;
-      final startId = all ? _batchStartId ??
-        (owns && playback.active ? playback.playingId ?? playback.queuedId : null) : null;
-      final clips = <RowData>[];
-      // Keep the complete queue. Native playback starts at startIndex and wraps
-      // back to its first item, rather than looping a truncated tail segment.
-      for (final row in items) {
-        if (!words && textOf(row, 'media_type').isNotEmpty && row['media_type'] != 'text') continue;
-        final file = textOf(row, 'phonetic');
-        if (file.isEmpty && all) continue;
-        if (file.isEmpty) throw StateError('本条暂无音频');
-        final path = await widget.app.resources.audioPath(bookId, file);
-        clips.add({'id': '${words ? 'word' : 'content'}:${row['id']}', 'path': path});
-      }
-      if (clips.isEmpty) throw StateError('当前没有可播放的音频');
-      final startIndex = startId == null ? -1 : clips.indexWhere((clip) => clip['id'] == startId);
-      if (!mounted || playback.stopRevision != stopRevision || playback.stopping || widget.app.resources.unavailable.contains(bookId)) return;
-      if (!all && owns && playback.active && playback.playingId == clips.single['id']) {
-        await (playback.paused ? playback.resume() : playback.stop()); return;
-      }
-      if (!all && mounted) setState(() => _batchStartId = clips.single['id'] as String);
-      await playback.start({'lesson': identity, 'title': textOf(widget.lesson, 'title'), 'words': words, 'batch': all, 'speed': widget.app.speed, 'repeat': repeat, 'intervalSteps': interval, 'startIndex': startIndex < 0 ? 0 : startIndex, 'clips': clips});
-      if (all && mounted) setState(() => _batchStartId = clips[startIndex < 0 ? 0 : startIndex]['id'] as String);
-    }, startingBatch: all);
-  }
-  Future<void> _speed() async {
-    int value = intOf(widget.app.settings, 'playback_speed', 10);
-    final chosen = await showGlassDialog<int>(context: context, builder: (context) => StatefulBuilder(builder: (context, update) => GlassAlertDialog(
-      title: const Text('播放速度'),
-      content: Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
-        StudyIconButton(tooltip: '减少 0.1', onPressed: value <= 5 ? null : () => update(() => value--), icon: const Icon(Icons.remove)),
-        SizedBox(width: MediaQuery.textScalerOf(context).scale(24) * 3, child: Text((value / 10).toStringAsFixed(1), textAlign: TextAlign.center, style: const TextStyle(fontSize: 24))),
-        StudyIconButton(tooltip: '增加 0.1', onPressed: value >= 30 ? null : () => update(() => value++), icon: const Icon(Icons.add)),
-      ]),
-      actions: [StudyButton.text(onPressed: () => Navigator.pop(context), child: const Text('取消')), StudyButton.filled(onPressed: () => Navigator.pop(context, value), child: const Text('确定'))],
-    )));
-    if (chosen != null && mounted) await perform(context, () async { await widget.app.setting('playback_speed', chosen); if (owns && playback.active) await playback.configure(speed: chosen / 10); });
-  }
-  Future<void> _complete() async {
-    if (completing || tab > 2) return;
-    final category = ['word', 'content', 'grammar'][tab];
-    final label = ['单词', '课文', '文法'][tab];
-    if (completedTabs.contains(category)) return;
-    setState(() => completing = true);
-    try {
-      final confirmed = await showGlassDialog<bool>(context: context, builder: (dialogContext) => GlassAlertDialog(
-        title: const Text('操作提示'),
-        content: Text('确定将本课的$label标记为已完成吗？\n确认后将更新学习进度。'),
-        actions: [
-          StudyButton.text(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
-          StudyButton.filled(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('确认')),
-        ],
-      ));
-      if (confirmed != true || !mounted) return;
-      await widget.app.store.complete(widget.book, widget.lesson, category);
-      if (mounted) setState(() => completedTabs.add(category));
-      await widget.app.reload();
-    } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '标记课程完成');
-      // 保存失败时保留未完成状态，允许用户再次标记，不弹出提示。
-    } finally {
-      if (mounted) setState(() => completing = false);
-    }
-  }
-  Future<void> _cancelCompletion(String category, String label) async {
-    if (completing || !completedTabs.contains(category)) return;
-    setState(() => completing = true);
-    try {
-      final confirmed = await showGlassDialog<bool>(context: context, builder: (dialogContext) => GlassAlertDialog(
-        title: const Text('取消提示'),
-        content: Text('是否取消本课$label的已完成状态？\n取消后将恢复为“标记完成”。\n学习进度和课程状态会同步更新，历史学习记录保留。'),
-        actions: [
-          StudyButton.text(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
-          StudyButton.filled(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('确认')),
-        ],
-      ));
-      if (confirmed != true || !mounted) return;
-      await perform(context, () async {
-        await widget.app.store.cancelCompletion(widget.book, widget.lesson, category);
-        if (mounted) setState(() => completedTabs.remove(category));
-        await widget.app.reload();
-      });
-    } finally {
-      if (mounted) setState(() => completing = false);
-    }
-  }
-
-  Widget _completionButton(bool disabled) {
-    final category = tab < 3 ? ['word', 'content', 'grammar'][tab] : null;
-    final label = tab < 3 ? ['单词', '课文', '文法'][tab] : '';
-    final complete = category != null && completedTabs.contains(category);
-    final enabled = !disabled && !completing && category != null;
-    return GestureDetector(
-      key: ValueKey('completion:$category:$complete'),
-      behavior: HitTestBehavior.opaque,
-      onDoubleTap: enabled && complete ? () => _cancelCompletion(category, label) : null,
-      child: StudyButton.textIcon(
-        icon: Icon(complete ? Icons.check_circle : Icons.radio_button_unchecked),
-        label: Text(complete ? '已完成' : '标记完成'),
-        onPressed: enabled && !complete && rows[tab].isNotEmpty ? _complete : null,
-      ),
-    );
-  }
-  Future<void> _displayOptions() async {
-    await showGlassBottomSheet<void>(context: context, showDragHandle: true, builder: (sheetContext) => StatefulBuilder(builder: (context, update) {
-      Widget option(String label, String key, bool enabled, Color color) => StudySwitchListTile(
-        secondary: Container(width: 12, height: 12, decoration: BoxDecoration(color: enabled ? color : Colors.grey, shape: BoxShape.circle)),
-        title: Text(label), value: enabled,
-        onChanged: (value) async {
-          await perform(context, () => widget.app.setting(key, value ? 1 : 0));
-          if (sheetContext.mounted) update(() {});
-        },
-      );
-      return SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const StudyListTile(title: Text('显示内容', style: TextStyle(fontWeight: FontWeight.w600))),
-        option('原文', 'show_source', widget.app.source, const Color(0xFFB55343)),
-        option('注音', 'show_ruby', widget.app.ruby, const Color(0xFF32AA43)),
-        option('翻译', 'show_definition', widget.app.translation, const Color(0xFF397CC6)),
-        const SizedBox(height: 8),
-      ]));
-    }));
-  }
-
-  Widget _bottomControls() {
-    final blocked = widget.app.resources.unavailable.contains(bookId);
-    final disabled = loading || error != null || blocked || _playbackLocked;
-    if (tab == 2) {
-      return Row(children: [
-        const Spacer(),
-        Expanded(flex: 2, child: _completionButton(disabled)),
-        const Spacer(),
-      ]);
-    }
-    if (!batchMode) {
-      return Row(children: [
-        Expanded(child: StudyButton.textIcon(icon: const Icon(Icons.playlist_play), label: const Text('全部播放'),
-          onPressed: disabled || tab > 1 ? null : () => _changeBatchMode(true),
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: _completionButton(disabled)),
-      ]);
-    }
-    final showEnd = _startingBatch || (owns && playback.active) || stopping;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: StudyButton.text(
-          onPressed: showEnd
-            ? _playbackLocked ? null : _endPlayback
-            : disabled ? null : () => _play(rows[tab], true),
-          child: Text(showEnd ? '结束' : '全部播放'),
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: StudyButton.text(onPressed: disabled ? null : () {
-          setState(() => repeat = repeat % 5 + 1);
-          if (owns) perform(context, () => playback.configure(repeat: repeat));
-        }, child: Text('循环 $repeat 次'))),
-      ]),
-      const SizedBox(height: 16),
-      Row(children: [
-        Expanded(child: Visibility(visible: !showEnd, maintainState: true, maintainAnimation: true, maintainSize: true,
-          child: StudyButton.text(onPressed: _playbackLocked || showEnd ? null : () => _changeBatchMode(false), child: const Text('返回')),
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: StudyButton.text(onPressed: disabled ? null : () {
-          setState(() => interval = (interval + 1) % 7);
-          if (owns) perform(context, () => playback.configure(intervalSteps: interval));
-        }, child: Text('间隔 ${(interval * 0.5).toStringAsFixed(1)} 秒'))),
-      ]),
-      const SizedBox(height: 8),
-    ]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final blocked = widget.app.resources.unavailable.contains(bookId);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return PlaybackScaffold(
-      controlledLesson: batchMode && tab < 2 ? identity : null,
-      backgroundColor: dark ? const Color(0xFF171817) : const Color(0xFFF5F5F5),
-      appBar: StudyAppBar(centerTitle: true, title: Text('第${widget.lesson['num'] ?? ''}课'),
-        backgroundColor: dark ? const Color(0xFF222322) : Colors.white,
-        actions: [
-          StudySpeedButton(onPressed: _speed, speed: widget.app.speed),
-          StudyIconButton.transparent(tooltip: '显示内容', onPressed: _displayOptions, showPressHighlight: false, padding: const EdgeInsets.all(2), icon: StudyDisplayRingIcon(source: widget.app.source, ruby: widget.app.ruby, translation: widget.app.translation)),
-        ],
-      ),
-      body: Column(children: [
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: SizedBox(width: 380,
-          child: StudySegments<int>(selected: tab,
-            values: const {0: '单词', 1: '课文', 2: '文法', 3: '练习'},
-            onChanged: _changeTab,
-          ),
-        )),
-        if (blocked) const Padding(padding: EdgeInsets.all(12), child: Text('内容正在同步或需要重新下载，暂时无法播放。')),
-        Expanded(child: loading ? const Center(child: StudyCircularProgressIndicator()) : error != null
-          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('课程内容读取失败，请重新读取；如仍失败，请重新下载内容', textAlign: TextAlign.center),
-              const SizedBox(height: 16), StudyButton.filled(onPressed: _load, child: const Text('重新读取')),
-            ]))) : GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: _startTabDrag,
-              onHorizontalDragUpdate: (details) => _tabDragDistance += details.primaryDelta ?? 0,
-              onHorizontalDragEnd: _endTabDrag,
-              onHorizontalDragCancel: _cancelTabDrag,
-              child: KeyedSubtree(key: ValueKey<int>(tab), child: _guardPlaybackTouches(_body())),
-            )),
-      ]),
-      bottomNavigationBar: tab == 3 ? null : SafeArea(top: false, child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (_showVideoBar && _video.active && !_video.fullscreen)
-          CourseVideoBar(controller: _video, onLocate: _locateVideo),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: _guardPlaybackTouches(_bottomControls())),
-      ])),
-    );
-  }
-
-  Widget _heading(String text) => Padding(padding: const EdgeInsets.fromLTRB(8, 8, 8, 12), child: Text(text, style: const TextStyle(fontSize: 15, color: Colors.grey)));
-
-  Widget _card({Key? key, required Widget child, VoidCallback? onTap, bool active = false}) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(key: key, padding: const EdgeInsets.only(bottom: 12), child: StudyPanel(
-      color: active ? (dark ? const Color(0xFF154D38) : const Color(0xFFC5F2D6)) : (dark ? const Color(0xFF252525) : Colors.white),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(
-        color: active ? (dark ? const Color(0xFF71E5A4) : const Color(0xFF16864B)) : Colors.transparent, width: 2)),
-      clipBehavior: Clip.antiAlias,
-      child: StudyInkWell(onTap: onTap, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-        child: DefaultTextStyle.merge(style: active ? TextStyle(fontWeight: FontWeight.w700, color: dark ? Colors.white : const Color(0xFF083B24)) : const TextStyle(), child: child))),
-    ));
-  }
-
-  Future<void> _openPractice(String id) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PracticePage(widget.app, id)));
-    if (mounted) await _load();
-  }
-
-  Widget _body() {
-    if (tab == 2 && rows[2].isNotEmpty) return _grammarBody();
-    if (tab == 3) {
-      final counts = {for (final relation in questionRelations) relation: rows[3].where((r) => r['relation'] == relation).length};
-      final quota = practiceQuota(rows[3]);
-      final ready = quota.entries.every((entry) => counts[entry.key]! >= entry.value);
-      return ListView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), children: [
-        _card(child: const Text('题目可能存在错误，请自行校对，内容仅供参考。', style: TextStyle(fontSize: 14, color: Colors.red))),
-        _card(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('本课 ${rows[3].length} 题：单词 ${counts['word']}、文法 ${counts['grammar']}、课文 ${counts['content']}\n综合练习每次 10 题（${quota.entries.map((entry) => '${questionRelationLabel(entry.key)} ${entry.value} 题').join('、')}）'),
-          const SizedBox(height: 12),
-          if (pending.isNotEmpty) StudyButton.outlined(onPressed: busy ? null : () => _openPractice(textOf(pending.first, 'id')), child: Text('继续未完成练习（${pending.first['answered']}/${pending.first['count']}）')),
-          if (pending.isNotEmpty && ready) const SizedBox(height: 20),
-          if (ready) StudyButton.filled(onPressed: busy || widget.app.resources.unavailable.contains(bookId) ? null : () async {
-            setState(() => busy = true);
-            await perform(context, () async {
-              final id = await widget.app.store.startPractice(rows[3]);
-              if (mounted) await _openPractice(id);
-            });
-            if (mounted) setState(() => busy = false);
-          }, child: Text(busy ? '准备中' : '开始随机练习'))
-          else Text(rows[3].isEmpty ? '本课练习题正在整理中。' : '题目尚未齐备，暂不能开始练习。'),
-          for (final relation in questionRelations)
-            if (counts[relation]! > 0) ...[
-              const SizedBox(height: 12),
-              StudyButton.outlined(
-              onPressed: busy || widget.app.resources.unavailable.contains(bookId) ? null : () async {
-                setState(() => busy = true);
-                await perform(context, () async {
-                  final id = await widget.app.store.startPractice(rows[3], relation: relation);
-                  if (mounted) await _openPractice(id);
-                });
-                if (mounted) setState(() => busy = false);
-              },
-              child: Text('${questionRelationLabel(relation)}专项（最多${relation == 'content' ? 3 : 10}题）'),
-            ),
-            ],
-        ])),
-      ]);
-    }
-    if (rows[tab].isEmpty) return ListView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), children: [_heading('本课暂无${['单词', '课文', '文法'][tab]}数据')]);
-    final widgets = <Widget>[];
-    if (tab == 0) {
-      widgets.add(_heading('单词表'));
-      for (final row in rows[0]) {
-        final id = itemId(row);
-        final reading = textOf(row, 'kana').replaceFirst(RegExp(r'@.*$'), '');
-        final surface = plainJapanese(textOf(row, 'word'));
-        widgets.add(_card(key: anchors.putIfAbsent(id, GlobalKey.new), active: owns && playback.playingId == id,
-          onTap: _canPlay ? () => _play([row], false) : null,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(child: Align(alignment: Alignment.centerLeft, child: Column(mainAxisSize: MainAxisSize.min, children: [
-                keepSpace(widget.app.ruby, Text(reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
-                keepSpace(widget.app.source, Text(surface.isNotEmpty ? surface : textOf(row, 'kanji').isNotEmpty ? textOf(row, 'kanji') : reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 19, height: 1.5))),
-              ]))),
-              if (textOf(row, 'pos').isNotEmpty) ...[
-                const SizedBox(width: 10),
-                ConstrainedBox(constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .3),
-                  child: Text('[${row['pos']}]', textAlign: TextAlign.right, style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF32AA43)))),
-              ],
-            ]),
-            const SizedBox(height: 5),
-            keepSpace(widget.app.translation, Align(alignment: Alignment.centerRight, child: Text(textOf(row, 'definition'), textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), fontSize: 16, color: Colors.grey)))),
-            if (textOf(row, 'phonetic').isEmpty) const Text('暂无音频', style: TextStyle(fontSize: 11, color: Colors.grey)),
-          ]),
-        ));
-      }
-    } else if (tab == 1) {
-      String? previousCategory;
-      for (var i = 0; i < rows[1].length; i++) {
-        final row = rows[1][i], category = textOf(rows[1][i], 'category');
-        if (category != previousCategory && category != '04') {
-          widgets.add(_heading(switch (category) { '01' => '文型', '02' => '例句', '03' => '应用课文', '05' => '对话', '06' => '课文', _ => category }));
-        }
-        previousCategory = category;
-        final mediaType = textOf(row, 'media_type');
-        if (mediaType == 'image') {
-          widgets.add(CourseImageCard(key: ValueKey('image:${row['id']}:${textOf(row, 'media_src')}'),
-            source: textOf(row, 'media_src'), label: category == '05' ? '对话插图' : '课文插图',
-            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'image')));
-          continue;
-        }
-        if (mediaType == 'interactive_image') {
-          widgets.add(CourseInteractiveImageCard(
-            key: ValueKey('interactive_image:${row['id']}:${textOf(row, 'media_src')}'),
-            source: textOf(row, 'media_src'),
-            label: category == '05' ? '互动对话插图' : '互动课文插图',
-            mediaConfig: textOf(row, 'media_config'),
-            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'interactive_image'),
-            onActivate: (hotspot) => _playInteractiveImageAudio(row, hotspot),
-            interactionEnabled: !_playbackLocked && !widget.app.resources.unavailable.contains(bookId) &&
-              widget.app.resources.activeBook != bookId,
-          ));
-          continue;
-        }
-        if (mediaType == 'video') {
-          final id = textOf(row, 'id');
-          widgets.add(CourseVideoCard(key: _videoAnchors.putIfAbsent(id, GlobalKey.new),
-            controller: _video, id: id, source: textOf(row, 'media_src'),
-            resolvePath: () => widget.app.resources.mediaPath(bookId, textOf(row, 'media_src'), 'video'),
-            onPlay: () => _startVideo(row),
-            enabled: !_playbackLocked && !widget.app.resources.unavailable.contains(bookId) && widget.app.resources.activeBook != bookId));
-          continue;
-        }
-        if (mediaType.isNotEmpty && mediaType != 'text') {
-          widgets.add(_card(child: const Text('此课文媒体类型暂不支持')));
-          continue;
-        }
-        if (category == '03') {
-          final id = itemId(row);
-          widgets.add(Padding(key: anchors.putIfAbsent(id, GlobalKey.new), padding: const EdgeInsets.symmetric(vertical: 20), child: StudyInkWell(
-            onTap: _canPlay ? () => _play([row], false) : null,
-            child: Column(children: [
-              RubyText(textOf(row, 'content'), ruby: widget.app.ruby, source: widget.app.source, centered: true, active: owns && playback.playingId == id),
-              keepSpace(widget.app.translation, Text(textOf(row, 'definition'), style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), color: Colors.grey, fontSize: 16))),
-            ]),
-          )));
-          continue;
-        }
-        final group = <RowData>[row];
-        if (category == '02' && textOf(row, 'org').isNotEmpty) {
-          while (i + 1 < rows[1].length && rows[1][i + 1]['category'] == category && rows[1][i + 1]['org'] == row['org'] &&
-              (textOf(rows[1][i + 1], 'media_type').isEmpty || rows[1][i + 1]['media_type'] == 'text')) {
-            group.add(rows[1][++i]);
-          }
-        }
-        widgets.add(_card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          for (var j = 0; j < group.length; j++) ...[if (j > 0) const SizedBox(height: 24), _utterance(group[j])],
-        ])));
-      }
-    }
-    if (tab > 1) return ListView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), children: widgets);
-    // Mount every anchor for the native background playback queue.
-    if (tab == 0) return SingleChildScrollView(padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widgets));
-    return NotificationListener<ScrollMetricsNotification>(onNotification: (_) { _scheduleVideoVisibility(); return false; },
-      child: SingleChildScrollView(key: _mediaViewport, controller: _lessonScroll,
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widgets)));
-  }
-
-  Widget _grammarBody() {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final foreground = dark ? const Color(0xFFDDDDDD) : const Color(0xFF595959);
-    final titleColor = dark ? const Color(0xFFFFB366) : const Color(0xFFB85C00);
-    final border = dark ? const Color(0xFF454545) : const Color(0xFFDDDDDD);
-    final byId = {for (final row in rows[2]) textOf(row, 'id'): row};
-    final children = <String, List<RowData>>{};
-    final roots = <RowData>[];
-    for (final row in rows[2]) {
-      final parent = textOf(row, 'pid');
-      if (parent.isEmpty || !byId.containsKey(parent) || parent == textOf(row, 'id')) {
-        roots.add(row);
-      } else {
-        children.putIfAbsent(parent, () => []).add(row);
-      }
-    }
-    final visited = <String>{};
-    Widget grammarText(RowData row, String key) {
-      final subtitle = textOf(row, 'type') == '4' && key == 'content';
-      final example = textOf(row, 'type') == '3' || key == 'example' || key == 'example_definition';
-      return Padding(padding: EdgeInsets.only(left: example ? 16 : 0, top: subtitle ? 16 : 10), child: Text.rich(
-        contentTextSpan(plainJapanese(textOf(row, key)),
-          japanese: key == 'example' || (key == 'content' && textOf(row, 'content').contains('▶∫'))),
-        style: TextStyle(fontSize: subtitle ? 17 : example ? 14 : 16, height: 1.6,
-          fontWeight: subtitle ? FontWeight.w600 : FontWeight.normal, color: subtitle ? titleColor : foreground),
-      ));
-    }
-    List<Widget> paragraphs(RowData row) {
-      final id = textOf(row, 'id');
-      if (!visited.add(id)) return [];
-      return [
-        for (final key in ['content', 'definition', 'connection', 'example', 'example_definition', 'tip'])
-          if (textOf(row, key).isNotEmpty) grammarText(row, key),
-        for (final child in children[id] ?? <RowData>[]) ...paragraphs(child),
-      ];
-    }
-    var number = 0;
-    Widget section(RowData row) {
-      final id = textOf(row, 'id');
-      final mainTitle = textOf(row, 'type') == '1';
-      if (!mainTitle) {
-        return Padding(padding: const EdgeInsets.only(bottom: 20), child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-          decoration: BoxDecoration(color: dark ? const Color(0xFF252525) : Colors.white, border: Border.all(color: border)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: paragraphs(row)),
-        ));
-      }
-      visited.add(id);
-      final title = '${++number}. ${plainJapanese(textOf(row, 'content'))}';
-      final body = <Widget>[
-        for (final key in ['definition', 'connection', 'example', 'example_definition', 'tip'])
-          if (textOf(row, key).isNotEmpty) grammarText(row, key),
-        for (final child in children[id] ?? <RowData>[]) ...paragraphs(child),
-      ];
-      final expanded = expandedGrammar.contains(id);
-      return Padding(key: ValueKey(id), padding: const EdgeInsets.only(bottom: 24), child: StudyPanel(
-        color: dark ? const Color(0xFF252525) : Colors.white,
-        shape: RoundedRectangleBorder(side: BorderSide(color: border)),
-        clipBehavior: Clip.antiAlias,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Semantics(button: true, expanded: expanded, child: StudyInkWell(
-            onTap: () => setState(() { if (expanded) { expandedGrammar.remove(id); } else { expandedGrammar.add(id); } }),
-            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: Row(children: [
-              Expanded(child: Text.rich(contentTextSpan(title), style: TextStyle(fontSize: 18, height: 1.4, fontWeight: FontWeight.w600, color: titleColor))),
-              const SizedBox(width: 12),
-              Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: foreground, size: 22),
-            ])),
-          )),
-          if (expanded && body.isNotEmpty) ...[
-            StudyDivider(height: 1, thickness: 1, color: border),
-            Padding(padding: const EdgeInsets.fromLTRB(16, 10, 16, 24), child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch, children: body,
-            )),
-          ],
-        ]),
-      ));
-    }
-    final sections = <Widget>[
-      for (final row in roots) section(row),
-      // Keep malformed parent chains visible without recursing indefinitely.
-      for (final row in rows[2]) if (!visited.contains(textOf(row, 'id'))) section(row),
-    ];
-    return ColoredBox(color: dark ? const Color(0xFF1B1B1B) : const Color(0xFFF1F1F1), child: DefaultTextStyle.merge(
-      style: TextStyle(color: foreground),
-      child: ListView(padding: const EdgeInsets.fromLTRB(14, 14, 14, 20), children: [
-        const Padding(padding: EdgeInsets.only(bottom: 12), child: Text('• 语法解释', style: TextStyle(fontSize: 18, height: 1.5))),
-        ...sections,
-      ]),
-    ));
-  }
-
-  bool get _canPlay => !batch && !_playbackLocked && !_video.busy && !widget.app.resources.unavailable.contains(bookId);
-  Widget _utterance(RowData row) {
-    final id = itemId(row);
-    return StudyInkWell(key: anchors.putIfAbsent(id, GlobalKey.new),
-      onTap: _canPlay ? () => _play([row], false) : null,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (textOf(row, 'role').isNotEmpty) Padding(padding: const EdgeInsets.only(right: 10), child: RubyText('${row['role']}：', ruby: widget.app.ruby, fontSize: 17, color: Colors.orange)),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          RubyText(textOf(row, 'content'), ruby: widget.app.ruby, source: widget.app.source, active: owns && playback.playingId == id),
-          if (textOf(row, 'definition').isNotEmpty) ...[
-            const SizedBox(height: 7),
-            keepSpace(widget.app.translation, Text(textOf(row, 'definition'), style: TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), fontSize: 16, height: 1.5, color: row['category'] == '02' ? null : Colors.grey))),
-          ],
-        ])),
-      ]),
-    );
-  }
 }
 
 class RubyText extends StatelessWidget {
@@ -2201,10 +1415,77 @@ class _PracticePageState extends State<PracticePage> {
   String? error, selected, previousRating;
   final clock = Stopwatch();
   final _resultScrollController = ScrollController(keepScrollOffset: false);
+  final _mediaPlayback = IosLessonPlayback.instance;
+  final _mediaVideo = CourseVideoController();
   @override
   void initState() { super.initState(); unawaited(_load(initial: true)); }
   @override
-  void dispose() { clock.stop(); _resultScrollController.dispose(); super.dispose(); }
+  void dispose() {
+    clock.stop();
+    _resultScrollController.dispose();
+    if (_mediaPlayback.lesson == 'practice:${widget.id}') unawaited(_mediaPlayback.stop());
+    _mediaVideo.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playQuestionAudio(RowData item, {String? filename, String? title}) async {
+    await perform(context, () async {
+      await _mediaVideo.stop();
+      if (_mediaPlayback.active) await _mediaPlayback.stop();
+      final book = textOf(item, 'textbook_id');
+      final path = filename == null
+        ? await widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'audio')
+        : await widget.app.resources.audioPath(book, filename);
+      await _mediaPlayback.start({
+        'lesson': 'practice:${widget.id}', 'title': title ?? '练习听力', 'words': false,
+        'batch': false, 'speed': widget.app.speed, 'repeat': 1, 'intervalSteps': 0,
+        'startIndex': 0,
+        'clips': [{'id': 'practice-media:${item['id']}:${filename ?? item['media_src']}', 'path': path}],
+      });
+    });
+  }
+
+  Future<void> _playQuestionHotspot(RowData item, CourseImageHotspot hotspot) =>
+    _playQuestionAudio(item, filename: hotspot.audioSource, title: hotspot.label);
+
+  Future<void> _playQuestionVideo(RowData item) async {
+    final book = textOf(item, 'textbook_id');
+    await _mediaVideo.play(id: textOf(item, 'id'), book: book,
+      resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'video'),
+      beforePlay: () async { if (_mediaPlayback.active) await _mediaPlayback.stop(); });
+  }
+
+  Widget _questionMedia(RowData item) {
+    final type = textOf(item, 'media_type');
+    final book = textOf(item, 'textbook_id');
+    if (type.isEmpty || type == 'text') return const SizedBox.shrink();
+    if (type == 'audio') {
+      return Padding(padding: const EdgeInsets.only(bottom: 18), child: StudyButton.outlined(
+        onPressed: busy ? null : () => _playQuestionAudio(item),
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.volume_up_outlined), SizedBox(width: 8), Text('播放听力材料'),
+        ])));
+    }
+    if (type == 'image') {
+      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseImageCard(
+        source: textOf(item, 'media_src'), label: '练习题插图',
+        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'image')));
+    }
+    if (type == 'interactive_image') {
+      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseInteractiveImageCard(
+        source: textOf(item, 'media_src'), label: '互动练习题插图',
+        mediaConfig: textOf(item, 'media_config'),
+        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'interactive_image'),
+        onActivate: (hotspot) => _playQuestionHotspot(item, hotspot), interactionEnabled: !busy));
+    }
+    if (type == 'video') {
+      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseVideoCard(
+        controller: _mediaVideo, id: textOf(item, 'id'), source: textOf(item, 'media_src'),
+        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'video'),
+        onPlay: () => _playQuestionVideo(item), enabled: !busy));
+    }
+    return const Padding(padding: EdgeInsets.only(bottom: 18), child: Text('此练习媒体类型暂不支持'));
+  }
 
   Future<void> _load({bool initial = false}) async {
     try {
@@ -2331,6 +1612,7 @@ class _PracticePageState extends State<PracticePage> {
       StudyLinearProgressIndicator(value: items.where((r) => r['answer_time'] != null).length / items.length),
       const SizedBox(height: 12), Text('${index + 1} / ${items.length} · ${questionRelationLabel(item['relation'])}'),
       const SizedBox(height: 18),
+      _questionMedia(item),
       if (polishPractice) Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(18), border: Border.all(color: colors.outlineVariant)),
