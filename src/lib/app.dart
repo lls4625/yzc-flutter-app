@@ -114,7 +114,7 @@ Future<void> perform(BuildContext context, Future<void> Function() action) async
   }
 }
 void openPage(BuildContext context, Widget page) {
-  Navigator.of(context).push(page is LessonPage
+  Navigator.of(context).push(page is CourseLessonPage
     ? _LessonPageRoute(builder: (_) => page)
     : MaterialPageRoute<void>(builder: (_) => page));
 }
@@ -1167,9 +1167,14 @@ class _CoursePanelState extends State<CoursePanel> {
     final currentUnitId = currentLesson.isEmpty ? null : currentLesson.single['unit_id'];
     Widget lessonTile(RowData lesson) {
       final done = lessonPercent(progress, textOf(lesson, 'id')) == 100;
-      return StudyInkWell(onTap: () => openPage(context, CourseLessonPage(widget.app, book, lesson,
-        openPractice: (context, id) => Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)))))), child: Padding(
+      return StudyInkWell(onTap: () => openPage(
+        context,
+        CourseLessonPage(widget.app, book, lesson,
+          openPractice: (context, id) => Navigator.of(context).push<void>(
+            MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)),
+          ),
+        ),
+      ), child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [
           SizedBox(width: 66, child: Text('第${lesson['num'] ?? lesson['lesson'] ?? ''}课', style: TextStyle(fontWeight: FontWeight.w600, color: done ? Colors.green : null))),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

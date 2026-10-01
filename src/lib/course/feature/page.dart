@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../data.dart';
 import '../../ios_lesson_playback.dart';
 import '../../playback_scaffold.dart';
+import '../../system_errors.dart';
 import '../../ui.dart';
+import '../../user_error.dart';
 import 'host.dart';
 import 'words/tab.dart';
 import 'content/tab.dart';
@@ -68,6 +70,19 @@ class _CourseLessonPageState extends State<CourseLessonPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _perform(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_page', operation: '课程页操作');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(userError(error))),
+        );
+      }
+    }
+  }
+
   void _changeTab(int? value) {
     if (value == null || value < 0 || value > 3 || value == _tab) return;
     setState(() => _tab = value);
@@ -117,7 +132,7 @@ class _CourseLessonPageState extends State<CourseLessonPage> {
       )),
     );
     if (selected == null || !mounted) return;
-    await perform(context, () async {
+    await _perform(() async {
       await widget.host.setting('playback_speed', selected);
       if (IosLessonPlayback.instance.active) {
         await IosLessonPlayback.instance.configure(speed: selected / 10);
@@ -133,7 +148,7 @@ class _CourseLessonPageState extends State<CourseLessonPage> {
             decoration: BoxDecoration(color: enabled ? color : Colors.grey, shape: BoxShape.circle)),
           title: Text(label), value: enabled,
           onChanged: (value) async {
-            await perform(context, () => widget.host.setting(key, value ? 1 : 0));
+            await _perform(() => widget.host.setting(key, value ? 1 : 0));
             if (sheetContext.mounted) update(() {});
           },
         );

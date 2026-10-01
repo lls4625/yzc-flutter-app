@@ -68,7 +68,21 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(perform(context, _playback.refresh));
+    if (state == AppLifecycleState.resumed) unawaited(_perform(_playback.refresh));
+  }
+
+  Future<void> _perform(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_content', operation: '课文页操作',
+        context: {'textbook_id': _bookId, 'lesson_id': _lessonId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(userError(error))),
+        );
+      }
+    }
   }
 
   void _hostChanged() { if (mounted) setState(() {}); }

@@ -53,6 +53,20 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _perform(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_practice', operation: '练习页操作',
+        context: {'textbook_id': _bookId, 'lesson_id': _lessonId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(userError(error))),
+        );
+      }
+    }
+  }
+
   Future<void> _load() async {
     try {
       final questions = await widget.host.store.content('yzc_ai_question', _bookId, _lessonId);
@@ -80,7 +94,7 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
   Future<void> _start({String? relation}) async {
     if (_busy || _blocked) return;
     setState(() => _busy = true);
-    await perform(context, () async {
+    await _perform(() async {
       final id = await widget.host.store.startPractice(_questions, relation: relation);
       if (mounted) await _open(id);
     });

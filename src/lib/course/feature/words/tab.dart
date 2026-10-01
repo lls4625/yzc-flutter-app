@@ -62,7 +62,21 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(perform(context, _playback.refresh));
+    if (state == AppLifecycleState.resumed) unawaited(_perform(_playback.refresh));
+  }
+
+  Future<void> _perform(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_words', operation: '单词页操作',
+        context: {'textbook_id': _bookId, 'lesson_id': _lessonId});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(userError(error))),
+        );
+      }
+    }
   }
 
   void _hostChanged() { if (mounted) setState(() {}); }
