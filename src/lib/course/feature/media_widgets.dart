@@ -265,6 +265,12 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
   Widget build(BuildContext context) => AnimatedBuilder(animation: widget.controller, builder: (context, _) {
     final c = widget.controller;
     final enabled = !c.busy && !c.loading && c.status != 'error';
+    const orientationNames = {
+      'auto': '自动旋转',
+      'portrait': '竖屏',
+      'landscapeLeft': '横屏向左',
+      'landscapeRight': '横屏向右',
+    };
     Widget button(String label, IconData icon, VoidCallback? action) => IconButton(
       tooltip: label, onPressed: action, color: Colors.white, disabledColor: Colors.white38,
       constraints: const BoxConstraints(minWidth: 44, minHeight: 44), icon: Icon(icon));
@@ -299,6 +305,22 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
               widget.fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
               widget.fullscreen || c.active ? widget.onFullscreen : null),
           ]))),
+        Positioned(top: 48, right: 0, child: ColoredBox(color: Colors.black54,
+          child: PopupMenuButton<String>(
+            tooltip: '屏幕方向',
+            enabled: c.active,
+            initialValue: c.orientationMode,
+            onSelected: (value) => unawaited(c.changeOrientation(value)),
+            icon: Icon(Icons.screen_rotation, color: c.active ? Colors.white : Colors.white38),
+            itemBuilder: (_) => orientationNames.entries.map((entry) => PopupMenuItem<String>(
+              value: entry.key,
+              child: Row(children: [
+                Icon(c.orientationMode == entry.key ? Icons.check : Icons.screen_rotation),
+                const SizedBox(width: 12),
+                Text(entry.value),
+              ]),
+            )).toList(),
+          ))),
         Positioned(bottom: 0, left: 0, right: 0, child: ColoredBox(color: Colors.black54,
           child: Row(children: [
             button(c.status == 'ended' ? '重新播放' : c.playing ? '暂停' : '继续',
@@ -327,7 +349,10 @@ Future<void> openCourseVideoFullscreen(BuildContext context, CourseVideoControll
   controller.setFullscreen(true);
   try {
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => _FullscreenVideo(controller)));
-  } finally { controller.setFullscreen(false); }
+  } finally {
+    controller.setFullscreen(false);
+    await controller.resetOrientation();
+  }
 }
 
 class _FullscreenVideo extends StatefulWidget {
