@@ -256,8 +256,9 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
           ]))),
           if (textOf(row, 'pos').isNotEmpty) ...[
             const SizedBox(width: 10),
-            Flexible(child: Text('[${row['pos']}]', textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF32AA43)))),
+            ConstrainedBox(constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .3),
+              child: Text('[${row['pos']}]', textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF32AA43)))),
           ],
         ]),
         const SizedBox(height: 5),
