@@ -28,7 +28,7 @@ class CourseVideoController extends ChangeNotifier {
   bool _disposed = false;
   bool busy = false;
   bool fullscreen = false;
-  String orientationMode = 'auto';
+  String videoOrientation = 'portrait';
   String? error;
   int speedSteps = 20;
   String? get rowId => _state['id'] as String?;
@@ -84,6 +84,7 @@ class CourseVideoController extends ChangeNotifier {
 
   Future<void> play({required String id, required String book,
     required Future<String> Function() resolvePath, required Future<void> Function() beforePlay}) => _action(() async {
+    setVideoOrientation('portrait');
     final request = ++_request;
     final path = await resolvePath();
     if (_disposed || request != _request) return;
@@ -120,31 +121,17 @@ class CourseVideoController extends ChangeNotifier {
     if (!_disposed) speedSteps = next;
   });
 
-  Future<void> changeOrientation(String mode) async {
-    const supported = {'auto', 'portrait', 'landscapeLeft', 'landscapeRight'};
-    if (_disposed || !supported.contains(mode) || orientationMode == mode) return;
-    final orientations = switch (mode) {
-      'portrait' => const [DeviceOrientation.portraitUp],
-      'landscapeLeft' => const [DeviceOrientation.landscapeLeft],
-      'landscapeRight' => const [DeviceOrientation.landscapeRight],
-      _ => const <DeviceOrientation>[],
-    };
-    try {
-      await SystemChrome.setPreferredOrientations(orientations);
-      if (!_disposed) {
-        orientationMode = mode;
-        notifyListeners();
-      }
-    } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'course_video', operation: '切换屏幕方向');
-    }
+  void setVideoOrientation(String value) {
+    const supported = {'portrait', 'landscapeLeft', 'landscapeRight'};
+    if (_disposed || !supported.contains(value) || videoOrientation == value) return;
+    videoOrientation = value;
+    notifyListeners();
   }
-
-  Future<void> resetOrientation() => changeOrientation('auto');
 
   Future<void> stop() async {
     ++_request; // Also cancels an in-flight path lookup or audio handoff.
     if (_disposed) return;
+    setVideoOrientation('portrait');
     try {
       await _invoke('stop');
     } catch (e, stack) {
@@ -165,10 +152,6 @@ class CourseVideoController extends ChangeNotifier {
     ++_request;
     _disposed = true;
     _owners.remove(owner);
-    unawaited(SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]).catchError(
-      (Object e, StackTrace stack) {
-        SystemErrors.record(e, stack, module: 'course_video', operation: '恢复自动旋转');
-      }));
     unawaited(_invoke('stop').catchError((Object e, StackTrace stack) {
       SystemErrors.record(e, stack, module: 'course_video', operation: '离开课程停止视频');
     }));

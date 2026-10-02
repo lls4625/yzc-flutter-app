@@ -217,7 +217,13 @@ class _CourseVideoCardState extends State<CourseVideoCard> {
         ClipRRect(borderRadius: BorderRadius.circular(14), child: selected
           ? AspectRatio(aspectRatio: controller.aspectRatio.clamp(.6, 2.0).toDouble(),
             child: CourseVideoSurface(controller: controller, onRetry: widget.onPlay,
-              onFullscreen: () => openCourseVideoFullscreen(context, controller)))
+              onFullscreen: () => openCourseVideoFullscreen(context, controller),
+              onOrientation: (value) {
+                controller.setVideoOrientation(value);
+                if (value != 'portrait' && !controller.fullscreen) {
+                  unawaited(openCourseVideoFullscreen(context, controller));
+                }
+              }))
           : FutureBuilder<(String, double)?>(future: _poster, builder: (context, snapshot) {
               final poster = snapshot.data;
               return AspectRatio(aspectRatio: (poster?.$2 ?? 16 / 9).clamp(.6, 2.0).toDouble(),
@@ -245,9 +251,10 @@ class _CourseVideoCardState extends State<CourseVideoCard> {
 /// change the course tab.
 class CourseVideoSurface extends StatefulWidget {
   const CourseVideoSurface({super.key, required this.controller, required this.onFullscreen,
-    this.fullscreen = false, this.onRetry});
+    required this.onOrientation, this.fullscreen = false, this.onRetry});
   final CourseVideoController controller;
   final VoidCallback onFullscreen;
+  final ValueChanged<String> onOrientation;
   final bool fullscreen;
   final Future<void> Function()? onRetry;
   @override
@@ -256,6 +263,7 @@ class CourseVideoSurface extends StatefulWidget {
 
 class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
   double? _dragPosition;
+  bool _showOrientationMenu = false;
   String _time(double value) {
     final seconds = value.isFinite ? value.floor().clamp(0, 864000) : 0;
     final minutes = seconds ~/ 60;
@@ -266,8 +274,6 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
     final c = widget.controller;
     final enabled = !c.busy && !c.loading && c.status != 'error';
     const orientationNames = {
-      'auto': '自动旋转',
-      'portrait': '竖屏',
       'landscapeLeft': '横屏向左',
       'landscapeRight': '横屏向右',
     };
@@ -305,22 +311,27 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
               widget.fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
               widget.fullscreen || c.active ? widget.onFullscreen : null),
           ]))),
-        Positioned(top: 48, right: 0, child: ColoredBox(color: Colors.black54,
-          child: PopupMenuButton<String>(
-            tooltip: '屏幕方向',
-            enabled: c.active,
-            initialValue: c.orientationMode,
-            onSelected: (value) => unawaited(c.changeOrientation(value)),
-            icon: Icon(Icons.screen_rotation, color: c.active ? Colors.white : Colors.white38),
-            itemBuilder: (_) => orientationNames.entries.map((entry) => PopupMenuItem<String>(
-              value: entry.key,
-              child: Row(children: [
-                Icon(c.orientationMode == entry.key ? Icons.check : Icons.screen_rotation),
-                const SizedBox(width: 12),
-                Text(entry.value),
-              ]),
-            )).toList(),
-          ))),
+        Positioned(top: 48, right: 0, child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          ColoredBox(color: Colors.black54, child: button('视频方向', Icons.screen_rotation,
+            c.active ? () => setState(() => _showOrientationMenu = !_showOrientationMenu) : null)),
+          if (_showOrientationMenu)
+            Material(color: Colors.black87, child: SizedBox(width: 164, child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: orientationNames.entries.map((entry) => InkWell(
+                onTap: () {
+                  setState(() => _showOrientationMenu = false);
+                  widget.onOrientation(entry.key);
+                },
+                child: SizedBox(height: 44, child: Row(children: [
+                  const SizedBox(width: 12),
+                  Icon(c.videoOrientation == entry.key ? Icons.check : Icons.screen_rotation,
+                    color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(entry.value, style: const TextStyle(color: Colors.white)),
+                ])),
+              )).toList(),
+            ))),
+        ])),
         Positioned(bottom: 0, left: 0, right: 0, child: ColoredBox(color: Colors.black54,
           child: Row(children: [
             button(c.status == 'ended' ? '重新播放' : c.playing ? '暂停' : '继续',
@@ -350,8 +361,8 @@ Future<void> openCourseVideoFullscreen(BuildContext context, CourseVideoControll
   try {
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => _FullscreenVideo(controller)));
   } finally {
+    controller.setVideoOrientation('portrait');
     controller.setFullscreen(false);
-    await controller.resetOrientation();
   }
 }
 
@@ -386,8 +397,19 @@ class _FullscreenVideoState extends State<_FullscreenVideo> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(backgroundColor: Colors.black,
-    body: SafeArea(child: CourseVideoSurface(controller: widget.controller,
-      fullscreen: true, onFullscreen: _close)),
+    body: SafeArea(child: AnimatedBuilder(animation: widget.controller, builder: (context, _) {
+      final quarterTurns = switch (widget.controller.videoOrientation) {
+        'landscapeLeft' => 3,
+        'landscapeRight' => 1,
+        _ => 0,
+      };
+      return RotatedBox(quarterTurns: quarterTurns, child: CourseVideoSurface(
+        controller: widget.controller,
+        fullscreen: true,
+        onFullscreen: _close,
+        onOrientation: widget.controller.setVideoOrientation,
+      ));
+    })),
   );
 }
 

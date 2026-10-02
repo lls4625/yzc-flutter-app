@@ -7,105 +7,91 @@ import 'package:flutter/services.dart';
 import 'image_interaction_config.dart';
 import '../video_controller.dart';
 
-class CourseImageCard extends StatefulWidget {
-  const CourseImageCard({super.key, required this.source, required this.resolvePath, required this.label});
-  final String source, label;
-  final Future<String> Function() resolvePath;
-  @override
-  State<CourseImageCard> createState() => _CourseImageCardState();
+class CourseWordImageMedia {
+  const CourseWordImageMedia({required this.path, required this.aspectRatio, this.config});
+  final String path;
+  final double aspectRatio;
+  final CourseImageInteractionConfig? config;
 }
 
-class _CourseImageCardState extends State<CourseImageCard> {
-  late Future<(String, double)> _image = _load();
-  Future<(String, double)> _load() async {
-    final path = await widget.resolvePath();
-    final codec = await ui.instantiateImageCodec(await File(path).readAsBytes(), targetWidth: 64);
-    try {
-      final frame = await codec.getNextFrame();
-      final ratio = frame.image.width / frame.image.height;
-      frame.image.dispose();
-      return (path, ratio);
-    } finally { codec.dispose(); }
-  }
-  @override
-  void didUpdateWidget(CourseImageCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.source != oldWidget.source) _image = _load();
-  }
-  @override
-  Widget build(BuildContext context) => _MediaCard(child: FutureBuilder<(String, double)>(
-    future: _image,
-    builder: (context, snapshot) {
-      Widget failure() => Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-        const Text('插图暂时无法显示'),
-        TextButton(onPressed: () => setState(() => _image = _load()), child: const Text('重试')),
-      ]));
-      if (snapshot.hasError) return failure();
-      final data = snapshot.data;
-      return AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
-          ? const Center(child: CircularProgressIndicator())
-          : Image.file(File(data.$1), fit: BoxFit.contain, semanticLabel: widget.label,
-              errorBuilder: (_, error, stack) => failure()));
-    },
-  ));
+Future<CourseWordImageMedia> loadCourseWordImageMedia({
+  required Future<String> Function() resolvePath,
+  String? mediaConfig,
+}) async {
+  final config = mediaConfig == null ? null : CourseImageInteractionConfig.parse(mediaConfig);
+  if (mediaConfig != null && config == null) throw const FormatException('互动图片配置无效');
+  final path = await resolvePath();
+  final codec = await ui.instantiateImageCodec(await File(path).readAsBytes(), targetWidth: 64);
+  try {
+    final frame = await codec.getNextFrame();
+    final ratio = frame.image.width / frame.image.height;
+    frame.image.dispose();
+    if (!ratio.isFinite || ratio <= 0) throw const FormatException('图片尺寸无效');
+    return CourseWordImageMedia(path: path, aspectRatio: ratio, config: config);
+  } finally { codec.dispose(); }
 }
 
-class CourseInteractiveImageCard extends StatefulWidget {
-  const CourseInteractiveImageCard({super.key, required this.source, required this.resolvePath, required this.label,
-    required this.mediaConfig, required this.onActivate, required this.interactionEnabled});
-  final String source, label, mediaConfig;
-  final Future<String> Function() resolvePath;
+Future<void> openCourseWordImagePage(BuildContext context, {
+  required CourseWordImageMedia media,
+  required String label,
+  Future<void> Function(CourseImageHotspot hotspot)? onActivate,
+}) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
+  media.config == null
+    ? _CourseWordImagePage(media: media, label: label)
+    : _CourseWordInteractiveImagePage(media: media, label: label, onActivate: onActivate!)));
+
+class _CourseWordImagePage extends StatelessWidget {
+  const _CourseWordImagePage({required this.media, required this.label});
+  final CourseWordImageMedia media;
+  final String label;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      automaticallyImplyLeading: false,
+      actions: [IconButton(tooltip: '关闭', onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))],
+    ),
+    body: SafeArea(top: false, child: Center(child: AspectRatio(
+      aspectRatio: media.aspectRatio,
+      child: Image.file(File(media.path), fit: BoxFit.contain, semanticLabel: label,
+        errorBuilder: (_, _, _) => const SizedBox.shrink()),
+    ))),
+  );
+}
+
+class _CourseWordInteractiveImagePage extends StatefulWidget {
+  const _CourseWordInteractiveImagePage({required this.media, required this.label, required this.onActivate});
+  final CourseWordImageMedia media;
+  final String label;
   final Future<void> Function(CourseImageHotspot hotspot) onActivate;
-  final bool interactionEnabled;
   @override
-  State<CourseInteractiveImageCard> createState() => _CourseInteractiveImageCardState();
+  State<_CourseWordInteractiveImagePage> createState() => _CourseWordInteractiveImagePageState();
 }
 
-class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard> {
-  late Future<(String, double)> _image = _load();
-  late CourseImageInteractionConfig? _config = _parseConfig();
+class _CourseWordInteractiveImagePageState extends State<_CourseWordInteractiveImagePage> {
   String? _selected;
   int _activation = 0;
-
-  CourseImageInteractionConfig? _parseConfig() {
-    try { return CourseImageInteractionConfig.parse(widget.mediaConfig); }
-    on FormatException { return null; }
-  }
-
-  Future<(String, double)> _load() async {
-    final path = await widget.resolvePath();
-    final codec = await ui.instantiateImageCodec(await File(path).readAsBytes(), targetWidth: 64);
-    try {
-      final frame = await codec.getNextFrame();
-      final ratio = frame.image.width / frame.image.height;
-      frame.image.dispose();
-      return (path, ratio);
-    } finally { codec.dispose(); }
-  }
-  @override
-  void didUpdateWidget(CourseInteractiveImageCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.source != oldWidget.source) _image = _load();
-    if (widget.mediaConfig != oldWidget.mediaConfig) {
-      _config = _parseConfig();
-      _selected = null;
-    }
-  }
+  Future<void>? _activationOperation;
+  bool _closing = false;
 
   Color _color(String value) => Color(int.parse(value.substring(1), radix: 16) | 0xFF000000);
 
-  void _activate(CourseImageHotspot hotspot) {
+  Future<void> _activate(CourseImageHotspot hotspot) async {
+    if (_closing || _activationOperation != null) return;
     setState(() { _selected = hotspot.id; _activation++; });
-    if (widget.interactionEnabled) unawaited(widget.onActivate(hotspot));
+    final operation = widget.onActivate(hotspot);
+    _activationOperation = operation;
+    try { await operation; } finally { if (identical(_activationOperation, operation)) _activationOperation = null; }
   }
 
-  Widget _interactiveImage(String path, double ratio) => AspectRatio(
-    aspectRatio: ratio,
-    child: LayoutBuilder(builder: (context, constraints) => Stack(fit: StackFit.expand, children: [
-      Image.file(File(path), fit: BoxFit.contain, semanticLabel: widget.label),
-      for (final hotspot in _config!.hotspots) _hotspot(hotspot, constraints),
-    ])),
-  );
+  Future<void> _close() async {
+    if (_closing) return;
+    _closing = true;
+    try { await _activationOperation; } catch (_) { /* Caller records failures. */ }
+    if (mounted) Navigator.pop(context);
+  }
 
   Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints) {
     final selected = _selected == hotspot.id;
@@ -118,12 +104,11 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
       height: constraints.maxHeight * bounds.height,
       child: Semantics(
         button: true,
-        enabled: widget.interactionEnabled,
         selected: selected,
         label: '${hotspot.semanticLabel}，点击播放读音',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _activate(hotspot),
+          onTap: () => unawaited(_activate(hotspot)),
           child: TweenAnimationBuilder<double>(
             key: ValueKey('${hotspot.id}:$selected:$_activation'),
             tween: Tween(begin: 0, end: selected ? 1 : 0),
@@ -159,85 +144,97 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
   }
 
   @override
-  Widget build(BuildContext context) => _MediaCard(child: FutureBuilder<(String, double)>(
-    future: _image,
-    builder: (context, snapshot) {
-      Widget failure() => Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-        const Text('插图暂时无法显示'),
-        TextButton(onPressed: () => setState(() => _image = _load()), child: const Text('重试')),
-      ]));
-      if (snapshot.hasError) return failure();
-      final data = snapshot.data;
-      return AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
-          ? const Center(child: CircularProgressIndicator())
-          : _config == null
-            ? const Center(child: Text('互动插图配置无效'))
-            : _interactiveImage(data.$1, data.$2));
-    },
-  ));
+  Widget build(BuildContext context) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) { if (!didPop) unawaited(_close()); },
+    child: Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
+        actions: [IconButton(tooltip: '关闭', onPressed: _closing ? null : _close, icon: const Icon(Icons.close))],
+      ),
+      body: SafeArea(top: false, child: Center(child: AspectRatio(
+        aspectRatio: widget.media.aspectRatio,
+        child: LayoutBuilder(builder: (context, constraints) => Stack(fit: StackFit.expand, children: [
+          Image.file(File(widget.media.path), fit: BoxFit.contain, semanticLabel: widget.label,
+            errorBuilder: (_, _, _) => const SizedBox.shrink()),
+          for (final hotspot in widget.media.config!.hotspots) _hotspot(hotspot, constraints),
+        ])),
+      ))),
+    ),
+  );
 }
 
-class _MediaCard extends StatelessWidget {
-  const _MediaCard({required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 12),
-    child: Material(color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(14), clipBehavior: Clip.antiAlias, child: child));
-}
-
-class CourseVideoCard extends StatefulWidget {
-  const CourseVideoCard({super.key, required this.controller, required this.id,
-    required this.source, required this.resolvePath, required this.onPlay, required this.enabled});
-  final CourseVideoController controller;
-  final String id, source;
-  final Future<String> Function() resolvePath;
-  final Future<void> Function() onPlay;
-  final bool enabled;
-  @override
-  State<CourseVideoCard> createState() => _CourseVideoCardState();
-}
-
-class _CourseVideoCardState extends State<CourseVideoCard> {
-  late Future<(String, double)?> _poster = widget.controller.poster(widget.resolvePath);
-  @override
-  void didUpdateWidget(CourseVideoCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.source != oldWidget.source || (!oldWidget.enabled && widget.enabled)) {
-      _poster = widget.controller.poster(widget.resolvePath);
-    }
+Future<void> openCourseWordVideoPage(BuildContext context, {
+  required CourseVideoController controller,
+  required String id,
+  required String posterPath,
+  required double posterAspectRatio,
+  required Future<void> Function() onPlay,
+}) async {
+  try {
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => _CourseWordVideoPage(
+      controller: controller,
+      id: id,
+      posterPath: posterPath,
+      posterAspectRatio: posterAspectRatio,
+      onPlay: onPlay,
+    )));
+  } finally {
+    try { await controller.stop(); } catch (_) { /* Closing remains silent. */ }
   }
+}
+
+class _CourseWordVideoPage extends StatelessWidget {
+  const _CourseWordVideoPage({required this.controller, required this.id, required this.posterPath,
+    required this.posterAspectRatio, required this.onPlay});
+  final CourseVideoController controller;
+  final String id, posterPath;
+  final double posterAspectRatio;
+  final Future<void> Function() onPlay;
+
   @override
-  Widget build(BuildContext context) => _MediaCard(child: AnimatedBuilder(
-    animation: widget.controller,
-    builder: (context, _) {
-      final controller = widget.controller;
-      final selected = controller.rowId == widget.id && controller.hasMedia;
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ClipRRect(borderRadius: BorderRadius.circular(14), child: selected
-          ? AspectRatio(aspectRatio: controller.aspectRatio.clamp(.6, 2.0).toDouble(),
-            child: CourseVideoSurface(controller: controller, onRetry: widget.onPlay,
-              onFullscreen: () => openCourseVideoFullscreen(context, controller)))
-          : FutureBuilder<(String, double)?>(future: _poster, builder: (context, snapshot) {
-              final poster = snapshot.data;
-              return AspectRatio(aspectRatio: (poster?.$2 ?? 16 / 9).clamp(.6, 2.0).toDouble(),
-                child: ColoredBox(color: Colors.black87, child: Stack(fit: StackFit.expand, children: [
-                  if (poster != null)
-                    Image.file(File(poster.$1), fit: BoxFit.contain,
-                      errorBuilder: (_, error, stack) => const SizedBox.shrink()),
-                  Center(child: TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
-                    onPressed: widget.enabled && !controller.busy ? widget.onPlay : null,
-                    icon: const Icon(Icons.play_circle_fill, size: 44),
-                    label: Text(controller.busy ? '准备中' : '点击播放'),
-                  )),
-                ])));
-            })),
-        if (!selected && controller.error != null)
-          Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Text(controller.error!)),
-      ]);
-    },
-  ));
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      automaticallyImplyLeading: false,
+      actions: [IconButton(tooltip: '关闭', onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))],
+    ),
+    body: SafeArea(top: false, child: Center(child: AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final selected = controller.rowId == id && controller.hasMedia && controller.error == null;
+        return AspectRatio(
+          aspectRatio: (selected ? controller.aspectRatio : posterAspectRatio).clamp(.6, 2.0).toDouble(),
+          child: selected
+            ? CourseVideoSurface(
+                controller: controller,
+                onFullscreen: () => openCourseVideoFullscreen(context, controller),
+                onOrientation: (value) {
+                  controller.setVideoOrientation(value);
+                  if (value != 'portrait' && !controller.fullscreen) {
+                    unawaited(openCourseVideoFullscreen(context, controller));
+                  }
+                },
+              )
+            : ColoredBox(color: Colors.black, child: Stack(fit: StackFit.expand, children: [
+                Image.file(File(posterPath), fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                Center(child: TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  onPressed: controller.busy ? null : onPlay,
+                  icon: const Icon(Icons.play_circle_fill, size: 44),
+                  label: Text(controller.busy ? '准备中' : '点击播放'),
+                )),
+              ])),
+        );
+      },
+    ))),
+  );
 }
 
 /// Flutter draws controls; the native view is only a video surface. Vertical
@@ -245,9 +242,10 @@ class _CourseVideoCardState extends State<CourseVideoCard> {
 /// change the course tab.
 class CourseVideoSurface extends StatefulWidget {
   const CourseVideoSurface({super.key, required this.controller, required this.onFullscreen,
-    this.fullscreen = false, this.onRetry});
+    required this.onOrientation, this.fullscreen = false, this.onRetry});
   final CourseVideoController controller;
   final VoidCallback onFullscreen;
+  final ValueChanged<String> onOrientation;
   final bool fullscreen;
   final Future<void> Function()? onRetry;
   @override
@@ -256,6 +254,7 @@ class CourseVideoSurface extends StatefulWidget {
 
 class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
   double? _dragPosition;
+  bool _showOrientationMenu = false;
   String _time(double value) {
     final seconds = value.isFinite ? value.floor().clamp(0, 864000) : 0;
     final minutes = seconds ~/ 60;
@@ -266,8 +265,6 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
     final c = widget.controller;
     final enabled = !c.busy && !c.loading && c.status != 'error';
     const orientationNames = {
-      'auto': '自动旋转',
-      'portrait': '竖屏',
       'landscapeLeft': '横屏向左',
       'landscapeRight': '横屏向右',
     };
@@ -305,22 +302,27 @@ class _CourseVideoSurfaceState extends State<CourseVideoSurface> {
               widget.fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
               widget.fullscreen || c.active ? widget.onFullscreen : null),
           ]))),
-        Positioned(top: 48, right: 0, child: ColoredBox(color: Colors.black54,
-          child: PopupMenuButton<String>(
-            tooltip: '屏幕方向',
-            enabled: c.active,
-            initialValue: c.orientationMode,
-            onSelected: (value) => unawaited(c.changeOrientation(value)),
-            icon: Icon(Icons.screen_rotation, color: c.active ? Colors.white : Colors.white38),
-            itemBuilder: (_) => orientationNames.entries.map((entry) => PopupMenuItem<String>(
-              value: entry.key,
-              child: Row(children: [
-                Icon(c.orientationMode == entry.key ? Icons.check : Icons.screen_rotation),
-                const SizedBox(width: 12),
-                Text(entry.value),
-              ]),
-            )).toList(),
-          ))),
+        Positioned(top: 48, right: 0, child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          ColoredBox(color: Colors.black54, child: button('视频方向', Icons.screen_rotation,
+            c.active ? () => setState(() => _showOrientationMenu = !_showOrientationMenu) : null)),
+          if (_showOrientationMenu)
+            Material(color: Colors.black87, child: SizedBox(width: 164, child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: orientationNames.entries.map((entry) => InkWell(
+                onTap: () {
+                  setState(() => _showOrientationMenu = false);
+                  widget.onOrientation(entry.key);
+                },
+                child: SizedBox(height: 44, child: Row(children: [
+                  const SizedBox(width: 12),
+                  Icon(c.videoOrientation == entry.key ? Icons.check : Icons.screen_rotation,
+                    color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Text(entry.value, style: const TextStyle(color: Colors.white)),
+                ])),
+              )).toList(),
+            ))),
+        ])),
         Positioned(bottom: 0, left: 0, right: 0, child: ColoredBox(color: Colors.black54,
           child: Row(children: [
             button(c.status == 'ended' ? '重新播放' : c.playing ? '暂停' : '继续',
@@ -350,8 +352,8 @@ Future<void> openCourseVideoFullscreen(BuildContext context, CourseVideoControll
   try {
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => _FullscreenVideo(controller)));
   } finally {
+    controller.setVideoOrientation('portrait');
     controller.setFullscreen(false);
-    await controller.resetOrientation();
   }
 }
 
@@ -386,8 +388,19 @@ class _FullscreenVideoState extends State<_FullscreenVideo> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(backgroundColor: Colors.black,
-    body: SafeArea(child: CourseVideoSurface(controller: widget.controller,
-      fullscreen: true, onFullscreen: _close)),
+    body: SafeArea(child: AnimatedBuilder(animation: widget.controller, builder: (context, _) {
+      final quarterTurns = switch (widget.controller.videoOrientation) {
+        'landscapeLeft' => 3,
+        'landscapeRight' => 1,
+        _ => 0,
+      };
+      return RotatedBox(quarterTurns: quarterTurns, child: CourseVideoSurface(
+        controller: widget.controller,
+        fullscreen: true,
+        onFullscreen: _close,
+        onOrientation: widget.controller.setVideoOrientation,
+      ));
+    })),
   );
 }
 

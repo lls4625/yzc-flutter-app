@@ -31,11 +31,13 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
   int _repeat = 1, _interval = 0;
   String? _error, _batchStartId;
   bool _resourceUpdating = false;
+  final Set<String> _mediaOpening = {};
 
   String get _bookId => textOf(widget.book, 'id');
   String get _lessonId => textOf(widget.lesson, 'id');
   String get _identity => '$_bookId:$_lessonId:words';
   bool get _owns => _playback.lesson == _identity;
+  bool get _batchPlaybackActive => _owns && _playback.active && _playback.batch;
   bool get _blocked => widget.host.resources.unavailable.contains(_bookId) ||
     widget.host.resources.activeBook == _bookId;
 
@@ -118,17 +120,9 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
       await _video.stop();
       final clips = <RowData>[];
       for (final row in rows) {
-        final type = textOf(row, 'media_type');
-        String source;
-        if (type == 'audio') {
-          source = textOf(row, 'media_src');
-          if (source.isEmpty) continue;
-          clips.add({'id': _itemId(row), 'path': await widget.host.resources.mediaPath(_bookId, source, 'audio')});
-        } else if (type.isEmpty || type == 'text') {
-          source = textOf(row, 'phonetic');
-          if (source.isEmpty) continue;
-          clips.add({'id': _itemId(row), 'path': await widget.host.resources.audioPath(_bookId, source)});
-        }
+        final source = textOf(row, 'phonetic').trim();
+        if (source.isEmpty) continue;
+        clips.add({'id': _itemId(row), 'path': await widget.host.resources.audioPath(_bookId, source)});
       }
       if (clips.isEmpty) throw StateError('当前没有可播放的单词音频');
       final wanted = all ? _batchStartId : null;
@@ -172,18 +166,61 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
       });
     } catch (error, stack) {
       SystemErrors.record(error, stack, module: 'course_words', operation: '播放互动单词音频');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        GlassSnackBar(content: Text(userError(error, fallback: '单词媒体播放失败'))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _startVideo(RowData row) async {
-    if (_busy || _blocked) return;
+  Future<void> _startVideo(RowData row, String path) async {
+    if (_blocked) return;
     await _video.play(id: textOf(row, 'id'), book: _bookId,
-      resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'video'),
+      resolvePath: () async => path,
       beforePlay: () async { if (_playback.active) await _playback.stop(); });
+  }
+
+  Future<void> _openMedia(RowData row) async {
+    final id = textOf(row, 'id');
+    final type = textOf(row, 'media_type').trim();
+    final source = textOf(row, 'media_src').trim();
+    if (_busy || _blocked || _batchPlaybackActive || type.isEmpty || source.isEmpty || !_mediaOpening.add(id)) return;
+    try {
+      if (type == 'image') {
+        final media = await loadCourseWordImageMedia(
+          resolvePath: () => widget.host.resources.mediaPath(_bookId, source, 'image'));
+        if (!mounted) return;
+        await openCourseWordImagePage(context, media: media, label: '单词插图');
+        return;
+      }
+      if (type == 'interactive_image') {
+        final media = await loadCourseWordImageMedia(
+          resolvePath: () => widget.host.resources.mediaPath(_bookId, source, 'interactive_image'),
+          mediaConfig: textOf(row, 'media_config'));
+        if (!mounted) return;
+        final hotspotPrefix = 'word-hotspot:$id:';
+        await openCourseWordImagePage(context, media: media, label: '互动单词插图',
+          onActivate: (hotspot) => _playHotspot(row, hotspot));
+        if (_owns && _playback.active && _playback.playingId?.startsWith(hotspotPrefix) == true) {
+          await _playback.stop();
+        }
+        return;
+      }
+      if (type == 'video') {
+        final path = await widget.host.resources.mediaPath(_bookId, source, 'video');
+        final poster = await _video.poster(() async => path);
+        if (!mounted || poster == null) return;
+        await openCourseWordVideoPage(context,
+          controller: _video,
+          id: id,
+          posterPath: poster.$1,
+          posterAspectRatio: poster.$2,
+          onPlay: () => _startVideo(row, path));
+      }
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_words', operation: '打开单词多媒体',
+        context: {'textbook_id': _bookId, 'lesson_id': _lessonId, 'word_id': id, 'media_type': type});
+    } finally {
+      _mediaOpening.remove(id);
+    }
   }
 
   Future<void> _complete() async {
@@ -208,7 +245,7 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
     }
   }
 
-  Widget _card({Key? key, required Widget child, VoidCallback? onTap, bool active = false}) {
+  Widget _card({Key? key, required Widget child, bool active = false}) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Padding(key: key, padding: const EdgeInsets.only(bottom: 12), child: StudyPanel(
       color: active ? (dark ? const Color(0xFF154D38) : const Color(0xFFC5F2D6))
@@ -217,56 +254,69 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
         side: BorderSide(color: active ? (dark ? const Color(0xFF71E5A4) : const Color(0xFF16864B))
           : Colors.transparent, width: 2)),
       clipBehavior: Clip.antiAlias,
-      child: StudyInkWell(onTap: onTap, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17), child: child)),
+      child: child,
     ));
   }
 
   Widget _row(RowData row) {
-    final type = textOf(row, 'media_type');
-    if (type == 'image') {
-      return CourseImageCard(key: ValueKey('word-image:${row['id']}'), source: textOf(row, 'media_src'),
-        label: '单词插图', resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'image'));
-    }
-    if (type == 'interactive_image') {
-      return CourseInteractiveImageCard(key: ValueKey('word-interactive:${row['id']}'),
-        source: textOf(row, 'media_src'), label: '互动单词插图', mediaConfig: textOf(row, 'media_config'),
-        resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'interactive_image'),
-        onActivate: (hotspot) => _playHotspot(row, hotspot), interactionEnabled: !_busy && !_blocked);
-    }
-    if (type == 'video') {
-      return CourseVideoCard(key: ValueKey('word-video:${row['id']}'), controller: _video,
-        id: textOf(row, 'id'), source: textOf(row, 'media_src'),
-        resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'video'),
-        onPlay: () => _startVideo(row), enabled: !_busy && !_blocked);
-    }
-    if (type.isNotEmpty && type != 'text' && type != 'audio') {
-      return _card(child: const Text('此单词媒体类型暂不支持'));
-    }
     final id = _itemId(row);
+    final mediaType = textOf(row, 'media_type').trim();
+    final mediaSource = textOf(row, 'media_src').trim();
+    final hasMediaIndicator = mediaType.isNotEmpty && mediaSource.isNotEmpty;
     final reading = textOf(row, 'kana').replaceFirst(RegExp(r'@.*$'), '');
     final surface = plainJapanese(textOf(row, 'word'));
     return _card(key: _anchors.putIfAbsent(id, GlobalKey.new), active: _owns && _playback.playingId == id,
-      onTap: !_busy && !_blocked ? () => _playRows([row], false) : null,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(child: Align(alignment: Alignment.centerLeft, child: Column(mainAxisSize: MainAxisSize.min, children: [
-            keepSpace(widget.host.ruby, Text(reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
-            keepSpace(widget.host.source, Text(surface.isNotEmpty ? surface : textOf(row, 'kanji').isNotEmpty ? textOf(row, 'kanji') : reading,
-              style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 19, height: 1.5))),
-          ]))),
-          if (textOf(row, 'pos').isNotEmpty) ...[
-            const SizedBox(width: 10),
-            ConstrainedBox(constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .3),
-              child: Text('[${row['pos']}]', textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF32AA43)))),
-          ],
-        ]),
-        const SizedBox(height: 5),
-        keepSpace(widget.host.translation, Align(alignment: Alignment.centerRight,
-          child: Text(textOf(row, 'definition'), textAlign: TextAlign.right,
-            style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), fontSize: 16, color: Colors.grey)))),
-        if (type == 'audio' || textOf(row, 'phonetic').isEmpty)
-          Text(type == 'audio' ? '附加音频' : '暂无音频', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      child: Stack(children: [
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Align(alignment: Alignment.centerLeft, child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  keepSpace(widget.host.ruby, Text(reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
+                  keepSpace(widget.host.source, Text(surface.isNotEmpty ? surface : textOf(row, 'kanji').isNotEmpty ? textOf(row, 'kanji') : reading,
+                    style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 19, height: 1.5))),
+                ],
+              ))),
+              if (hasMediaIndicator || textOf(row, 'pos').isNotEmpty) ...[
+                const SizedBox(width: 10),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .3),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    SizedBox(height: 15.6, child: hasMediaIndicator
+                      ? const Align(alignment: Alignment.centerRight,
+                          child: Icon(Icons.perm_media_outlined, size: 14, color: Color(0xFF32AA43)))
+                      : null),
+                    if (textOf(row, 'pos').isNotEmpty)
+                      Text('[${row['pos']}]', textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF32AA43))),
+                  ]),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 5),
+            keepSpace(widget.host.translation, Align(alignment: Alignment.centerRight,
+              child: Text(textOf(row, 'definition'), textAlign: TextAlign.right,
+                style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), fontSize: 16, color: Colors.grey)))),
+            if (textOf(row, 'phonetic').trim().isEmpty)
+              const Text('暂无音频', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ])),
+        Positioned.fill(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: Semantics(
+            button: true,
+            enabled: !_busy && !_blocked,
+            label: '播放当前单词读音',
+            child: InkWell(onTap: !_busy && !_blocked ? () => _playRows([row], false) : null),
+          )),
+          Expanded(child: Semantics(
+            button: hasMediaIndicator,
+            enabled: hasMediaIndicator && !_busy && !_blocked && !_batchPlaybackActive,
+            label: hasMediaIndicator ? '打开单词多媒体' : null,
+            child: InkWell(onTap: hasMediaIndicator && !_busy && !_blocked && !_batchPlaybackActive
+              ? () => _openMedia(row) : null),
+          )),
+        ])),
       ]),
     );
   }
