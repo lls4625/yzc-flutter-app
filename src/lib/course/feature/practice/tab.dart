@@ -11,15 +11,17 @@ import '../host.dart';
 import '../image_interaction_config.dart';
 import '../media_widgets.dart';
 import '../video_controller.dart';
+import '../tab_coordinator.dart';
 
 typedef OpenPracticeSession = Future<void> Function(BuildContext context, String id);
 
 /// Independent implementation of the course practice tab.
 class CoursePracticeTab extends StatefulWidget {
   const CoursePracticeTab({required this.host, required this.book, required this.lesson,
-    required this.openPractice, super.key});
+    required this.coordinator, required this.openPractice, super.key});
   final CourseTabHost host;
   final RowData book, lesson;
+  final CourseTabCoordinator coordinator;
   final OpenPracticeSession openPractice;
 
   @override
@@ -44,13 +46,17 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
   void initState() {
     super.initState();
     widget.host.resources.addListener(_resourceChanged);
+    _video.addListener(_videoChanged);
+    widget.coordinator.attach(this, stopForTabChange: _stopForTabChange,
+      stopVideo: _video.stop, videoFullscreen: () => _video.fullscreen, busy: _busy);
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    widget.coordinator.detach(this);
     widget.host.resources.removeListener(_resourceChanged);
-    if (_ownsPlayback) unawaited(_playback.stop());
+    _video.removeListener(_videoChanged);
     _video.dispose();
     super.dispose();
   }
@@ -61,7 +67,16 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
       _resourceUpdating = false;
       unawaited(_load());
     }
-    if (mounted) setState(() {});
+    if (mounted) { setState(() {}); _syncCoordinator(); }
+  }
+
+  void _syncCoordinator() => widget.coordinator.update(this,
+    busy: _busy || _video.busy || _playback.stopping);
+  void _videoChanged() { if (mounted) { setState(() {}); _syncCoordinator(); } }
+
+  Future<void> _stopForTabChange() async {
+    await _video.stop();
+    if (_ownsPlayback) await _playback.stop();
   }
 
   Future<void> _perform(Future<void> Function() action) async {
@@ -90,10 +105,14 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
         _loading = false;
         _error = null;
       });
+      _syncCoordinator();
     } catch (error, stack) {
       SystemErrors.record(error, stack, module: 'course_practice', operation: '读取练习页签',
         context: {'textbook_id': _bookId, 'lesson_id': _lessonId});
-      if (mounted) setState(() { _loading = false; _error = userError(error, fallback: '练习内容读取失败'); });
+      if (mounted) {
+        setState(() { _loading = false; _error = userError(error, fallback: '练习内容读取失败'); });
+        _syncCoordinator();
+      }
     }
   }
 
@@ -105,18 +124,20 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
   Future<void> _start({String? relation}) async {
     if (_busy || _blocked) return;
     setState(() => _busy = true);
+    _syncCoordinator();
     await _perform(() async {
       if (_ownsPlayback) await _playback.stop();
       await _video.stop();
       final id = await widget.host.store.startPractice(_questions, relation: relation);
       if (mounted) await _open(id);
     });
-    if (mounted) setState(() => _busy = false);
+    if (mounted) { setState(() => _busy = false); _syncCoordinator(); }
   }
 
   Future<void> _playAudio(RowData question, {String? filename, String? title}) async {
     if (_busy || _blocked) return;
     setState(() => _busy = true);
+    _syncCoordinator();
     await _perform(() async {
       await _video.stop();
       if (_playback.active) await _playback.stop();
@@ -130,7 +151,7 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
         'clips': [{'id': 'open-practice:${question['id']}:${filename ?? question['media_src']}', 'path': path}],
       });
     });
-    if (mounted) setState(() => _busy = false);
+    if (mounted) { setState(() => _busy = false); _syncCoordinator(); }
   }
 
   Future<void> _playHotspot(RowData question, CourseImageHotspot hotspot) =>

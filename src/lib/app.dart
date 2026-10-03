@@ -27,12 +27,11 @@ import 'course/feature/video_controller.dart';
 import 'course/feature/media_widgets.dart';
 import 'course/feature/host.dart';
 import 'course/feature/page.dart';
+import 'route_observer.dart';
 
 import 'study_room/study_room_module.dart';
 import 'study_room/resources/manager.dart';
 import 'study_room/resources/page.dart';
-
-final reviewRouteObserver = RouteObserver<ModalRoute<dynamic>>();
 
 class AppController extends ChangeNotifier implements CourseTabHost {
   AppController(this.store, this.resources);
@@ -148,7 +147,7 @@ class StudyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: app, builder: (_, __) => MaterialApp(
     title: '语之初', debugShowCheckedModeBanner: false,
-    navigatorObservers: [reviewRouteObserver],
+    navigatorObservers: [appRouteObserver, courseRouteObserver],
     theme: studyTheme(Brightness.light),
     darkTheme: studyTheme(Brightness.dark),
     themeMode: switch (textOf(app.settings, 'theme')) { 'light' => ThemeMode.light, 'dark' => ThemeMode.dark, _ => ThemeMode.system },
@@ -257,10 +256,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
     super.didChangeDependencies();
     final route = ModalRoute.of(context);
     if (_route != route) {
-      reviewRouteObserver.unsubscribe(this);
+      appRouteObserver.unsubscribe(this);
       _route = route;
       _routeVisible = route?.isCurrent ?? true;
-      if (route != null) reviewRouteObserver.subscribe(this, route);
+      if (route != null) appRouteObserver.subscribe(this, route);
     }
   }
   @override
@@ -356,7 +355,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
     widget.app.openStudyRoomPurchase = null;
     _profileScrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    reviewRouteObserver.unsubscribe(this);
+    appRouteObserver.unsubscribe(this);
     super.dispose();
   }
   @override
@@ -1283,10 +1282,10 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
     super.didChangeDependencies();
     final route = ModalRoute.of(context);
     if (_route != route) {
-      reviewRouteObserver.unsubscribe(this);
+      appRouteObserver.unsubscribe(this);
       _route = route;
       _routeVisible = route?.isCurrent ?? true;
-      if (route != null) reviewRouteObserver.subscribe(this, route);
+      if (route != null) appRouteObserver.subscribe(this, route);
     }
   }
 
@@ -1369,7 +1368,7 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
     _dueTimer?.cancel();
     widget.app.removeListener(_scheduleDueRefresh);
     WidgetsBinding.instance.removeObserver(this);
-    reviewRouteObserver.unsubscribe(this);
+    appRouteObserver.unsubscribe(this);
     super.dispose();
   }
 

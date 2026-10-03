@@ -10,12 +10,15 @@ import '../host.dart';
 import 'image_interaction_config.dart';
 import 'media_widgets.dart';
 import '../video_controller.dart';
+import '../tab_coordinator.dart';
 
 /// Independent implementation of the course grammar tab.
 class CourseGrammarTab extends StatefulWidget {
-  const CourseGrammarTab({required this.host, required this.book, required this.lesson, super.key});
+  const CourseGrammarTab({required this.host, required this.book, required this.lesson,
+    required this.coordinator, super.key});
   final CourseTabHost host;
   final RowData book, lesson;
+  final CourseTabCoordinator coordinator;
 
   @override
   State<CourseGrammarTab> createState() => _CourseGrammarTabState();
@@ -43,30 +46,34 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
     widget.host.resources.addListener(_resourceChanged);
     _playback.addListener(_playChanged);
     _video.addListener(_videoChanged);
+    widget.coordinator.attach(this, bottomBuilder: (_) => _bottomBar(),
+      stopForTabChange: _stopForTabChange, stopVideo: _video.stop,
+      videoFullscreen: () => _video.fullscreen, busy: _busy);
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    widget.coordinator.detach(this);
     widget.host.removeListener(_hostChanged);
     widget.host.resources.removeListener(_resourceChanged);
     _playback.removeListener(_playChanged);
     _video.removeListener(_videoChanged);
-    if (_playback.lesson == _identity) unawaited(_playback.stop());
     _video.dispose();
     super.dispose();
   }
 
-  void _hostChanged() { if (mounted) setState(() {}); }
-  void _playChanged() { if (mounted) setState(() {}); }
-  void _videoChanged() { if (mounted) setState(() {}); }
+  void _syncCoordinator() => widget.coordinator.update(this, busy: _busy || _video.busy || _playback.stopping);
+  void _hostChanged() { if (mounted) { setState(() {}); _syncCoordinator(); } }
+  void _playChanged() { if (mounted) { setState(() {}); _syncCoordinator(); } }
+  void _videoChanged() { if (mounted) { setState(() {}); _syncCoordinator(); } }
   void _resourceChanged() {
     if (widget.host.resources.activeBook == _bookId) _resourceUpdating = true;
     if (_resourceUpdating && widget.host.resources.activeBook == null) {
       _resourceUpdating = false;
       unawaited(_load());
     }
-    if (mounted) setState(() {});
+    if (mounted) { setState(() {}); _syncCoordinator(); }
   }
 
   Future<void> _load() async {
@@ -81,16 +88,26 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
         _loading = false;
         _error = null;
       });
+      _syncCoordinator();
     } catch (error, stack) {
       SystemErrors.record(error, stack, module: 'course_grammar', operation: '读取文法页签',
         context: {'textbook_id': _bookId, 'lesson_id': _lessonId});
-      if (mounted) setState(() { _loading = false; _error = userError(error, fallback: '文法内容读取失败'); });
+      if (mounted) {
+        setState(() { _loading = false; _error = userError(error, fallback: '文法内容读取失败'); });
+        _syncCoordinator();
+      }
     }
+  }
+
+  Future<void> _stopForTabChange() async {
+    await _video.stop();
+    if (_playback.lesson == _identity) await _playback.stop();
   }
 
   Future<void> _playAudio(RowData row, {String? filename, String? title}) async {
     if (_busy || _blocked) return;
     setState(() => _busy = true);
+    _syncCoordinator();
     try {
       await _video.stop();
       if (_playback.active) await _playback.stop();
@@ -108,7 +125,7 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         GlassSnackBar(content: Text(userError(error, fallback: '文法媒体播放失败'))));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) { setState(() => _busy = false); _syncCoordinator(); }
     }
   }
 
@@ -125,6 +142,7 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
   Future<void> _complete() async {
     if (_completing || _completed.contains('grammar') || _rows.isEmpty) return;
     setState(() => _completing = true);
+    _syncCoordinator();
     try {
       final confirmed = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
         title: const Text('操作提示'), content: const Text('确定将本课的文法标记为已完成吗？\n确认后将更新学习进度。'),
@@ -136,12 +154,53 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
       if (confirmed != true || !mounted) return;
       await widget.host.store.complete(widget.book, widget.lesson, 'grammar');
       if (mounted) setState(() => _completed.add('grammar'));
+      _syncCoordinator();
       await widget.host.reload();
     } catch (error, stack) {
       SystemErrors.record(error, stack, module: 'course_grammar', operation: '标记文法完成');
     } finally {
-      if (mounted) setState(() => _completing = false);
+      if (mounted) { setState(() => _completing = false); _syncCoordinator(); }
     }
+  }
+
+  Future<void> _cancelCompletion() async {
+    if (_completing || !_completed.contains('grammar')) return;
+    setState(() => _completing = true);
+    _syncCoordinator();
+    try {
+      final confirmed = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
+        title: const Text('取消提示'),
+        content: const Text('是否取消本课文法的已完成状态？\n取消后将恢复为“标记完成”。\n学习进度和课程状态会同步更新，历史学习记录保留。'),
+        actions: [
+          StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('确认')),
+        ],
+      ));
+      if (confirmed != true || !mounted) return;
+      await widget.host.store.cancelCompletion(widget.book, widget.lesson, 'grammar');
+      if (mounted) setState(() => _completed.remove('grammar'));
+      await widget.host.reload();
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'course_grammar', operation: '取消文法完成状态');
+    } finally {
+      if (mounted) { setState(() => _completing = false); _syncCoordinator(); }
+    }
+  }
+
+  Widget _bottomBar() {
+    final complete = _completed.contains('grammar');
+    return SafeArea(top: false, child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(children: [
+        const Spacer(),
+        Expanded(flex: 2, child: GestureDetector(behavior: HitTestBehavior.opaque,
+          onDoubleTap: complete && !_completing && !_busy && !_blocked ? _cancelCompletion : null,
+          child: StudyButton.textIcon(
+            icon: Icon(complete ? Icons.check_circle : Icons.radio_button_unchecked),
+            label: Text(complete ? '已完成' : '标记完成'),
+            onPressed: complete || _busy || _blocked || _rows.isEmpty ? null : _complete))),
+        const Spacer(),
+      ])));
   }
 
   Widget _media(RowData row) {
@@ -275,18 +334,6 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
         Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 16),
         StudyButton.filled(onPressed: _load, child: const Text('重新读取文法')),
       ])));
-    final complete = _completed.contains('grammar');
-    return Column(children: [
-      Expanded(child: _rows.isEmpty ? const Center(child: Text('本课暂无文法数据')) : _grammarBody()),
-      SafeArea(top: false, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(children: [
-          const Spacer(),
-          Expanded(flex: 2, child: StudyButton.textIcon(
-            icon: Icon(complete ? Icons.check_circle : Icons.radio_button_unchecked),
-            label: Text(complete ? '已完成' : '标记完成'),
-            onPressed: complete || _busy || _blocked || _rows.isEmpty ? null : _complete)),
-          const Spacer(),
-        ]))),
-    ]);
+    return _rows.isEmpty ? const Center(child: Text('本课暂无文法数据')) : _grammarBody();
   }
 }

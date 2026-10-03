@@ -136,8 +136,9 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
                 duration: MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero : const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
-                  color: selected ? color.withValues(alpha: .10) : Colors.transparent,
-                  border: Border.all(color: selected ? color : Colors.transparent, width: 3),
+                  color: color.withValues(alpha: selected ? .10 : .04),
+                  border: Border.all(color: color.withValues(alpha: selected ? 1 : .72),
+                    width: selected ? 3 : 2),
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: selected
                     ? [BoxShadow(color: color.withValues(alpha: .35), blurRadius: 12, spreadRadius: 2)]
@@ -149,7 +150,12 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
                   decoration: BoxDecoration(color: color.withValues(alpha: .92), borderRadius: BorderRadius.circular(6)),
                   child: Text(hotspot.label, style: const TextStyle(color: Colors.white, fontSize: 12,
                     fontWeight: FontWeight.w700, height: 1.2)),
-                )) : null,
+                )) : Align(alignment: Alignment.topRight, child: Container(
+                  width: 12, height: 12, margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [BoxShadow(color: color.withValues(alpha: .45), blurRadius: 5)]),
+                )),
               ),
             ),
           ),
