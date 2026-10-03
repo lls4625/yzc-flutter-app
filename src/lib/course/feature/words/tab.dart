@@ -431,6 +431,9 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
 
   Widget _row(RowData row) {
     final id = _itemId(row);
+    final translationColor = Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF9E9E9E)
+      : const Color(0xFF616161);
     final mediaType = textOf(row, 'media_type').trim();
     final mediaSource = textOf(row, 'media_src').trim();
     final hasMediaIndicator = mediaType.isNotEmpty && mediaSource.isNotEmpty;
@@ -447,7 +450,7 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
                 children: [
                   keepSpace(widget.host.ruby, Text(reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
                   keepSpace(widget.host.source, Text(surface.isNotEmpty ? surface : textOf(row, 'kanji').isNotEmpty ? textOf(row, 'kanji') : reading,
-                    style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 19, height: 1.5))),
+                    style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 16, height: 1.5))),
                 ],
               ))),
               if (hasMediaIndicator || textOf(row, 'pos').isNotEmpty) ...[
@@ -469,7 +472,8 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
             const SizedBox(height: 5),
             keepSpace(widget.host.translation, Align(alignment: Alignment.centerRight,
               child: Text(textOf(row, 'definition'), textAlign: TextAlign.right,
-                style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), fontSize: 16, color: Colors.grey)))),
+                style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
+                  fontSize: 15, color: translationColor)))),
             if (textOf(row, 'phonetic').trim().isEmpty)
               const Text('暂无音频', style: TextStyle(fontSize: 11, color: Colors.grey)),
           ])),

@@ -454,6 +454,10 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
     return roleLength + 1;
   }
 
+  Color get _translationColor => Theme.of(context).brightness == Brightness.dark
+    ? const Color(0xFF9E9E9E)
+    : const Color(0xFF616161);
+
   Widget _utterance(RowData row, double roleWidth) {
     final id = _itemId(row);
     final role = textOf(row, 'role');
@@ -466,15 +470,18 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
               child: role.isEmpty ? const SizedBox.shrink() : _RubyText(role,
                 ruby: widget.host.ruby, fontSize: 16, color: Colors.orange,
                 endAligned: true, trailingSuffix: '：', balanceFourCharacters: true))),
-          Expanded(child: _RubyText(textOf(row, 'content'), ruby: widget.host.ruby,
-            source: widget.host.source, active: _owns && _playback.playingId == id)),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _RubyText(textOf(row, 'content'), ruby: widget.host.ruby,
+              source: widget.host.source, active: _owns && _playback.playingId == id,
+              fontSize: 16),
+            if (textOf(row, 'definition').isNotEmpty) ...[
+              const SizedBox(height: 7),
+              keepSpace(widget.host.translation, Text(textOf(row, 'definition'),
+                style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
+                  fontSize: 15, height: 1.5, color: _translationColor))),
+            ],
+          ])),
         ]),
-        if (textOf(row, 'definition').isNotEmpty) ...[
-          const SizedBox(height: 7),
-          keepSpace(widget.host.translation, Text(textOf(row, 'definition'),
-            style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
-              fontSize: 16, height: 1.5, color: row['category'] == '02' ? null : Colors.grey))),
-        ],
       ]));
   }
 
@@ -527,7 +534,8 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
             _RubyText(textOf(row, 'content'), ruby: widget.host.ruby, source: widget.host.source,
               centered: true, active: _owns && _playback.playingId == _itemId(row)),
             keepSpace(widget.host.translation, Text(textOf(row, 'definition'),
-              style: const TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'), color: Colors.grey, fontSize: 16))),
+              style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
+                color: _translationColor, fontSize: 15))),
           ]))));
         continue;
       }
