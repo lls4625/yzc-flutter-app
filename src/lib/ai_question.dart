@@ -12,6 +12,19 @@ String questionRelationLabel(Object? relation) => switch (relation) {
 
 String questionDisplayText(String text) => text.trim();
 
+/// Open course exercises are display-only: they have neither options nor an
+/// answer and must never enter the user answer/review pipeline.
+bool isOpenDisplayQuestion(Map<String, Object?> question) =>
+    question['options'] == null && question['answer'] == null;
+
+void validateQuestionAnswerMode(Map<String, Object?> question) {
+  if (isOpenDisplayQuestion(question)) return;
+  if (question['options'] == null || question['answer'] == null) {
+    throw const FormatException('练习题 options 与 answer 必须同时为空或同时有效');
+  }
+  questionOptions(question['options'], question['answer']);
+}
+
 class QuestionBodyPart {
   const QuestionBodyPart(this.text);
   final String text;

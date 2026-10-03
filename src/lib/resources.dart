@@ -553,7 +553,7 @@ class Resources extends ChangeNotifier {
       final questions = await source.query('yzc_ai_question', orderBy: 'id', limit: 200, offset: offset);
       for (final question in questions) {
         if (textOf(question, 'question').trim().isEmpty || !questionRelations.contains(question['relation'])) throw const FormatException('题目内容或分类无效');
-        questionOptions(question['options'], question['answer']);
+        validateQuestionAnswerMode(question);
       }
       if (questions.length < 200) break;
     }

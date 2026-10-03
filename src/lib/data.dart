@@ -337,7 +337,11 @@ class AppStore {
     final seenRows = await tx.rawQuery('SELECT q.textbook_id,q.question_id,MAX(i.answer_time) last FROM yzc_user_question q JOIN yzc_user_practice_item i ON i.question_id=q.id AND i.user_id=q.user_id WHERE q.user_id=? GROUP BY q.textbook_id,q.question_id', [userId]);
     final seen = {for (final r in seenRows) '${r['textbook_id']}:${r['question_id']}': intOf(r, 'last')};
     final unique = <String, RowData>{};
-    for (final q in currentPool) { unique['${q['textbook_id']}:${q['question_id'] ?? q['id']}'] = q; }
+    for (final q in currentPool) {
+      if (!isOpenDisplayQuestion(q)) {
+        unique['${q['textbook_id']}:${q['question_id'] ?? q['id']}'] = q;
+      }
+    }
     final candidates = unique.values.toList()..shuffle(Random.secure());
     final order = {for (var i = 0; i < candidates.length; i++) candidates[i]: i};
     candidates.sort((a, b) {
@@ -373,6 +377,7 @@ class AppStore {
         whereArgs: [selected['id'], review ? userId : selected['textbook_id']]);
       if (current.isEmpty) throw StateError('题库已更新，请重新打开课程后开始练习');
       final q = review ? current.single : _question(current.single);
+      if (isOpenDisplayQuestion(q)) throw StateError('开放练习不创建作答记录');
       final options = questionOptions(q['options'], q['answer']);
       if (options.length != 4 || options.map((o) => o['code']).toSet().length != 4 || options.any((o) => !['A', 'B', 'C', 'D'].contains(o['code']) || textOf(o, 'content').isEmpty) || !options.any((o) => o['code'] == q['answer'])) throw StateError('题目选项或答案不完整');
       final snapshot = newId();
