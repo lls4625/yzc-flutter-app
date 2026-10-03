@@ -429,25 +429,52 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
     ));
   }
 
-  Widget _utterance(RowData row) {
+  int _roleSlots(String role) {
+    final partLengths = <int>[];
+    var offset = 0;
+    for (final match in RegExp(r'!([^!\s()]+)\(([^)]*)\)').allMatches(role)) {
+      for (final _ in role.substring(offset, match.start).runes) {
+        partLengths.add(1);
+      }
+      partLengths.add(match.group(1)!.runes.length);
+      offset = match.end;
+    }
+    for (final _ in role.substring(offset).runes) {
+      partLengths.add(1);
+    }
+    final surfaceLength = partLengths.fold<int>(0, (sum, length) => sum + length);
+    var consumed = 0;
+    var canSplitAfterTwo = false;
+    for (final length in partLengths) {
+      consumed += length;
+      if (consumed == 2) canSplitAfterTwo = true;
+    }
+    if (surfaceLength == 4 && canSplitAfterTwo) return 3;
+    final roleLength = surfaceLength < 1 ? 1 : surfaceLength > 3 ? 3 : surfaceLength;
+    return roleLength + 1;
+  }
+
+  Widget _utterance(RowData row, double roleWidth) {
     final id = _itemId(row);
+    final role = textOf(row, 'role');
     return StudyInkWell(key: _anchors.putIfAbsent(id, GlobalKey.new),
       onTap: _canPlayItem ? () => _playRows([row], false) : null,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (textOf(row, 'role').isNotEmpty) Padding(padding: const EdgeInsets.only(right: 10),
-          child: SizedBox(width: MediaQuery.textScalerOf(context).scale(17) * 4,
-            child: _RubyText(textOf(row, 'role'), ruby: widget.host.ruby, fontSize: 17,
-              color: Colors.orange, endAligned: true, trailingSuffix: '：'))),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _RubyText(textOf(row, 'content'), ruby: widget.host.ruby, source: widget.host.source,
-            active: _owns && _playback.playingId == id),
-          if (textOf(row, 'definition').isNotEmpty) ...[
-            const SizedBox(height: 7),
-            keepSpace(widget.host.translation, Text(textOf(row, 'definition'),
-              style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
-                fontSize: 16, height: 1.5, color: row['category'] == '02' ? null : Colors.grey))),
-          ],
-        ])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (roleWidth > 0) Padding(padding: const EdgeInsets.only(right: 8),
+            child: SizedBox(width: roleWidth,
+              child: role.isEmpty ? const SizedBox.shrink() : _RubyText(role,
+                ruby: widget.host.ruby, fontSize: 16, color: Colors.orange,
+                endAligned: true, trailingSuffix: '：', balanceFourCharacters: true))),
+          Expanded(child: _RubyText(textOf(row, 'content'), ruby: widget.host.ruby,
+            source: widget.host.source, active: _owns && _playback.playingId == id)),
+        ]),
+        if (textOf(row, 'definition').isNotEmpty) ...[
+          const SizedBox(height: 7),
+          keepSpace(widget.host.translation, Text(textOf(row, 'definition'),
+            style: TextStyle(fontFamily: 'PingFang SC', locale: const Locale('zh', 'CN'),
+              fontSize: 16, height: 1.5, color: row['category'] == '02' ? null : Colors.grey))),
+        ],
       ]));
   }
 
@@ -511,8 +538,22 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
           group.add(_rows[++i]);
         }
       }
+      var roleSlots = 0;
+      for (final item in group) {
+        final role = textOf(item, 'role');
+        if (role.isNotEmpty) {
+          final slots = _roleSlots(role);
+          if (slots > roleSlots) roleSlots = slots;
+        }
+      }
+      final roleWidth = roleSlots == 0
+        ? 0.0
+        : MediaQuery.textScalerOf(context).scale(16) * roleSlots;
       widgets.add(_card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        for (var j = 0; j < group.length; j++) ...[if (j > 0) const SizedBox(height: 24), _utterance(group[j])],
+        for (var j = 0; j < group.length; j++) ...[
+          if (j > 0) const SizedBox(height: 24),
+          _utterance(group[j], roleWidth),
+        ],
       ])));
     }
     return widgets;
@@ -593,10 +634,10 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
 class _RubyText extends StatelessWidget {
   const _RubyText(this.text, {required this.ruby, this.source = true, this.centered = false,
     this.endAligned = false, this.active = false, this.fontSize = 19, this.color,
-    this.trailingSuffix});
+    this.trailingSuffix, this.balanceFourCharacters = false});
   final String text;
   final bool ruby, source, centered, active;
-  final bool endAligned;
+  final bool endAligned, balanceFourCharacters;
   final double fontSize;
   final Color? color;
   final String? trailingSuffix;
@@ -626,17 +667,32 @@ class _RubyText extends StatelessWidget {
       offset = match.end;
     }
     for (final rune in text.substring(offset).runes) { add(String.fromCharCode(rune), ''); }
-    final tokens = <Widget>[
-      for (var index = 0; index < parts.length; index++)
-        if (index == parts.length - 1 && trailingSuffix != null)
+    List<Widget> tokens(int start, int end, {required bool suffix}) => [
+      for (var index = start; index < end; index++)
+        if (index == end - 1 && suffix && trailingSuffix != null)
           Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
             token(parts[index].surface, parts[index].reading), token(trailingSuffix!, ''),
           ])
         else
           token(parts[index].surface, parts[index].reading),
     ];
-    return Wrap(alignment: centered ? WrapAlignment.center
-        : endAligned ? WrapAlignment.end : WrapAlignment.start,
-      crossAxisAlignment: WrapCrossAlignment.end, children: tokens);
+    final alignment = centered ? WrapAlignment.center
+      : endAligned ? WrapAlignment.end : WrapAlignment.start;
+    var surfaceLength = 0;
+    var splitIndex = -1;
+    for (var index = 0; index < parts.length; index++) {
+      surfaceLength += parts[index].surface.runes.length;
+      if (surfaceLength == 2) splitIndex = index + 1;
+    }
+    if (balanceFourCharacters && surfaceLength == 4 && splitIndex > 0 && splitIndex < parts.length) {
+      return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(alignment: alignment, crossAxisAlignment: WrapCrossAlignment.end,
+          children: tokens(0, splitIndex, suffix: false)),
+        Wrap(alignment: alignment, crossAxisAlignment: WrapCrossAlignment.end,
+          children: tokens(splitIndex, parts.length, suffix: true)),
+      ]);
+    }
+    return Wrap(alignment: alignment, crossAxisAlignment: WrapCrossAlignment.end,
+      children: tokens(0, parts.length, suffix: true));
   }
 }
