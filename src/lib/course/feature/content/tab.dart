@@ -468,7 +468,8 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
           if (roleWidth > 0) Padding(padding: const EdgeInsets.only(right: 8),
             child: SizedBox(width: roleWidth,
               child: role.isEmpty ? const SizedBox.shrink() : _RubyText(role,
-                ruby: widget.host.ruby, fontSize: 16, color: Colors.orange,
+                ruby: false, reserveRubyHeight: widget.host.ruby,
+                fontSize: 16, color: Colors.orange,
                 endAligned: true, trailingSuffix: '：', balanceFourCharacters: true))),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _RubyText(textOf(row, 'content'), ruby: widget.host.ruby,
@@ -556,7 +557,7 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
       }
       final roleWidth = roleSlots == 0
         ? 0.0
-        : MediaQuery.textScalerOf(context).scale(16) * roleSlots;
+        : MediaQuery.textScalerOf(context).scale(16) * roleSlots + 2;
       widgets.add(_card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         for (var j = 0; j < group.length; j++) ...[
           if (j > 0) const SizedBox(height: 24),
@@ -642,10 +643,10 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
 class _RubyText extends StatelessWidget {
   const _RubyText(this.text, {required this.ruby, this.source = true, this.centered = false,
     this.endAligned = false, this.active = false, this.fontSize = 19, this.color,
-    this.trailingSuffix, this.balanceFourCharacters = false});
+    this.trailingSuffix, this.balanceFourCharacters = false, this.reserveRubyHeight = false});
   final String text;
   final bool ruby, source, centered, active;
-  final bool endAligned, balanceFourCharacters;
+  final bool endAligned, balanceFourCharacters, reserveRubyHeight;
   final double fontSize;
   final Color? color;
   final String? trailingSuffix;
@@ -660,9 +661,12 @@ class _RubyText extends StatelessWidget {
     Widget token(String surface, String reading) {
       final highlighted = active && surface.trim().isNotEmpty;
       return Column(mainAxisSize: MainAxisSize.min, children: [
-        keepSpace(ruby, Text(reading.isEmpty ? ' ' : reading,
-          style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
-            fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
+        if (reserveRubyHeight)
+          SizedBox(height: MediaQuery.textScalerOf(context).scale(12) * 1.3)
+        else
+          keepSpace(ruby, Text(reading.isEmpty ? ' ' : reading,
+            style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+              fontSize: 12, height: 1.3, color: Color(0xFF32AA43)))),
         keepSpace(source, Text(surface, style: TextStyle(fontFamily: 'Hiragino Sans',
           locale: const Locale('ja', 'JP'), fontSize: fontSize, height: 1.5,
           color: highlighted ? (dark ? const Color(0xFFFFB366) : const Color(0xFFB85C00)) : color))),
@@ -699,6 +703,11 @@ class _RubyText extends StatelessWidget {
         Wrap(alignment: alignment, crossAxisAlignment: WrapCrossAlignment.end,
           children: tokens(splitIndex, parts.length, suffix: true)),
       ]);
+    }
+    if (balanceFourCharacters && surfaceLength <= 3) {
+      return Row(mainAxisAlignment: endAligned ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: tokens(0, parts.length, suffix: true));
     }
     return Wrap(alignment: alignment, crossAxisAlignment: WrapCrossAlignment.end,
       children: tokens(0, parts.length, suffix: true));
