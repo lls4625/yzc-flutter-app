@@ -19,6 +19,36 @@ void safeName(String name) {
   if (name.isEmpty || name == '.' || name == '..' || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('\u0000') || name.startsWith('.')) throw const FormatException('资源文件名无效');
 }
 
+Future<bool> _resourceEntityExists(String path) async =>
+    await FileSystemEntity.type(path, followLinks: false) != FileSystemEntityType.notFound;
+
+Future<void> _deleteResourceEntity(String path) async {
+  final type = await FileSystemEntity.type(path, followLinks: false);
+  if (type == FileSystemEntityType.directory) {
+    await Directory(path).delete(recursive: true);
+  } else if (type == FileSystemEntityType.file) {
+    await File(path).delete();
+  } else if (type == FileSystemEntityType.link) {
+    await Link(path).delete();
+  }
+}
+
+Future<void> _moveResourceEntity(String source, String target) async {
+  final type = await FileSystemEntity.type(source, followLinks: false);
+  if (type == FileSystemEntityType.notFound) throw FileSystemException('资源路径不存在', source);
+  await Directory(target).parent.create(recursive: true);
+  if (await _resourceEntityExists(target)) await _deleteResourceEntity(target);
+  if (type == FileSystemEntityType.directory) {
+    await Directory(source).rename(target);
+  } else if (type == FileSystemEntityType.file) {
+    await File(source).rename(target);
+  } else if (type == FileSystemEntityType.link) {
+    await Link(source).rename(target);
+  } else {
+    throw FileSystemException('资源路径类型不受支持', source);
+  }
+}
+
 String textbookMediaFilename(String source, String type) {
   final parts = source.split('/');
   if (parts.length != 2 || parts.first != 'mp3') throw const FormatException('内容媒体必须位于 mp3 文件夹');
@@ -179,16 +209,6 @@ class Resources extends ChangeNotifier {
       // The hash is an update hint only; size comes from the HTTP response.
       'size': null, 'sha256': textbook['sha256'], 'update_time': nowMs(),
     };
-    await store.write(() async {
-      final old = await store.db.query('yzc_resource_install', where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id]);
-      if (old.isNotEmpty) throw const FormatException('目录名已被其他内容使用');
-      final reserved = await store.db.query('yzc_resource', columns: ['id'], where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id], limit: 1);
-      if (reserved.isNotEmpty) throw const FormatException('目录名已被其他学习资源描述使用');
-      final previous = await store.db.query('yzc_resource', where: 'textbook_id=?', whereArgs: [id]);
-      row['id'] = previous.isEmpty ? store.newId() : previous.single['id'];
-      final count = await store.db.update('yzc_resource', row, where: 'textbook_id=?', whereArgs: [id]);
-      if (count == 0) await store.db.insert('yzc_resource', row);
-    });
     return row;
   }
 
@@ -285,6 +305,10 @@ class Resources extends ChangeNotifier {
     RowData? job;
     Database? source;
     String? operationId;
+    String? previousFolder;
+    final blockedBooks = <String>{};
+    final displacedBooks = <String>{};
+    bool committed = false;
     final diagnostics = <String, Object?>{'textbook_id': id, 'base_url': ResourceConfig.baseUrl};
     try {
       final jobId = await _beginOperation(id, 'download');
@@ -302,7 +326,7 @@ class Resources extends ChangeNotifier {
         'folder': descriptor['folder'], 'update_time': nowMs(),
       }, where: 'id=?', whereArgs: [operationId]));
       final old = await installation(id);
-      if (old != null && old['folder'] != descriptor['folder']) throw StateError('内容目录名发生变化，请先确认资源映射');
+      previousFolder = old == null ? null : textOf(old, 'folder');
       final folder = textOf(descriptor, 'folder');
       final staging = '${store.root.path}/staging/$jobId';
       final backup = '${store.root.path}/backups/$jobId/$folder/mp3';
@@ -329,27 +353,44 @@ class Resources extends ChangeNotifier {
         SystemErrors.record(e, stack, module: 'textbook', operation: '校验内容数据', context: {...diagnostics, 'operation_id': operationId, 'stage': 'validate'});
         rethrow;
       }
+      final installedConflicts = await store.db.query('yzc_resource_install',
+        columns: ['textbook_id'], where: 'folder=? AND textbook_id<>?', whereArgs: [folder, id]);
+      displacedBooks.addAll(installedConflicts.map((row) => textOf(row, 'textbook_id')).where((value) => value.isNotEmpty));
+      final previousDescriptors = await store.db.query('yzc_resource',
+        columns: ['id'], where: 'textbook_id=?', whereArgs: [id], orderBy: 'update_time DESC,id', limit: 1);
+      descriptor['id'] = previousDescriptors.isEmpty ? store.newId() : previousDescriptors.single['id'];
       await _phase(jobId, 'prepared');
-      unavailable.add(id);
       final playback = IosLessonPlayback.instance;
-      await playback.blockBook(id);
+      for (final book in {id, ...displacedBooks}) {
+        unavailable.add(book);
+        await playback.blockBook(book);
+        blockedBooks.add(book);
+      }
       // Reserve the write queue from filesystem preparation through commit.
       await store.write(() async {
-        final target = Directory('${store.root.path}/resources/$folder/mp3');
-        final hadAudio = await target.exists();
+        final targetPath = '${store.root.path}/resources/$folder/mp3';
+        final hadAudio = await _resourceEntityExists(targetPath);
         await store.db.update('yzc_resource_job', {'phase': 'moving_audio', 'had_audio': hadAudio ? 1 : 0, 'update_time': nowMs()}, where: 'id=?', whereArgs: [jobId]);
         if (hadAudio) {
           await Directory(backup).parent.create(recursive: true);
-          await target.rename(backup);
+          await _moveResourceEntity(targetPath, backup);
           await _excludeDownloadsFromBackup();
         }
-        await _copyAudio(Directory('$staging/extracted/$folder/mp3'), target);
+        await _copyAudio(Directory('$staging/extracted/$folder/mp3'), Directory(targetPath));
         await store.db.update('yzc_resource_job', {'phase': 'audio_ready', 'audio_ready': 1, 'update_time': nowMs()}, where: 'id=?', whereArgs: [jobId]);
         final input = sourceDatabase;
         final counts = <String, int>{};
         for (final table in tables) { counts[table] = Sqflite.firstIntValue(await input.rawQuery('SELECT COUNT(*) FROM $table')) ?? 0; }
         final total = counts.values.fold<int>(0, (a, b) => a + b); var inserted = 0;
         await store.db.transaction((tx) async {
+          for (final displaced in displacedBooks) {
+            for (final table in textbookContentTables.reversed) {
+              await tx.delete(table, where: 'textbook_id=?', whereArgs: [displaced]);
+            }
+            await tx.delete('yzc_resource_install', where: 'textbook_id=?', whereArgs: [displaced]);
+            await tx.delete('yzc_resource', where: 'textbook_id=?', whereArgs: [displaced]);
+            await tx.delete('yzc_textbook', where: 'id=?', whereArgs: [displaced]);
+          }
           // Replace this book's content using the current textbook schema.
           for (final table in textbookContentTables.reversed) {
             await tx.delete(table, where: 'textbook_id=?', whereArgs: [id]);
@@ -377,6 +418,9 @@ class Resources extends ChangeNotifier {
           final installed = {'id': old?['id'] ?? store.newId(), 'textbook_id': id, 'folder': folder, 'status': 'ready', 'job_id': jobId, 'install_time': nowMs()};
           final changed = await tx.update('yzc_resource_install', installed, where: 'textbook_id=?', whereArgs: [id]);
           if (changed == 0) await tx.insert('yzc_resource_install', installed);
+          await tx.delete('yzc_resource', where: 'folder=? AND textbook_id<>?', whereArgs: [folder, id]);
+          await tx.delete('yzc_resource', where: 'textbook_id=?', whereArgs: [id]);
+          await tx.insert('yzc_resource', descriptor);
           await tx.update('yzc_resource_operation', {
             'sha256': hash, 'status': 'success', 'phase': 'installed', 'error': null,
             'update_time': nowMs(), 'finish_time': nowMs(),
@@ -384,12 +428,19 @@ class Resources extends ChangeNotifier {
           await tx.update('yzc_resource_job', {'phase': 'db_committed', 'update_time': nowMs()}, where: 'id=?', whereArgs: [jobId]);
         });
       });
+      committed = true;
       await sourceDatabase.close(); source = null;
       unavailable.remove(id);
       await playback.unblockBook(id);
+      blockedBooks.remove(id);
       try { await _cleanup(job); } catch (cleanupError, cleanupStack) {
         SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _phase(jobId, 'cleanup_pending');
+      }
+      if (previousFolder != null && previousFolder!.isNotEmpty && previousFolder != folder) {
+        try { await _deleteFolderIfUnused(previousFolder!); } catch (cleanupError, cleanupStack) {
+          SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '清理旧学习资源目录', context: {'textbook_id': id, 'folder': previousFolder});
+        }
       }
       report('sync', 1, '安装完成');
     } catch (e, stack) {
@@ -404,6 +455,12 @@ class Resources extends ChangeNotifier {
         catch (cleanupError, cleanupStack) {
           SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
           await _markBroken(job);
+        }
+      }
+      if (!committed) {
+        for (final book in blockedBooks) {
+          unavailable.remove(book);
+          await IosLessonPlayback.instance.unblockBook(book);
         }
       }
       rethrow;
@@ -675,19 +732,18 @@ class Resources extends ChangeNotifier {
     }
     final phase = textOf(job, 'phase');
     if (!['download', 'prepared'].contains(phase)) {
-      final target = Directory('${store.root.path}/resources/$folder/mp3');
-      final backup = Directory(textOf(job, 'backup'));
-      if (await backup.exists()) {
+      final targetPath = '${store.root.path}/resources/$folder/mp3';
+      final backupPath = textOf(job, 'backup');
+      if (await _resourceEntityExists(backupPath)) {
         // Persist rollback intent before changing files. If we crash after
         // rename, the surviving target is already the restored old directory.
         await _phase(textOf(job, 'id'), 'rolling_back');
-        if (await target.exists()) await target.delete(recursive: true);
-        await target.parent.create(recursive: true);
-        await backup.rename(target.path);
+        if (await _resourceEntityExists(targetPath)) await _deleteResourceEntity(targetPath);
+        await _moveResourceEntity(backupPath, targetPath);
         await _excludeDownloadsFromBackup();
       } else if (intOf(job, 'had_audio') == 0) {
-        if (await target.exists()) await target.delete(recursive: true);
-      } else if (!['moving_audio', 'rolling_back'].contains(phase) || !await target.exists()) {
+        if (await _resourceEntityExists(targetPath)) await _deleteResourceEntity(targetPath);
+      } else if (!['moving_audio', 'rolling_back'].contains(phase) || !await _resourceEntityExists(targetPath)) {
         unavailable.add(id); throw StateError('旧音频备份缺失，需重新下载');
       }
     }
@@ -712,9 +768,17 @@ class Resources extends ChangeNotifier {
   }
   Future<void> _cleanup(RowData job) async {
     for (final path in [textOf(job, 'backup'), textOf(job, 'staging')]) {
-      final directory = Directory(path);
-      if (await directory.exists()) await directory.delete(recursive: true);
+      if (await _resourceEntityExists(path)) await _deleteResourceEntity(path);
     }
     await _phase(textOf(job, 'id'), 'done');
+  }
+
+  Future<void> _deleteFolderIfUnused(String folder) async {
+    safeName(folder);
+    final references = await store.db.query('yzc_resource_install',
+      columns: ['id'], where: 'folder=?', whereArgs: [folder], limit: 1);
+    if (references.isNotEmpty) return;
+    final path = '${store.root.path}/resources/$folder';
+    if (await _resourceEntityExists(path)) await _deleteResourceEntity(path);
   }
 }

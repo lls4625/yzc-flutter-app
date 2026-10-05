@@ -1032,7 +1032,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Text(displayTextbook, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              Flexible(child: Text(displayTextbook, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
               const SizedBox(width: 8),
               Text(textOf(book, 'volume'), style: TextStyle(color: bookColor(book), fontWeight: FontWeight.w700)),
             ]),
