@@ -183,7 +183,7 @@ class Resources extends ChangeNotifier {
       final old = await store.db.query('yzc_resource_install', where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id]);
       if (old.isNotEmpty) throw const FormatException('目录名已被其他内容使用');
       final reserved = await store.db.query('yzc_resource', columns: ['id'], where: 'folder=? AND textbook_id<>?', whereArgs: [row['folder'], id], limit: 1);
-      if (reserved.isNotEmpty) throw const FormatException('目录名已被其他内容资源描述使用');
+      if (reserved.isNotEmpty) throw const FormatException('目录名已被其他学习资源描述使用');
       final previous = await store.db.query('yzc_resource', where: 'textbook_id=?', whereArgs: [id]);
       row['id'] = previous.isEmpty ? store.newId() : previous.single['id'];
       final count = await store.db.update('yzc_resource', row, where: 'textbook_id=?', whereArgs: [id]);
@@ -195,7 +195,7 @@ class Resources extends ChangeNotifier {
   Future<void> remove(String id) async {
     if (activeBook != null) throw StateError('请等待当前内容任务完成');
     activeBook = id;
-    report('delete', null, '正在删除内容资源');
+    report('delete', null, '正在删除学习资源');
     final playback = IosLessonPlayback.instance;
     String? operationId;
     bool committed = false;
@@ -227,7 +227,7 @@ class Resources extends ChangeNotifier {
       }));
       committed = true;
       await _finishDelete({'id': operationId, 'textbook_id': id, 'folder': folder});
-      report('delete', 1, '内容资源已删除');
+      report('delete', 1, '学习资源已删除');
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'textbook', operation: '删除内容', context: {'textbook_id': id, 'operation_id': operationId, 'stage': stage});
       if (operationId != null) {
@@ -589,7 +589,7 @@ class Resources extends ChangeNotifier {
     int total = 0, copied = 0;
     for (final file in files) { total += await file.length(); }
     final capacity = await const MethodChannel('yuzhichu/device').invokeMethod<int>('freeSpace');
-    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步内容资源的空间不足');
+    if (capacity != null && capacity < total + 128 * 1024 * 1024) throw StateError('同步学习资源的空间不足');
     await to.create(recursive: true);
     await _excludeDownloadsFromBackup();
     for (final file in files) {
@@ -599,12 +599,12 @@ class Resources extends ChangeNotifier {
         await for (final bytes in file.openRead()) {
           sink.add(bytes); copied += bytes.length;
           await sink.flush();
-          report('sync', total == 0 ? .6 : .6 * copied / total, '复制内容资源 $copied/$total 字节');
+          report('sync', total == 0 ? .6 : .6 * copied / total, '复制学习资源 $copied/$total 字节');
         }
         await sink.flush();
       } finally { await sink.close(); }
     }
-    report('sync', .6, '内容资源已就位');
+    report('sync', .6, '学习资源已就位');
   }
   Future<void> _excludeDownloadsFromBackup() async {
     if (Platform.isIOS) {

@@ -912,7 +912,7 @@ private final class LessonPlayback {
               prepared === self.currentClip || prepared === self.nextClip else { return }
         guard asset.statusOfValue(forKey: "duration", error: nil) == .loaded,
               asset.statusOfValue(forKey: "tracks", error: nil) == .loaded else {
-          prepared.error = "音频时长或音轨读取失败，请检查内容资源"
+          prepared.error = "音频时长或音轨读取失败，请检查学习资源"
           if prepared === self.currentClip { self.installPreparedClip(prepared) }
           return
         }
@@ -965,7 +965,7 @@ private final class LessonPlayback {
         guard let self = self, token == self.generation,
               item === self.currentClip?.item, item === self.player.currentItem else { return }
         if item.status == .failed {
-          self.fail("音频读取失败，请检查内容资源后重新开始")
+          self.fail("音频读取失败，请检查学习资源后重新开始")
           return
         }
         guard item.status == .readyToPlay, self.preparing else { return }

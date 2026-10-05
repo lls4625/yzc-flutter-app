@@ -14,7 +14,7 @@ String userError(Object? error, {String fallback = '操作失败，请重试'}) 
   if (message.contains('密码密文')) return '资源包配置异常';
   if (message.contains('下载地址无效')) return '下载地址配置异常';
   if (message.contains('不存在或不可下载')) return '内容暂不可下载';
-  if (message.contains('目录名')) return '内容资源配置异常';
+  if (message.contains('目录名')) return '学习资源配置异常';
   if (message.contains('请等待当前内容任务完成') || message.contains('内容正在')) return '内容正在处理，请稍后再试';
   if (message.contains('内容未安装') || message == '请先下载内容') return '内容暂不可用';
   if (message.contains('缺少音频') || message.contains('音频文件缺失') || message.contains('音频丢失') || message.contains('音频备份缺失')) return '音频资源缺失';

@@ -506,7 +506,7 @@ class _HomePanelState extends State<HomePanel> {
     final waiting = error == null && !hasCurrentSnapshot;
     final unavailable = !resourceReady || widget.app.resources.unavailable.contains(_loadedBookId);
     final studyHint = waiting ? '正在读取所选内容…' : error != null && !hasCurrentSnapshot ? '学习数据读取失败，请重试'
-      : book == null ? '请选择内容开始学习' : unavailable ? '内容资源不可用，请前往内容选择页处理'
+      : book == null ? '请选择内容开始学习' : unavailable ? '学习资源不可用，请前往内容选择页处理'
       : current == null ? '本内容暂无课程，请前往内容选择页' : '';
     return PageBody(
       children: [
@@ -891,8 +891,8 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       error is HandshakeException || error is TimeoutException;
   void _showOperationError(String title, Object cause) {
     setState(() {
-      error = cause is StateError && cause.message == '内容资源包更新失败'
-          ? '内容资源包更新失败' : '$title：${_errorDetail(cause)}';
+      error = cause is StateError && cause.message == '学习资源包更新失败'
+          ? '学习资源包更新失败' : '$title：${_errorDetail(cause)}';
       _errorNeedsRecheck = _isNetworkError(cause);
       permissionError = false;
     });
@@ -976,7 +976,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       } finally {
         await _local();
       }
-      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地内容资源已删除，学习记录已保留')));
+      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地学习资源已删除，学习记录已保留')));
     });
     } finally { _finishOperation(); }
   }
@@ -1090,7 +1090,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop && _operationBusy && !_leaving) showResourceWait(context, _operationLabel);
       },
-      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('内容资源'),
+      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('学习资源'),
         leading: StudyIconButton(tooltip: '返回', onPressed: _back,
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20)),
         actions: [StudyIconButton(tooltip: _operationBusy ? '正在$_operationLabel' : fetching ? '正在检查内容' : '刷新内容',
@@ -1211,7 +1211,7 @@ class _CoursePanelState extends State<CoursePanel> {
       Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
         child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${textOf(book, 'textbook')} · ${textOf(book, 'volume')}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4), Text('${lessons.length} 课 · ${widget.app.resources.unavailable.contains(bookId) ? '内容资源需要重新下载' : '课文与单词录音已就绪'}'),
+        const SizedBox(height: 4), Text('${lessons.length} 课 · ${widget.app.resources.unavailable.contains(bookId) ? '学习资源需要重新下载' : '课文与单词录音已就绪'}'),
       ])), StudyIconButton.filledTonal(tooltip: '切换内容', onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.swap_horiz))])),
       Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
         for (var i = 0; i < units.length; i++) unitCard(units[i], lessonsByUnit[units[i]['id']] ?? [],
@@ -2237,8 +2237,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
       _settingCard(
         context,
         icon: Icons.menu_book_outlined,
-        title: '内容资源',
-        subtitle: '下载与更新内容资源',
+        title: '学习资源',
+        subtitle: '下载与更新学习资源',
         onTap: () => openPage(context, LibraryPage(app)),
       ),
       const SizedBox(height: 10),

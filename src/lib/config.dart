@@ -11,7 +11,7 @@ class ResourceConfig {
     try {
       return await restoreResourcePassword(passwordCiphertext);
     } catch (_) {
-      throw StateError('内容资源包密码密文配置无效，请检查本模块配置');
+      throw StateError('学习资源包密码密文配置无效，请检查本模块配置');
     }
   }
 
@@ -20,7 +20,7 @@ class ResourceConfig {
     if (uri == null || !['http', 'https'].contains(uri.scheme) ||
         uri.host.isEmpty || uri.hasQuery || uri.hasFragment ||
         uri.userInfo.isNotEmpty) {
-      throw StateError('内容资源包下载地址无效');
+      throw StateError('学习资源包下载地址无效');
     }
     return uri.replace(path: uri.path.endsWith('/') ? uri.path : uri.path + '/');
   }
