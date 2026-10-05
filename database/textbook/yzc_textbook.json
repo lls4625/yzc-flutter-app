@@ -2,7 +2,7 @@
   {
     "id": "894847224435970048",
     "resource_file": "ryshxgs_1_1.zip",
-    "sha256": "",
+    "sha256": "a25c8a10f38b2d40c6b337c4bca8225c8d4f00b902cbef86966e5b082d0af2cc",
     "publisher": "语之初-学习资料",
     "textbook": "日语生活小故事-初级",
     "volume": "1",
@@ -16,7 +16,7 @@
     "sfky": "1"
   },
   {
-    "id": "3671170190440280001",
+    "id": "3671170190440280002",
     "resource_file": "ryshxgs_1_2.zip",
     "sha256": "",
     "publisher": "语之初-学习资料",
@@ -34,7 +34,7 @@
   {
     "id": "1971170190440288258",
     "resource_file": "xbr_1_1.zip",
-    "sha256": "35c964e00e38540b1b1f48adb5265318dcceb6c0b212bd74503d2a801d2ce0a8",
+    "sha256": "e3e3c9b047467c853a096c630e010e093275eb9cc5db153e22fb7f387657e118",
     "publisher": "",
     "textbook": "新标日-初级",
     "volume": "上",
@@ -50,7 +50,7 @@
   {
     "id": "1971170190440288259",
     "resource_file": "xbr_1_2.zip",
-    "sha256": "8164c47704e9c508e1176877627403713a5f214a1ae6e57992a816733dbdc9b1",
+    "sha256": "40e1f7e8e0cdb20bd1953f9cdf330ae5ca7d5fba44065f971cd964933bec092b",
     "publisher": "",
     "textbook": "新标日-初级",
     "volume": "下",
@@ -66,7 +66,7 @@
   {
     "id": "1971170190440288260",
     "resource_file": "xbr_2_1.zip",
-    "sha256": "96d65e286e3cf0f4740d20c9853113812c0497e997f5247f0ed9b8f2c9ce7f27",
+    "sha256": "b9501751c8f5e20229492185693fcb86696c72080eed67aa19fc9bda7ed86a51",
     "publisher": "",
     "textbook": "新标日-中级",
     "volume": "上",
@@ -82,7 +82,7 @@
   {
     "id": "1971170190440288261",
     "resource_file": "xbr_2_2.zip",
-    "sha256": "14c0faa3b5db4f6f1071ae7caa7d8e671addd0b1d258f6c86fa5ce35654f8b99",
+    "sha256": "951ee992c8f55e68c286681dd2a354200bfa9706026ccf0f91dd5294d401941d",
     "publisher": "",
     "textbook": "新标日-中级",
     "volume": "下",
@@ -98,7 +98,7 @@
   {
     "id": "1971170190440288262",
     "resource_file": "xbr_3_1.zip",
-    "sha256": "57f3e50bd885dbfa276c6c8cafa8b9b109ffb89ed7637e43502550a0f0e6b3a2",
+    "sha256": "dafe1fbe8649b9f786266bba3844b3c581c482f7616e020b3304691ed36f7bbe",
     "publisher": "",
     "textbook": "新标日-高级",
     "volume": "上",
@@ -114,7 +114,7 @@
   {
     "id": "1971170190440288263",
     "resource_file": "xbr_3_2.zip",
-    "sha256": "c71acece0080c974c4b8b55d4713ea915c688a00bf13da495e50b4f34bff60b7",
+    "sha256": "54c58847d64766485f90d7a296940f085f05eb19e9669ab52b6e2f9bafe20b84",
     "publisher": "",
     "textbook": "新标日-高级",
     "volume": "下",
