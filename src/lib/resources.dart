@@ -363,8 +363,8 @@ class Resources extends ChangeNotifier {
       final playback = IosLessonPlayback.instance;
       for (final book in {id, ...displacedBooks}) {
         unavailable.add(book);
-        await playback.blockBook(book);
         blockedBooks.add(book);
+        await playback.blockBook(book);
       }
       // Reserve the write queue from filesystem preparation through commit.
       await store.write(() async {
