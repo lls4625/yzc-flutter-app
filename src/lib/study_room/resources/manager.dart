@@ -14,6 +14,36 @@ import '../jlpt/feature/content.dart';
 
 String _quote(String name) => '"${name.replaceAll('"', '""')}"';
 
+Future<bool> _studyEntityExists(String path) async =>
+    await FileSystemEntity.type(path, followLinks: false) != FileSystemEntityType.notFound;
+
+Future<void> _deleteStudyEntity(String path) async {
+  final type = await FileSystemEntity.type(path, followLinks: false);
+  if (type == FileSystemEntityType.directory) {
+    await Directory(path).delete(recursive: true);
+  } else if (type == FileSystemEntityType.file) {
+    await File(path).delete();
+  } else if (type == FileSystemEntityType.link) {
+    await Link(path).delete();
+  }
+}
+
+Future<void> _moveStudyEntity(String source, String target) async {
+  final type = await FileSystemEntity.type(source, followLinks: false);
+  if (type == FileSystemEntityType.notFound) throw FileSystemException('自习资源路径不存在', source);
+  await Directory(target).parent.create(recursive: true);
+  if (await _studyEntityExists(target)) await _deleteStudyEntity(target);
+  if (type == FileSystemEntityType.directory) {
+    await Directory(source).rename(target);
+  } else if (type == FileSystemEntityType.file) {
+    await File(source).rename(target);
+  } else if (type == FileSystemEntityType.link) {
+    await Link(source).rename(target);
+  } else {
+    throw FileSystemException('自习资源路径类型不受支持', source);
+  }
+}
+
 class StudyResources extends ChangeNotifier {
   StudyResources(this.store);
   final AppStore store;
@@ -124,6 +154,7 @@ class StudyResources extends ChangeNotifier {
       SystemErrors.record(e, stack, module: 'selfstudy', operation: '设置资源备份属性');
     }
     await directory.create(recursive: true);
+    await _recoverMediaSwaps();
     await _restoreReceipts();
     for (final level in levels) { await _tryCleanup(level); }
     await refreshInfo();
@@ -216,6 +247,24 @@ class StudyResources extends ChangeNotifier {
     } catch (e, stack) {
       _cleanup.add(level);
       SystemErrors.record(e, stack, module: 'selfstudy', operation: '清理级别资源文件', context: {'level': level});
+    }
+  }
+
+  Future<void> _recoverMediaSwaps() async {
+    for (final level in levels) {
+      final root = Directory('${directory.path}/resources/$level');
+      if (!await root.exists()) continue;
+      await for (final entry in root.list(followLinks: false)) {
+        final name = entry.uri.pathSegments.where((part) => part.isNotEmpty).last;
+        final match = RegExp(r'^\.replace-([a-f0-9]{64})$').firstMatch(name);
+        if (match == null) continue;
+        final target = '${root.path}/${match.group(1)}';
+        if (await _studyEntityExists(target)) {
+          await _deleteStudyEntity(entry.path);
+        } else {
+          await _moveStudyEntity(entry.path, target);
+        }
+      }
     }
   }
 
@@ -381,6 +430,9 @@ class StudyResources extends ChangeNotifier {
     busy = true; activeLevel = level; error = ''; permissionError = false; errorNeedsRecheck = false; _report('获取 ${level.toUpperCase()} 资源信息');
     Database? source;
     Directory? staging;
+    String? mediaPath;
+    String? mediaBackupPath;
+    bool mediaPlaced = false;
     bool committed = false;
     String? oldManifest;
     final diagnostics = <String, Object?>{'base_url': StudyResourceConfig.baseUrl, 'resource_file': '$level.zip'};
@@ -437,14 +489,15 @@ class StudyResources extends ChangeNotifier {
         if (foreign.isNotEmpty) throw const FormatException('资源包包含其他级别或无级别的数据');
       }
       await validateStudyContent(sourceDb);
-      // Install media into a new directory; the previous directory is never
-      // overwritten while its database/manifest is still the installed version.
-      final media = Directory('${directory.path}/resources/$level/$actualHash');
-      if (!await media.exists()) {
-        await media.parent.create(recursive: true);
-        await _excludeDownloadsFromBackup();
-        await Directory('${staging.path}/extracted/$level/mp3').rename(media.path);
-      }
+      // The validated download is authoritative. Keep the occupied target only
+      // as a short-lived rollback copy until the database receipt commits.
+      mediaPath = '${directory.path}/resources/$level/$actualHash';
+      mediaBackupPath = '${directory.path}/resources/$level/.replace-$actualHash';
+      await Directory(mediaPath).parent.create(recursive: true);
+      if (await _studyEntityExists(mediaBackupPath)) await _deleteStudyEntity(mediaBackupPath);
+      if (await _studyEntityExists(mediaPath)) await _moveStudyEntity(mediaPath, mediaBackupPath);
+      await _moveStudyEntity('${staging.path}/extracted/$level/mp3', mediaPath);
+      mediaPlaced = true;
       await _excludeDownloadsFromBackup();
       _report('导入自习资源');
       await store.write(() => store.db.transaction((tx) async {
@@ -503,6 +556,7 @@ class StudyResources extends ChangeNotifier {
           if (id == level) installedDescriptor else if (_installed.containsKey(id)) _installed[id]]));
       }));
       committed = true;
+      if (await _studyEntityExists(mediaBackupPath)) await _deleteStudyEntity(mediaBackupPath);
       await _restoreReceipts();
       await refreshInfo();
       _report('${level.toUpperCase()} 资源安装完成', 1);
@@ -512,6 +566,18 @@ class StudyResources extends ChangeNotifier {
         try { await _publish(oldManifest); } catch (cleanupError, cleanupStack) {
           SystemErrors.record(cleanupError, cleanupStack, module: 'selfstudy', operation: '恢复与清理自习资源', context: {'stage': message, 'staging': staging?.path});
           /* Startup restores from the committed receipt. */
+        }
+      }
+      if (!committed && mediaPath != null) {
+        try {
+          if (mediaBackupPath != null && await _studyEntityExists(mediaBackupPath)) {
+            if (await _studyEntityExists(mediaPath)) await _deleteStudyEntity(mediaPath);
+            await _moveStudyEntity(mediaBackupPath, mediaPath);
+          } else if (mediaPlaced && await _studyEntityExists(mediaPath)) {
+            await _deleteStudyEntity(mediaPath);
+          }
+        } catch (cleanupError, cleanupStack) {
+          SystemErrors.record(cleanupError, cleanupStack, module: 'selfstudy', operation: '恢复被替换的自习资源', context: {'level': level, 'media': mediaPath, 'backup': mediaBackupPath});
         }
       }
       error = committed ? '资源已安装，本地文件同步未完成，请重新打开资源页。'
