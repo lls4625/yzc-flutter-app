@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -19,7 +20,7 @@ class _DictationCard {
   final RowData lesson;
   final bool words;
   String get key => '${lesson['id']}:${words ? 'word' : 'content'}';
-  String get course => '第${lesson['num'] ?? ''}课';
+  String get course => lessonLabel(lesson);
   String get label => words ? '单词' : '课文';
   IconData get icon =>
       words ? Icons.headphones_rounded : Icons.menu_book_rounded;

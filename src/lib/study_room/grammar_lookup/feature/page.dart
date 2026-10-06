@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../glass_ui.dart';
+import '../../../lesson_presentation.dart';
 import '../../../playback_scaffold.dart';
 import '../../../ui.dart' show plainJapanese;
 import '../../host_contracts.dart';
@@ -122,7 +123,8 @@ class _GrammarLookupPageState extends State<GrammarLookupPage> {
     final title = _text(row, 'lesson_title');
     return [
       book,
-      if (lesson.isNotEmpty) '第 $lesson 课',
+      if (lesson.isNotEmpty || _text(row, 'lesson_code').isNotEmpty)
+        lessonLabel(row, lessonKey: 'lesson_code', numberKey: 'lesson_num'),
       title,
     ].where((value) => value.isNotEmpty).join(' · ');
   }
@@ -195,9 +197,7 @@ class _GrammarLookupPageState extends State<GrammarLookupPage> {
     return Padding(
       key: ValueKey(key),
       padding: const EdgeInsets.only(bottom: 12),
-      child: StudyPanel(
-        color: dark ? const Color(0xFF252525) : Colors.white,
-        shape: RoundedRectangleBorder(side: BorderSide(color: border)),
+      child: StudyCard(
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

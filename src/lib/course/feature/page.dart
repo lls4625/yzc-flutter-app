@@ -1,3 +1,4 @@
+import '../../lesson_presentation.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../data.dart';
@@ -348,7 +349,7 @@ class _CourseLessonPageState extends State<CourseLessonPage> with WidgetsBinding
     return PlaybackScaffold(
       controlledLesson: _batchPlayback ? _playback.lesson : null,
       backgroundColor: dark ? const Color(0xFF171817) : const Color(0xFFF5F5F5),
-      appBar: StudyAppBar(centerTitle: true, title: Text('第${widget.lesson['num'] ?? ''}课'),
+      appBar: StudyAppBar(centerTitle: true, title: Text(lessonLabel(widget.lesson)),
         backgroundColor: dark ? const Color(0xFF222322) : Colors.white,
         actions: [
           StudySpeedButton(onPressed: _speed, speed: widget.host.speed),

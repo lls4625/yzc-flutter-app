@@ -102,7 +102,7 @@ class GrammarLookupRepository {
     // Examples and complete grammar trees load only when a card is expanded.
     final rows = await host.database.rawQuery('''
       SELECT g.*, b.textbook AS book_name, b.volume AS book_volume,
-        l.num AS lesson_num, l.title AS lesson_title
+        l.lesson AS lesson_code, l.num AS lesson_num, l.title AS lesson_title
       FROM yzc_grammar g
       LEFT JOIN yzc_textbook b ON b.id=g.textbook_id
       LEFT JOIN yzc_lessons l ON l.id=g.lessons_id

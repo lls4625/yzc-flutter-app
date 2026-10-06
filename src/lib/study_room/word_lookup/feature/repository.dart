@@ -18,7 +18,7 @@ class WordLookupRepository {
     final pattern = _pattern(keyword);
     return host.database.rawQuery('''
       SELECT w.*, b.textbook AS book_name, b.volume AS book_volume,
-        l.num AS lesson_num
+        l.lesson AS lesson_code, l.num AS lesson_num
       FROM yzc_words w
       LEFT JOIN yzc_textbook b ON b.id=w.textbook_id
       LEFT JOIN yzc_lessons l ON l.id=w.lessons_id

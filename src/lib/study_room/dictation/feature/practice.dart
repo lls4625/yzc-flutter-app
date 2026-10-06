@@ -1,8 +1,6 @@
 part of 'dictation.dart';
 
-String _dictationPlain(String text) => text
-    .replaceAllMapped(RegExp(r'!([^!\s()]+)\([^)]*\)'), (m) => m.group(1)!)
-    .trim();
+String _dictationPlain(String text) => dictationPlainText(text);
 
 /// Keeps textbook spacing first; native tokens are only a fallback for unspaced text.
 Future<List<String>> _dictationPhrases(String source) async {
@@ -97,7 +95,8 @@ class _DictationQuestion {
 enum _DictationStage { loading, listening, waiting, answering, revealed, paused, failed, done }
 
 class _DictationPage extends StatefulWidget {
-  const _DictationPage(this.controller, this.book, this.queue);
+  const _DictationPage(this.controller, this.book, this.queue, this.selectionVersion);
+  final String selectionVersion;
   final DictationController controller;
   final RowData book;
   final List<_DictationCard> queue;
@@ -194,6 +193,9 @@ class _DictationPageState extends State<_DictationPage> with WidgetsBindingObser
       if (!widget.controller.access.available) throw StateError('自习室暂未解锁');
       final catalog = widget.controller.catalog;
       final version = await catalog.version(_bookId);
+      if (version != widget.selectionVersion) {
+        throw StateError('内容已更新，请返回课程选择页重新选择');
+      }
       final questions = <_DictationQuestion>[];
       final paths = <String, String>{};
       var skipped = 0;
@@ -204,7 +206,7 @@ class _DictationPageState extends State<_DictationPage> with WidgetsBindingObser
           final text = _dictationPlain(
             textOf(row, card.words ? 'word' : 'content'),
           );
-          final filename = textOf(row, 'phonetic');
+          final filename = dictationAudioSource(row);
           if (text.isEmpty || filename.isEmpty) { skipped++; continue; }
           final path = paths[filename] ?? await catalog.audioPath(_bookId, filename);
           if (!_current(epoch)) return;

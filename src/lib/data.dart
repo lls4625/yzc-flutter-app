@@ -1,3 +1,4 @@
+import 'lesson_presentation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -258,7 +259,7 @@ class AppStore {
     await db.update('yzc_user_setting', {key: value, 'update_time': nowMs()}, where: 'user_id = ?', whereArgs: [userId]);
   });
   Future<List<RowData>> textbooks() => db.query('yzc_textbook', orderBy: 'sort IS NULL, sort, id');
-  Future<List<RowData>> lessons(String book) => db.query('yzc_lessons', where: 'textbook_id = ?', whereArgs: [book], orderBy: 'num IS NULL, num, id');
+  Future<List<RowData>> lessons(String book) async => sortLessons(await db.query('yzc_lessons', where: 'textbook_id = ?', whereArgs: [book], orderBy: 'num IS NULL, num, id'));
   Future<List<RowData>> content(String table, String book, String lesson) {
     if (table == 'yzc_ai_question') return _questions(db, book, lesson);
     if (!{'yzc_words', 'yzc_content', 'yzc_grammar'}.contains(table)) throw ArgumentError('未知内容表');

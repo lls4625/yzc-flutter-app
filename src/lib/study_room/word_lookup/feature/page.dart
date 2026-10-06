@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -85,7 +86,7 @@ class _WordLookupPageState extends State<WordLookupPage> {
     final book = [_text(row, 'book_name'), _text(row, 'book_volume')]
       .where((value) => value.isNotEmpty).join('·');
     final lesson = _text(row, 'lesson_num');
-    return [book, if (lesson.isNotEmpty) '第 $lesson 课']
+    return [book, if (lesson.isNotEmpty || _text(row, 'lesson_code').isNotEmpty) lessonLabel(row, lessonKey: 'lesson_code', numberKey: 'lesson_num')]
       .where((value) => value.isNotEmpty).join(' · ');
   }
 

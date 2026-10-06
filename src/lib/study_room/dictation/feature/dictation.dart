@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import '../../../system_errors.dart';
 import 'dart:async';
 import 'dart:math';
@@ -41,7 +42,8 @@ class _DictationCard {
   final RowData lesson;
   final bool words;
   String get key => '${lesson['id']}:${words ? 'word' : 'content'}';
-  String get course => '第${lesson['num'] ?? ''}课';
+  String get course => lessonLabel(lesson);
+  int get count => lesson[words ? 'word_count' : 'content_count'] as int? ?? 0;
   String get label => words ? '单词' : '课文';
   IconData get icon =>
       words ? Icons.headphones_rounded : Icons.menu_book_rounded;
@@ -56,6 +58,7 @@ class DictationSelectionPage extends StatefulWidget {
 
 class _DictationSelectionPageState extends State<DictationSelectionPage> {
   RowData? book;
+  String? selectionVersion;
   List<_DictationCard> cards = [], selected = [];
   bool loading = true;
   String? error;
@@ -169,7 +172,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
                       children: [
                         Icon(item.icon, size: 14, color: scheme.primary),
                         const SizedBox(width: 4),
-                        Text(item.label, style: const TextStyle(fontSize: 12)),
+                        Text('${item.label} ${item.count}', style: const TextStyle(fontSize: 12)),
                         const SizedBox(width: 4),
                         const Icon(Icons.drag_indicator_rounded, size: 14),
                       ],
@@ -263,16 +266,21 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
       final books = await widget.controller.catalog.textbooks();
       final matches = books.where((row) => textOf(row, 'id') == id);
       final current = matches.isEmpty ? null : matches.first;
+      final version = current == null ? null : await widget.controller.catalog.version(id);
       final lessons = current == null
           ? <RowData>[]
           : await widget.controller.catalog.lessons(id);
+      if (current != null && version != await widget.controller.catalog.version(id)) {
+        throw StateError('内容已更新，请重新读取课程');
+      }
       if (!mounted) return;
       setState(() {
         book = current;
+        selectionVersion = version;
         cards = [
           for (final lesson in lessons) ...[
-            _DictationCard(lesson, true),
-            _DictationCard(lesson, false),
+            if ((lesson['word_count'] as int? ?? 0) > 0) _DictationCard(lesson, true),
+            if ((lesson['content_count'] as int? ?? 0) > 0) _DictationCard(lesson, false),
           ],
         ];
         selected = [];
@@ -370,12 +378,26 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
     final queue = List<_DictationCard>.unmodifiable(selected);
     setState(() => confirming = true);
     try {
+      final version = await widget.controller.catalog.version(textOf(book!, 'id'));
+      if (!mounted) return;
+      if (version != selectionVersion) {
+        await _load();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: const Text('内容已更新，数量已刷新，请重新选择')),
+        );
+        return;
+      }
       await Navigator.of(context).push(
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => _DictationPage(widget.controller, book!, queue),
+          pageBuilder: (_, __, ___) => _DictationPage(widget.controller, book!, queue, version),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
+      );
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'dictation', operation: '校验课程数量');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(content: Text(featureError(error, fallback: '课程校验失败，请重新读取'))),
       );
     } finally {
       if (mounted) setState(() => confirming = false);
@@ -578,7 +600,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: columns,
-                                    mainAxisExtent: 60,
+                                    mainAxisExtent: 78,
                                     crossAxisSpacing: 4,
                                     mainAxisSpacing: 4,
                                   ),
@@ -589,7 +611,7 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
                                 return Semantics(
                                   selected: checked,
                                   button: true,
-                                  label: '${item.course}${item.label}',
+                                  label: '${item.course}${item.label} ${item.count}',
                                   child: StudyPanel(
                                     color: checked
                                         ? scheme.primaryContainer
@@ -622,7 +644,9 @@ class _DictationSelectionPageState extends State<DictationSelectionPage> {
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(height: 5),
+                                            const SizedBox(height: 3),
+                                            Text('${item.count}', style: const TextStyle(fontSize: 11)),
+                                            const SizedBox(height: 3),
                                             FittedBox(
                                               fit: BoxFit.scaleDown,
                                               child: Row(

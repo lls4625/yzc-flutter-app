@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,7 +43,7 @@ class FlashDemoData {
           chinese: flashDemoText(row['definition']),
           pos: flashDemoText(row['pos']),
           source:
-              '${book['textbook']} ${book['volume']} · 第${lesson['num']}课 · 演示',
+              '${book['textbook']} ${book['volume']} · ${lessonLabel(lesson)} · 演示',
         ),
     ];
   }

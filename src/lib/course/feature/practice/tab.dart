@@ -8,6 +8,7 @@ import '../../../system_errors.dart';
 import '../../../ui.dart';
 import '../../../user_error.dart';
 import '../host.dart';
+import 'open_practice_body.dart';
 import '../image_interaction_config.dart';
 import '../media_widgets.dart';
 import '../video_controller.dart';
@@ -208,7 +209,7 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
         style: Theme.of(context).textTheme.labelLarge),
       const SizedBox(height: 14),
       _questionMedia(question),
-      PracticeQuestionBody(textOf(question, 'content'),
+      OpenPracticeBody(textOf(question, 'content'),
         key: ValueKey('open-practice-${question['id']}')),
     ],
   ));

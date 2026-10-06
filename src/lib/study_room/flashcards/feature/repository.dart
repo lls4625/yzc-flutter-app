@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -67,12 +68,12 @@ class FlashCatalog {
   });
 
   Future<List<FlashRow>> lessons(String book) => _read(
-    (db) => db.query(
+    (db) async => sortLessons(await db.query(
       'yzc_lessons',
       where: 'textbook_id=?',
       whereArgs: [book],
       orderBy: 'num IS NULL,num,id',
-    ),
+    )),
   );
 
   Future<String> _version(DatabaseExecutor db, String book) async {
@@ -95,7 +96,7 @@ class FlashCatalog {
     final result = await db.transaction((tx) async {
       final stamp = await _version(tx, book);
       final rows = await tx.rawQuery(
-        '''SELECT w.*,l.num lesson_num,b.textbook book_name FROM yzc_words w
+        '''SELECT w.*,l.lesson lesson_code,l.num lesson_num,b.textbook book_name FROM yzc_words w
         JOIN yzc_lessons l ON l.id=w.lessons_id AND l.textbook_id=w.textbook_id
         JOIN yzc_textbook b ON b.id=w.textbook_id WHERE w.textbook_id=?
         AND w.lessons_id IN (${List.filled(lessonIds.length, '?').join(',')})
@@ -126,7 +127,7 @@ class FlashCatalog {
             kana: kana,
             chinese: zh,
             pos: flashText(row['pos']),
-            source: '${row['book_name']} · 第${row['lesson_num']}课',
+            source: '${row['book_name']} · ${lessonLabel(row, lessonKey: 'lesson_code', numberKey: 'lesson_num')}',
           ),
         );
       }

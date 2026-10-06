@@ -1,3 +1,4 @@
+import 'lesson_presentation.dart';
 import 'content_typography.dart';
 import 'dart:async';
 import 'dart:io';
@@ -499,7 +500,7 @@ class _HomePanelState extends State<HomePanel> {
     final book = hasCurrentSnapshot ? this.book : null;
     final current = hasCurrentSnapshot ? this.current : null;
     final lessons = hasCurrentSnapshot ? this.lessons : <RowData>[];
-    final number = current == null ? 0 : intOf(current, 'num');
+    final currentLabel = current == null ? '' : lessonLabel(current);
     final progress = current == null ? 0.0 : lessonPercent(progressRows, textOf(current, 'id')) / 100;
     final completed = lessons.where((row) => lessonPercent(progressRows, textOf(row, 'id')) == 100).length;
     final textbookProgress = lessons.isEmpty ? 0.0 : completed / lessons.length;
@@ -565,7 +566,7 @@ class _HomePanelState extends State<HomePanel> {
               Text(
                 book == null
                     ? '当前学习课程'
-                    : '当前学习课程 · ${textOf(book, 'textbook')} ${textOf(book, 'volume')} · 第 $number 课',
+                    : '当前学习课程 · ${textOf(book, 'textbook')} ${textOf(book, 'volume')}${currentLabel.isEmpty ? '' : ' · $currentLabel'}',
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 6),
@@ -650,7 +651,7 @@ class _HomePanelState extends State<HomePanel> {
                     : studyHint.isNotEmpty ? '选择内容' : canResume ? '继续学习' : '开始学习',
                 subtitle: studyHint.isNotEmpty
                     ? studyHint
-                    : current == null ? '请选择内容开始学习' : '第 ${intOf(current, 'num')} 课 · ${textOf(current, 'title')}',
+                    : current == null ? '请选择内容开始学习' : '${lessonLabel(current)} · ${textOf(current, 'title')}',
                 subtitleColor: Colors.grey,
                 subtitleMaxLines: 1,
                 onTap: () => perform(context, _continue),
@@ -1177,7 +1178,7 @@ class _CoursePanelState extends State<CoursePanel> {
         ),
       ), child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [
-          SizedBox(width: 66, child: Text('第${lesson['num'] ?? lesson['lesson'] ?? ''}课', style: TextStyle(fontWeight: FontWeight.w600, color: done ? Colors.green : null))),
+          SizedBox(width: 66, child: Text(lessonLabel(lesson), style: TextStyle(fontWeight: FontWeight.w600, color: done ? Colors.green : null))),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(textOf(lesson, 'title'), style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 16, fontWeight: FontWeight.w600)),
             if (textOf(lesson, 'sub_title').isNotEmpty) ...[const SizedBox(height: 2), Text(textOf(lesson, 'sub_title'), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP')))],
@@ -1194,7 +1195,7 @@ class _CoursePanelState extends State<CoursePanel> {
         title: Text(intOf(unit, 'num') > 0 ? '第${chineseNumber(intOf(unit, 'num'))}单元' : textOf(unit, 'title'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: bookColor(book))),
         subtitle: useUnitTitle && textOf(unit, 'title').trim().isNotEmpty
           ? Text(textOf(unit, 'title'))
-          : children.isEmpty ? null : Text('第 ${children.first['num']}—${children.last['num']} 课'),
+          : children.isEmpty ? null : Text(children.length == 1 ? lessonLabel(children.first) : '${lessonLabel(children.first)}—${lessonLabel(children.last)}'),
         children: [for (var i = 0; i < children.length; i++) ...[if (i > 0) const StudyDivider(height: 1), lessonTile(children[i])]],
       )),
     );

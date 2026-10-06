@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import '../../../user_error.dart';
 import '../../../system_errors.dart';
 import 'dart:convert';
@@ -93,6 +94,16 @@ class DictationController extends ChangeNotifier {
   }
 }
 
+String dictationPlainText(String text) => text
+    .replaceAllMapped(RegExp(r'!([^!\s()]+)\([^)]*\)'), (m) => m.group(1)!)
+    .trim();
+
+String dictationAudioSource(RowData row) => textOf(row, 'phonetic').trim();
+
+bool dictationRowEligible(RowData row, bool words) =>
+    dictationPlainText(textOf(row, words ? 'word' : 'content')).isNotEmpty &&
+    dictationAudioSource(row).isNotEmpty;
+
 class DictationCatalog {
   DictationCatalog(this.host);
   final StudyRoomHost host;
@@ -119,14 +130,28 @@ class DictationCatalog {
     );
     return rows.where((r) => !host.isBookUnavailable(textOf(r, 'id'))).toList();
   });
-  Future<List<RowData>> lessons(String book) => _read(
-    (db) => db.query(
-      'yzc_lessons',
-      where: 'textbook_id=?',
-      whereArgs: [book],
+  Future<List<RowData>> lessons(String book) => _read((db) async {
+    final lessons = sortLessons(await db.query(
+      'yzc_lessons', where: 'textbook_id=?', whereArgs: [book],
       orderBy: 'num IS NULL,num,id',
-    ),
-  );
+    )).where(isRegularLesson);
+    final words = await _content(db, 'yzc_words', book);
+    final content = await _content(db, 'yzc_content', book);
+    Map<String, int> counts(List<RowData> rows) {
+      final result = <String, int>{};
+      for (final row in rows) {
+        final id = textOf(row, 'lessons_id');
+        result[id] = (result[id] ?? 0) + 1;
+      }
+      return result;
+    }
+    final wordCounts = counts(words), contentCounts = counts(content);
+    return [for (final lesson in lessons) {
+      ...lesson,
+      'word_count': wordCounts[textOf(lesson, 'id')] ?? 0,
+      'content_count': contentCounts[textOf(lesson, 'id')] ?? 0,
+    }];
+  });
   Future<String> version(String book) => _read((db) async {
     if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
     final rows = await db.query(
@@ -145,18 +170,26 @@ class DictationCatalog {
     String table,
     String book,
     String lesson,
-  ) => _read((db) {
-    if (!{'yzc_words', 'yzc_content'}.contains(table))
+  ) => _read((db) => _content(db, table, book, lesson));
+
+  // Counts and the prepared queue use this same read-only inclusion rule.
+  Future<List<RowData>> _content(
+    DatabaseExecutor db, String table, String book, [String? lesson]
+  ) async {
+    if (!{'yzc_words', 'yzc_content'}.contains(table)) {
       throw ArgumentError('未知内容类型');
+    }
     if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
-    return db.query(
-      table,
-      where: 'textbook_id=? AND lessons_id=?',
-      whereArgs: [book, lesson],
-      orderBy:
-          '${table == 'yzc_content' ? 'category IS NULL,category,' : ''}sort IS NULL,sort,id',
-    );
-  });
+    final rows = await db.rawQuery('''SELECT c.*,l.lesson AS _lesson_code
+      FROM $table c JOIN yzc_lessons l
+        ON l.id=c.lessons_id AND l.textbook_id=c.textbook_id
+      WHERE c.textbook_id=? ${lesson == null ? '' : 'AND c.lessons_id=?'}
+      ORDER BY ${table == 'yzc_content' ? 'c.category IS NULL,c.category,' : ''}
+        c.sort IS NULL,c.sort,c.id''', [book, if (lesson != null) lesson]);
+    return rows.where((row) =>
+      isRegularLesson({'lesson': row['_lesson_code']}) &&
+      dictationRowEligible(row, table == 'yzc_words')).toList();
+  }
   Future<String> audioPath(String book, String filename) async {
     void safeName(String name) {
       if (name.isEmpty ||

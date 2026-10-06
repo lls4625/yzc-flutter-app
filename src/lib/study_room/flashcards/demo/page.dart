@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -180,7 +181,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                                       for (final lesson in c.lessons)
                                         (
                                           id: lesson['id'].toString(),
-                                          title: '第${lesson['num']}课',
+                                          title: lessonLabel(lesson),
                                         ),
                                     ],
                                     selected: c.lessonIds,

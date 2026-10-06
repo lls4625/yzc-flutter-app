@@ -1,3 +1,4 @@
+import '../../../lesson_presentation.dart';
 import '../../../system_errors.dart';
 import 'dart:async';
 
@@ -42,7 +43,8 @@ class _ListeningCard {
   final RowData lesson;
   final bool words;
   String get key => '${lesson['id']}:${words ? 'word' : 'content'}';
-  String get course => '第${lesson['num'] ?? ''}课';
+  String get course => lessonLabel(lesson);
+  int get count => lesson[words ? 'word_count' : 'content_count'] as int? ?? 0;
   String get label => words ? '单词' : '课文';
   IconData get icon =>
       words ? Icons.headphones_rounded : Icons.menu_book_rounded;
@@ -57,6 +59,7 @@ class ListeningSelectionPage extends StatefulWidget {
 
 class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
   RowData? book;
+  String? selectionVersion;
   List<_ListeningCard> cards = [], selected = [];
   bool loading = true;
   String? error;
@@ -170,7 +173,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                       children: [
                         Icon(item.icon, size: 14, color: scheme.primary),
                         const SizedBox(width: 4),
-                        Text(item.label, style: const TextStyle(fontSize: 12)),
+                        Text('${item.label} ${item.count}', style: const TextStyle(fontSize: 12)),
                         const SizedBox(width: 4),
                         const Icon(Icons.drag_indicator_rounded, size: 14),
                       ],
@@ -264,16 +267,21 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
       final books = await widget.controller.catalog.textbooks();
       final matches = books.where((row) => textOf(row, 'id') == id);
       final current = matches.isEmpty ? null : matches.first;
+      final version = current == null ? null : await widget.controller.catalog.version(id);
       final lessons = current == null
           ? <RowData>[]
           : await widget.controller.catalog.lessons(id);
+      if (current != null && version != await widget.controller.catalog.version(id)) {
+        throw StateError('内容已更新，请重新读取课程');
+      }
       if (!mounted) return;
       setState(() {
         book = current;
+        selectionVersion = version;
         cards = [
           for (final lesson in lessons) ...[
-            _ListeningCard(lesson, true),
-            _ListeningCard(lesson, false),
+            if ((lesson['word_count'] as int? ?? 0) > 0) _ListeningCard(lesson, true),
+            if ((lesson['content_count'] as int? ?? 0) > 0) _ListeningCard(lesson, false),
           ],
         ];
         selected = [];
@@ -371,16 +379,31 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
     final queue = List<_ListeningCard>.unmodifiable(selected);
     setState(() => confirming = true);
     try {
+      final version = await widget.controller.catalog.version(textOf(book!, 'id'));
+      if (!mounted) return;
+      if (version != selectionVersion) {
+        await _load();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: const Text('内容已更新，数量已刷新，请重新选择')),
+        );
+        return;
+      }
       await Navigator.of(context).push(
         PageRouteBuilder<void>(
           pageBuilder: (_, __, ___) => _ListeningPlayerPage(
             widget.controller,
             book!,
             queue,
+            version,
           ),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
+      );
+    } catch (error, stack) {
+      SystemErrors.record(error, stack, module: 'listening', operation: '校验课程数量');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(content: Text(featureError(error, fallback: '课程校验失败，请重新读取'))),
       );
     } finally {
       if (mounted) setState(() => confirming = false);
@@ -505,7 +528,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: columns,
-                                    mainAxisExtent: 60,
+                                    mainAxisExtent: 78,
                                     crossAxisSpacing: 4,
                                     mainAxisSpacing: 4,
                                   ),
@@ -516,7 +539,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                 return Semantics(
                                   selected: checked,
                                   button: true,
-                                  label: '${item.course}${item.label}',
+                                  label: '${item.course}${item.label} ${item.count}',
                                   child: StudyPanel(
                                     color: checked
                                         ? scheme.primaryContainer
@@ -549,7 +572,9 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(height: 5),
+                                            const SizedBox(height: 3),
+                                            Text('${item.count}', style: const TextStyle(fontSize: 11)),
+                                            const SizedBox(height: 3),
                                             FittedBox(
                                               fit: BoxFit.scaleDown,
                                               child: Row(
@@ -667,7 +692,9 @@ class _ListeningPlayerPage extends StatefulWidget {
     this.controller,
     this.book,
     this.queue,
+    this.selectionVersion,
   );
+  final String selectionVersion;
   final ListeningController controller;
   final RowData book;
   final List<_ListeningCard> queue;
@@ -729,6 +756,9 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
         throw StateError('自习室尚未解锁，请在“我的”页面购买或恢复购买');
       }
       final contentVersion = await widget.controller.catalog.version(bookId);
+      if (contentVersion != widget.selectionVersion) {
+        throw StateError('内容已更新，请返回课程选择页重新选择');
+      }
       final nextSections = <_ListeningSection>[];
       final nextClips = <RowData>[];
       final nextIndex = <String, int>{};
@@ -745,7 +775,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
         final clipStart = nextClips.length;
         nextSections.add(_ListeningSection(card, rows));
         for (final row in rows) {
-          final file = textOf(row, 'phonetic');
+          final file = listeningAudioSource(row);
           if (file.isEmpty) continue;
           final path =
               pathCache[file] ??
@@ -1249,7 +1279,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                   ),
                 ),
               ),
-              if (textOf(row, 'phonetic').isEmpty)
+              if (listeningAudioSource(row).isEmpty)
                 const Text('暂无音频', style: TextStyle(fontSize: 11)),
             ],
           ),
