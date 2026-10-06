@@ -186,6 +186,7 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
         mediaConfig: textOf(question, 'media_config'),
         resolvePath: () => widget.host.resources.mediaPath(
           _bookId, textOf(question, 'media_src'), 'interactive_image'),
+        hotspotAvailable: (hotspot) => widget.host.resources.hasAudio(_bookId, hotspot.audioSource),
         onActivate: (hotspot) => _playHotspot(question, hotspot),
         interactionEnabled: !_busy && !_blocked);
     }
@@ -212,6 +213,18 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
     ],
   ));
 
+  Widget _degradedQuestion(RowData question, int index) => _card(Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text('暂不可作答 ${index + 1} · ${questionRelationLabel(question['relation'])}', style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: 8),
+      const Text('这道题的选项或答案不完整，已从自动评分中排除。', style: TextStyle(color: Colors.orange)),
+      const SizedBox(height: 14),
+      _questionMedia(question),
+      PracticeQuestionBody(textOf(question, 'content'), key: ValueKey('degraded-practice-${question['id']}')),
+    ],
+  ));
+
   Widget _card(Widget child) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: StudyPanel(
@@ -229,7 +242,8 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
         StudyButton.filled(onPressed: _load, child: const Text('重新读取练习')),
       ])));
     final openQuestions = _questions.where(isOpenDisplayQuestion).toList();
-    final choiceQuestions = _questions.where((row) => !isOpenDisplayQuestion(row)).toList();
+    final choiceQuestions = _questions.where(isAnswerableQuestion).toList();
+    final degradedQuestions = _questions.where((row) => questionAnswerMode(row).degraded).toList();
     final counts = {for (final relation in questionRelations)
       relation: choiceQuestions.where((row) => row['relation'] == relation).length};
     final quota = practiceQuota(choiceQuestions);
@@ -240,6 +254,10 @@ class _CoursePracticeTabState extends State<CoursePracticeTab> {
       if (openQuestions.isNotEmpty) ...[
         _card(Text('本课有 ${openQuestions.length} 道开放练习。请自行口头或纸笔作答，App 不记录作答、不判对错。')),
         for (var i = 0; i < openQuestions.length; i++) _openQuestion(openQuestions[i], i),
+      ],
+      if (degradedQuestions.isNotEmpty) ...[
+        _card(Text('本课有 ${degradedQuestions.length} 道题数据不完整，可阅读题干，不记录作答也不自动判分。')),
+        for (var i = 0; i < degradedQuestions.length; i++) _degradedQuestion(degradedQuestions[i], i),
       ],
       if (choiceQuestions.isNotEmpty) _card(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('客观练习 ${choiceQuestions.length} 题：单词 ${counts['word']}、文法 ${counts['grammar']}、课文 ${counts['content']}\n'

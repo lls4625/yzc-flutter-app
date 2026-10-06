@@ -18,8 +18,7 @@ Future<CourseWordImageMedia> loadCourseWordImageMedia({
   required Future<String> Function() resolvePath,
   String? mediaConfig,
 }) async {
-  final config = mediaConfig == null ? null : CourseImageInteractionConfig.parse(mediaConfig);
-  if (mediaConfig != null && config == null) throw const FormatException('互动图片配置无效');
+  final config = mediaConfig == null ? null : CourseImageInteractionConfig.parseTolerant(mediaConfig).config;
   final path = await resolvePath();
   final codec = await ui.instantiateImageCodec(await File(path).readAsBytes(), targetWidth: 64);
   try {
@@ -35,10 +34,11 @@ Future<void> openCourseWordImagePage(BuildContext context, {
   required CourseWordImageMedia media,
   required String label,
   Future<void> Function(CourseImageHotspot hotspot)? onActivate,
+  Future<bool> Function(CourseImageHotspot hotspot)? hotspotAvailable,
 }) => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
   media.config == null
     ? _CourseWordImagePage(media: media, label: label)
-    : _CourseWordInteractiveImagePage(media: media, label: label, onActivate: onActivate!)));
+    : _CourseWordInteractiveImagePage(media: media, label: label, onActivate: onActivate!, hotspotAvailable: hotspotAvailable)));
 
 class _CourseWordImagePage extends StatelessWidget {
   const _CourseWordImagePage({required this.media, required this.label});
@@ -62,10 +62,11 @@ class _CourseWordImagePage extends StatelessWidget {
 }
 
 class _CourseWordInteractiveImagePage extends StatefulWidget {
-  const _CourseWordInteractiveImagePage({required this.media, required this.label, required this.onActivate});
+  const _CourseWordInteractiveImagePage({required this.media, required this.label, required this.onActivate, this.hotspotAvailable});
   final CourseWordImageMedia media;
   final String label;
   final Future<void> Function(CourseImageHotspot hotspot) onActivate;
+  final Future<bool> Function(CourseImageHotspot hotspot)? hotspotAvailable;
   @override
   State<_CourseWordInteractiveImagePage> createState() => _CourseWordInteractiveImagePageState();
 }
@@ -75,6 +76,7 @@ class _CourseWordInteractiveImagePageState extends State<_CourseWordInteractiveI
   int _activation = 0;
   Future<void>? _activationOperation;
   bool _closing = false;
+  final Map<String, Future<bool>> _availability = {};
 
   Color _color(String value) => Color(int.parse(value.substring(1), radix: 16) | 0xFF000000);
 
@@ -93,7 +95,7 @@ class _CourseWordInteractiveImagePageState extends State<_CourseWordInteractiveI
     if (mounted) Navigator.pop(context);
   }
 
-  Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints) {
+  Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints, bool available) {
     final selected = _selected == hotspot.id;
     final bounds = hotspot.bounds;
     final color = _color(hotspot.color);
@@ -104,11 +106,12 @@ class _CourseWordInteractiveImagePageState extends State<_CourseWordInteractiveI
       height: constraints.maxHeight * bounds.height,
       child: Semantics(
         button: true,
+        enabled: available,
         selected: selected,
         label: '${hotspot.semanticLabel}，点击播放读音',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => unawaited(_activate(hotspot)),
+          onTap: available ? () => unawaited(_activate(hotspot)) : null,
           child: TweenAnimationBuilder<double>(
             key: ValueKey('${hotspot.id}:$selected:$_activation'),
             tween: Tween(begin: 0, end: selected ? 1 : 0),
@@ -166,7 +169,9 @@ class _CourseWordInteractiveImagePageState extends State<_CourseWordInteractiveI
         child: LayoutBuilder(builder: (context, constraints) => Stack(fit: StackFit.expand, children: [
           Image.file(File(widget.media.path), fit: BoxFit.contain, semanticLabel: widget.label,
             errorBuilder: (_, _, _) => const SizedBox.shrink()),
-          for (final hotspot in widget.media.config!.hotspots) _hotspot(hotspot, constraints),
+          for (final hotspot in widget.media.config!.hotspots) FutureBuilder<bool>(
+            future: _availability.putIfAbsent(hotspot.id, () => widget.hotspotAvailable?.call(hotspot) ?? Future<bool>.value(true)),
+            builder: (context, snapshot) => _hotspot(hotspot, constraints, snapshot.data ?? false)),
         ])),
       ))),
     ),

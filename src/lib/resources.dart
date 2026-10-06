@@ -15,6 +15,39 @@ import 'system_errors.dart';
 import 'course/feature/image_interaction_config.dart';
 
 const textbookContentTables = ['yzc_unit', 'yzc_lessons', 'yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question'];
+const optionalTextbookContentColumns = {'media_type', 'media_src', 'media_config'};
+class ResourceContentIssue {
+  const ResourceContentIssue(this.location, this.message, {this.skipped = false});
+  final String location, message;
+  final bool skipped;
+  @override String toString() => '$location：$message';
+}
+class TextbookValidationResult {
+  const TextbookValidationResult({required this.tables, required this.normal, required this.issues, required this.skippedRows});
+  final List<String> tables;
+  final int normal;
+  final List<ResourceContentIssue> issues;
+  final Map<String, Set<String>> skippedRows;
+  int get skipped => issues.where((issue) => issue.skipped).length;
+  int get degraded => issues.length - skipped;
+  String get summary => '正常 $normal，跳过 $skipped，降级 $degraded';
+}
+bool shouldImportResourceRow(TextbookValidationResult validation, String table, RowData row) =>
+    validation.skippedRows[table]?.contains(textOf(row, 'id')) != true;
+
+/// Projects one source row onto the installed schema without mutating the
+/// package database. Old packages may omit media columns, while some SQLite
+/// producers explicitly store NULL or blanks despite the app's NOT NULL
+/// media_type contract.
+RowData normalizeResourceRowForImport(RowData sourceRow, Set<String> localColumns) {
+  final row = Map<String, Object?>.from(sourceRow);
+  if (localColumns.contains('media_type') && textOf(row, 'media_type').trim().isEmpty) {
+    row['media_type'] = 'text';
+  }
+  if (localColumns.contains('media_src')) row.putIfAbsent('media_src', () => null);
+  if (localColumns.contains('media_config')) row.putIfAbsent('media_config', () => null);
+  return row;
+}
 void safeName(String name) {
   if (name.isEmpty || name == '.' || name == '..' || name.contains('/') || name.contains('\\') || name.contains(':') || name.contains('\u0000') || name.startsWith('.')) throw const FormatException('资源文件名无效');
 }
@@ -69,6 +102,7 @@ class Resources extends ChangeNotifier {
   Resources(this.store);
   final AppStore store;
   String? activeBook;
+  String? lastInstallSummary;
   String stage = '', detail = '';
   double? progress;
   final Set<String> unavailable = {};
@@ -124,6 +158,9 @@ class Resources extends ChangeNotifier {
     final path = '${store.root.path}/resources/$folder/mp3/$filename';
     if (!await File(path).exists()) throw StateError('音频文件缺失，请重新下载内容');
     return path;
+  }
+  Future<bool> hasAudio(String book, String filename) async {
+    try { await audioPath(book, filename); return true; } on Object { return false; }
   }
   Future<String> mediaPath(String book, String source, String type) async {
     final filename = textbookMediaFilename(source, type);
@@ -301,6 +338,7 @@ class Resources extends ChangeNotifier {
 
   Future<void> download(String id) async {
     if (activeBook != null) throw StateError('请等待当前内容任务完成');
+    lastInstallSummary = null;
     activeBook = id; report('catalog', null, '获取内容信息');
     RowData? job;
     Database? source;
@@ -346,12 +384,21 @@ class Resources extends ChangeNotifier {
       await _extract(zip.path, '$staging/extracted', folder);
       final sourceDatabase = await openDatabase('$staging/extracted/$folder/data.sqlite', readOnly: true, singleInstance: false);
       source = sourceDatabase;
-      final List<String> tables;
+      final TextbookValidationResult validation;
       try {
-        tables = await _validate(sourceDatabase, id, '$staging/extracted/$folder');
+        validation = await _validate(sourceDatabase, id, '$staging/extracted/$folder');
       } on FormatException catch (e, stack) {
         SystemErrors.record(e, stack, module: 'textbook', operation: '校验内容数据', context: {...diagnostics, 'operation_id': operationId, 'stage': 'validate'});
         rethrow;
+      }
+      final tables = validation.tables;
+      lastInstallSummary = validation.issues.isEmpty ? null : validation.summary;
+      diagnostics.addAll({'content_normal': validation.normal, 'content_skipped': validation.skipped, 'content_degraded': validation.degraded});
+      if (validation.issues.isNotEmpty) {
+        SystemErrors.record(FormatException(validation.issues.join('\n')), StackTrace.current,
+          module: 'textbook', operation: '内容兼容性降级', severity: 'warning',
+          hint: '内容已安装，部分题目或媒体已降级',
+          context: {'textbook_id': id, 'operation_id': operationId, 'summary': validation.summary});
       }
       final installedConflicts = await store.db.query('yzc_resource_install',
         columns: ['textbook_id'], where: 'folder=? AND textbook_id<>?', whereArgs: [folder, id]);
@@ -395,9 +442,10 @@ class Resources extends ChangeNotifier {
           for (final table in textbookContentTables.reversed) {
             await tx.delete(table, where: 'textbook_id=?', whereArgs: [id]);
           }
+          final localBookColumns = (await tx.rawQuery('PRAGMA table_info(yzc_textbook)'))
+              .map((row) => textOf(row, 'name')).toSet();
           final book = Map<String, Object?>.from((await input.query('yzc_textbook')).single)
-            ..remove('resource_file')
-            ..remove('sha256');
+            ..removeWhere((key, _) => !localBookColumns.contains(key) || key == 'resource_file' || key == 'sha256');
           final bookChanged = await tx.update('yzc_textbook', book, where: 'id=?', whereArgs: [id]);
           if (bookChanged == 0) await tx.insert('yzc_textbook', book);
           // The current server catalog is authoritative for every matching
@@ -406,10 +454,18 @@ class Resources extends ChangeNotifier {
           await tx.update('yzc_textbook', publishedBook, where: 'id=?', whereArgs: [id]);
           for (final table in tables) {
             final columns = (await tx.rawQuery('PRAGMA table_info($table)')).map((r) => r['name'] as String).toList();
+            final localColumns = columns.toSet();
+            final sourceNames = (await input.rawQuery('PRAGMA table_info($table)'))
+                .map((r) => textOf(r, 'name')).toSet();
+            final selectedColumns = columns.where(sourceNames.contains).toList();
             for (var offset = 0; offset < counts[table]!; offset += 200) {
-              final rows = await input.query(table, columns: columns, orderBy: 'id', limit: 200, offset: offset);
+              final rows = await input.query(table, columns: selectedColumns, orderBy: 'id', limit: 200, offset: offset);
               final batch = tx.batch();
-              for (final row in rows) { batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort); }
+              for (final sourceRow in rows) {
+                if (!shouldImportResourceRow(validation, table, sourceRow)) continue;
+                final row = normalizeResourceRowForImport(sourceRow, localColumns);
+                batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.abort);
+              }
               await batch.commit(noResult: true);
               inserted += rows.length;
               report('sync', .6 + .35 * (total == 0 ? 1 : inserted / total), '同步数据 $inserted/$total');
@@ -437,12 +493,12 @@ class Resources extends ChangeNotifier {
         SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '内容恢复与清理', context: {'textbook_id': activeBook, 'stage': stage});
         await _phase(jobId, 'cleanup_pending');
       }
-      if (previousFolder != null && previousFolder!.isNotEmpty && previousFolder != folder) {
-        try { await _deleteFolderIfUnused(previousFolder!); } catch (cleanupError, cleanupStack) {
+      if (previousFolder != null && previousFolder.isNotEmpty && previousFolder != folder) {
+        try { await _deleteFolderIfUnused(previousFolder); } catch (cleanupError, cleanupStack) {
           SystemErrors.record(cleanupError, cleanupStack, module: 'textbook', operation: '清理旧学习资源目录', context: {'textbook_id': id, 'folder': previousFolder});
         }
       }
-      report('sync', 1, '安装完成');
+      report('sync', 1, '安装完成（${validation.summary}）');
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'textbook', operation: '下载并安装内容', context: {...diagnostics, 'operation_id': operationId, 'stage': stage, 'detail': detail, 'job_id': job?['id']});
       try { await source?.close(); } catch (cleanupError, cleanupStack) {
@@ -535,7 +591,15 @@ class Resources extends ChangeNotifier {
     }
   }
 
-  Future<List<String>> _validate(Database source, String id, String folder) async {
+  Future<TextbookValidationResult> _validate(Database source, String id, String folder) async {
+    final issues = <ResourceContentIssue>[];
+    final skippedRows = <String, Set<String>>{};
+    void isolate(String table, Object? id, String message) {
+      final rowId = id?.toString() ?? '';
+      if (rowId.isEmpty || !(skippedRows[table] ??= <String>{}).add(rowId)) return;
+      issues.add(ResourceContentIssue('$table[$rowId]', message, skipped: true));
+    }
+    var normal = 0;
     final integrity = await source.rawQuery('PRAGMA quick_check');
     if (integrity.length != 1 || integrity.single.values.single != 'ok') throw const FormatException('内容 SQLite 损坏');
     final schema = await source.rawQuery("SELECT name,type FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'");
@@ -553,10 +617,16 @@ class Resources extends ChangeNotifier {
       final metadata = table == 'yzc_textbook' ? {'resource_file', 'sha256'} : <String>{};
       final actualContent = actual.where((column) => !metadata.contains(column['name'])).toList();
       final localContent = local.where((column) => !metadata.contains(column['name'])).toList();
-      if (actualContent.length != localContent.length) throw FormatException('$table 字段不符');
+      final actualByName = {for (final column in actualContent) textOf(column, 'name'): column};
       for (var i = 0; i < localContent.length; i++) {
+        final name = textOf(localContent[i], 'name');
+        final sourceColumn = actualByName[name];
+        if (sourceColumn == null) {
+          if (optionalTextbookContentColumns.contains(name)) continue;
+          throw FormatException('$table 缺少必需字段 $name');
+        }
         for (final key in ['name', 'type', 'pk']) {
-          if (actualContent[i][key].toString().toLowerCase() != localContent[i][key].toString().toLowerCase()) {
+          if (sourceColumn[key].toString().toLowerCase() != localContent[i][key].toString().toLowerCase()) {
             throw FormatException('$table 的 ${localContent[i]['name']} 定义不符');
           }
         }
@@ -576,6 +646,10 @@ class Resources extends ChangeNotifier {
             final key = textOf(column, 'name'), type = textOf(column, 'type').toLowerCase();
             final value = row[key];
             if (value != null && (type.contains('int') ? value is! int : value is! String)) {
+              // Payload and relationship faults are isolated by the common
+              // lesson JOIN used by every consumer. Stable row/package
+              // identity remains fatal because it cannot be guessed safely.
+              if (!{'id', 'textbook_id'}.contains(key)) continue;
               throw FormatException('$table.$key 的数据类型不正确');
             }
           }
@@ -588,29 +662,67 @@ class Resources extends ChangeNotifier {
       ['yzc_lessons', 'unit_id', 'yzc_unit'],
       ['yzc_words', 'lessons_id', 'yzc_lessons'], ['yzc_content', 'lessons_id', 'yzc_lessons'],
       ['yzc_words', 'unit_id', 'yzc_unit'], ['yzc_content', 'unit_id', 'yzc_unit'],
-      ['yzc_grammar', 'lessons_id', 'yzc_lessons'],
+      ['yzc_grammar', 'lessons_id', 'yzc_lessons'], ['yzc_grammar', 'unit_id', 'yzc_unit'],
       ['yzc_ai_question', 'lessons_id', 'yzc_lessons'], ['yzc_ai_question', 'unit_id', 'yzc_unit'],
     ];
     for (final relation in relations) {
       final child = relation[0], column = relation[1], parent = relation[2];
-      final required = column == 'lessons_id' || child == 'yzc_ai_question';
-      final missing = Sqflite.firstIntValue(await source.rawQuery('SELECT COUNT(*) FROM $child c LEFT JOIN $parent p ON p.id=c.$column AND p.textbook_id=c.textbook_id WHERE ${required ? '' : 'c.$column IS NOT NULL AND '}p.id IS NULL')) ?? 0;
-      if (missing > 0) throw FormatException('$child 的 $column 关联不完整');
+      final required = column == 'lessons_id';
+      final optionalPresent = 'c.$column IS NOT NULL AND NOT (${sqlBlankExpression('c.$column')}) AND ';
+      final missing = Sqflite.firstIntValue(await source.rawQuery('SELECT COUNT(*) FROM $child c LEFT JOIN $parent p ON p.id=c.$column AND p.textbook_id=c.textbook_id WHERE ${required ? '' : optionalPresent}p.id IS NULL')) ?? 0;
+      if (missing > 0) {
+        final rows = await source.rawQuery('SELECT c.id FROM $child c LEFT JOIN $parent p ON p.id=c.$column AND p.textbook_id=c.textbook_id WHERE ${required ? '' : optionalPresent}p.id IS NULL');
+        for (final row in rows) {
+          isolate(child, row['id'], '$column 关联不完整，已隔离');
+        }
+      }
+      final unavailableParents = skippedRows[parent];
+      if (unavailableParents != null && unavailableParents.isNotEmpty) {
+        final rows = await source.query(child, columns: ['id', column]);
+        for (final row in rows) {
+          if (unavailableParents.contains(textOf(row, column))) {
+            isolate(child, row['id'], '所属 $parent 已隔离，本条目一并跳过');
+          }
+        }
+      }
+    }
+    for (final table in const ['yzc_words', 'yzc_content', 'yzc_grammar']) {
+      final invalidRows = await source.rawQuery("SELECT c.id FROM $table c JOIN yzc_lessons l ON l.id=c.lessons_id AND l.textbook_id=c.textbook_id WHERE (c.unit_id IS NOT NULL AND NOT (${sqlBlankExpression('c.unit_id')}) AND c.unit_id<>l.unit_id) OR l.unit_id IS NULL OR (c.lesson IS NOT NULL AND NOT (${sqlBlankExpression('c.lesson')}) AND c.lesson<>l.lesson) OR l.lesson IS NULL");
+      for (final row in invalidRows) {
+        isolate(table, row['id'], '与课程、单元关联不一致，已隔离');
+      }
     }
     for (final table in ['yzc_words', 'yzc_content']) {
       final names = await source.rawQuery('SELECT DISTINCT phonetic FROM $table WHERE phonetic IS NOT NULL AND phonetic<>?', ['']);
       for (final row in names) {
-        final name = textOf(row, 'phonetic'); safeName(name);
-        if (!name.toLowerCase().endsWith('.mp3') || !await File('$folder/mp3/$name').exists()) throw FormatException('缺少音频 $name');
+        final name = textOf(row, 'phonetic');
+        try {
+          safeName(name);
+          if (!name.toLowerCase().endsWith('.mp3') || !await File('$folder/mp3/$name').exists()) {
+            issues.add(ResourceContentIssue('$table.phonetic[$name]', '音频缺失，播放按钮已降级'));
+          } else { normal++; }
+        } on FormatException catch (error) {
+          issues.add(ResourceContentIssue('$table.phonetic[$name]', '$error，播放按钮已降级'));
+        }
       }
     }
-    final invalid = await source.rawQuery('SELECT q.id FROM yzc_ai_question q JOIN yzc_lessons l ON l.id=q.lessons_id AND l.textbook_id=q.textbook_id WHERE q.unit_id<>l.unit_id OR l.unit_id IS NULL OR q.lesson<>l.lesson OR l.lesson IS NULL LIMIT 1');
-    if (invalid.isNotEmpty) throw const FormatException('题目与课程、单元关联不一致');
+    final invalid = await source.rawQuery("SELECT q.id FROM yzc_ai_question q JOIN yzc_lessons l ON l.id=q.lessons_id AND l.textbook_id=q.textbook_id WHERE (q.unit_id IS NOT NULL AND NOT (${sqlBlankExpression('q.unit_id')}) AND q.unit_id<>l.unit_id) OR l.unit_id IS NULL OR (q.lesson IS NOT NULL AND NOT (${sqlBlankExpression('q.lesson')}) AND q.lesson<>l.lesson) OR l.lesson IS NULL");
+    for (final row in invalid) {
+      isolate('yzc_ai_question', row['id'], '与课程、单元关联不一致，已隔离');
+    }
     for (var offset = 0; ; offset += 200) {
       final questions = await source.query('yzc_ai_question', orderBy: 'id', limit: 200, offset: offset);
       for (final question in questions) {
-        if (textOf(question, 'question').trim().isEmpty || !questionRelations.contains(question['relation'])) throw const FormatException('题目内容或分类无效');
-        validateQuestionAnswerMode(question);
+        final location = 'yzc_ai_question[${question['id']}]';
+        if (skippedRows['yzc_ai_question']?.contains(textOf(question, 'id')) == true) continue;
+        if (!isReadableQuestion({...question, 'content': question['question']})) {
+          isolate('yzc_ai_question', question['id'], '题干或分类无效，已隔离');
+          continue;
+        }
+        final mode = questionAnswerMode(question);
+        if (mode.degraded) {
+          issues.add(ResourceContentIssue(location, '${mode.issue}，已排除自动评分'));
+        } else { normal++; }
       }
       if (questions.length < 200) break;
     }
@@ -620,27 +732,61 @@ class Resources extends ChangeNotifier {
         for (final row in rows) {
           final type = textOf(row, 'media_type');
           if (type.isEmpty || type == 'text') continue;
-          final filename = textbookMediaFilename(textOf(row, 'media_src'), type);
-          if (!await File('$folder/mp3/$filename').exists()) throw FormatException('$table 缺少媒体 $filename');
-          final mediaConfig = textOf(row, 'media_config');
-          if ((type == 'image' || type == 'audio' || type == 'video') && mediaConfig.trim().isNotEmpty) {
-            throw FormatException('$table 普通媒体 ${row['id']} 不能包含互动配置');
+          final location = '$table[${row['id']}]';
+          String filename;
+          try { filename = textbookMediaFilename(textOf(row, 'media_src'), type); }
+          on FormatException catch (error) {
+            issues.add(ResourceContentIssue(location, '$error，媒体已降级'));
+            continue;
           }
+          if (!await File('$folder/mp3/$filename').exists()) {
+            issues.add(ResourceContentIssue(location, '缺少媒体 $filename，已使用占位提示'));
+            continue;
+          }
+          final mediaConfig = textOf(row, 'media_config');
           if (type == 'interactive_image') {
-            final config = CourseImageInteractionConfig.parse(mediaConfig);
-            if (config == null) throw FormatException('$table 互动图片 ${row['id']} 缺少有效配置');
+            final parsed = CourseImageInteractionConfig.parseTolerant(mediaConfig);
+            for (final issue in parsed.issues) {
+              issues.add(ResourceContentIssue('$location.media_config', issue, skipped: issue.startsWith('热点')));
+            }
+            final config = parsed.config;
+            if (config == null) continue;
             for (final hotspot in config.hotspots) {
               if (!await File('$folder/mp3/${hotspot.audioSource}').exists()) {
-                throw FormatException('$table 互动图片 ${row['id']} 缺少音频 ${hotspot.audioSource}');
-              }
+                issues.add(ResourceContentIssue('$location.hotspot[${hotspot.id}]', '缺少音频 ${hotspot.audioSource}，已禁用', skipped: true));
+              } else { normal++; }
             }
-          }
+          } else { normal++; }
         }
         if (rows.length < 200) break;
       }
     }
-    return tables;
+    var suppliedLearningRows = 0, usableLearningRows = 0;
+    for (final table in const ['yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question']) {
+      final count = Sqflite.firstIntValue(await source.rawQuery('SELECT COUNT(*) FROM $table')) ?? 0;
+      suppliedLearningRows += count;
+      usableLearningRows += count - (skippedRows[table]?.length ?? 0);
+    }
+    if (suppliedLearningRows > 0 && usableLearningRows == 0) {
+      throw const FormatException('资源包的学习条目全部无法安全使用，已保留旧版内容');
+    }
+    if (suppliedLearningRows == 0) {
+      var installedLearningRows = 0;
+      for (final table in const ['yzc_words', 'yzc_content', 'yzc_grammar', 'yzc_ai_question']) {
+        installedLearningRows += Sqflite.firstIntValue(await store.db.rawQuery(
+          'SELECT COUNT(*) FROM $table WHERE textbook_id=?', [id])) ?? 0;
+      }
+      if (installedLearningRows > 0) {
+        throw const FormatException('新资源包不含学习条目，已保留旧版内容');
+      }
+    }
+    return TextbookValidationResult(tables: tables, normal: normal,
+      issues: List.unmodifiable(issues),
+      skippedRows: {for (final entry in skippedRows.entries) entry.key: Set.unmodifiable(entry.value)});
   }
+  @visibleForTesting
+  Future<TextbookValidationResult> validateForTesting(Database source, String id, String folder) =>
+      _validate(source, id, folder);
   Future<void> _copyAudio(Directory from, Directory to) async {
     final files = await from.list().where((f) => f is File).cast<File>().toList();
     int total = 0, copied = 0;

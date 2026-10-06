@@ -213,6 +213,7 @@ class _CourseGrammarTabState extends State<CourseGrammarTab> {
       return CourseInteractiveImageCard(key: ValueKey('grammar-interactive:${row['id']}'),
         source: textOf(row, 'media_src'), label: '互动文法插图', mediaConfig: textOf(row, 'media_config'),
         resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'interactive_image'),
+        hotspotAvailable: (hotspot) => widget.host.resources.hasAudio(_bookId, hotspot.audioSource),
         onActivate: (hotspot) => _playHotspot(row, hotspot), interactionEnabled: !_busy && !_blocked);
     }
     if (type == 'video') {

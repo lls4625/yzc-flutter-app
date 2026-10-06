@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../content_typography.dart';
 import '../../../data.dart';
 import '../../../ios_lesson_playback.dart';
 import '../../../system_errors.dart';
@@ -339,6 +338,7 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
         if (!mounted) return;
         final hotspotPrefix = 'word-hotspot:$id:';
         await openCourseWordImagePage(context, media: media, label: '互动单词插图',
+          hotspotAvailable: (hotspot) => widget.host.resources.hasAudio(_bookId, hotspot.audioSource),
           onActivate: (hotspot) => _playHotspot(row, hotspot));
         if (_owns && _playback.active && _playback.playingId?.startsWith(hotspotPrefix) == true) {
           await _playback.stop();

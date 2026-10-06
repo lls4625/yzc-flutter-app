@@ -773,9 +773,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   bool _canDownload(RowData book) {
     final id = textOf(book, 'id');
     final remote = widget.app.resources.publishedTextbook(id);
-    final hash = remote?['sha256'];
     return _serverReady != false && remote != null &&
-        hash is String && hash.trim().isNotEmpty &&
         !widget.app.resources.hasInvalidPublishedTextbookHash(id) && textOf(remote, 'sfky') == '1';
   }
   @override
@@ -926,7 +924,11 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
         await widget.app.store.selectBook(id);
         await widget.app.reload();
       } finally { await _local(); }
-      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('内容已安装，可离线学习')));
+      if (_pageCurrent) {
+        final summary = widget.app.resources.lastInstallSummary;
+        ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text(
+          summary == null ? '内容已安装，可离线学习' : '内容已安装：$summary')));
+      }
       if (_pageCurrent && select) await _leaveAfterOperation();
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
@@ -1480,6 +1482,7 @@ class _PracticePageState extends State<PracticePage> {
         source: textOf(item, 'media_src'), label: '互动练习题插图',
         mediaConfig: textOf(item, 'media_config'),
         resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'interactive_image'),
+        hotspotAvailable: (hotspot) => widget.app.resources.hasAudio(book, hotspot.audioSource),
         onActivate: (hotspot) => _playQuestionHotspot(item, hotspot), interactionEnabled: !busy));
     }
     if (type == 'video') {

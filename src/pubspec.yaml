@@ -19,6 +19,10 @@ dependencies:
   archive: 4.2.0
   crypto: ^3.0.6
   cryptography: 2.9.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  sqflite_common_ffi: ^2.3.6
 flutter:
   uses-material-design: true
   assets:

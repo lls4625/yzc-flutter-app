@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart' as hash;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -16,8 +17,16 @@ int intOf(RowData row, String key, [int fallback = 0]) =>
     row[key] is int ? row[key] as int : int.tryParse(textOf(row, key)) ?? fallback;
 int nowMs() => DateTime.now().millisecondsSinceEpoch;
 bool validFontScale(Object? value) => value is int && (value == 0 || (value >= 90 && value <= 150 && value % 10 == 0));
+String sqlBlankExpression(String value) =>
+    "TRIM(CAST($value AS TEXT), char(9)||char(10)||char(11)||char(12)||char(13)||char(32)||char(160)||char(12288))=''";
 
 class AppStore {
+  AppStore();
+  @visibleForTesting
+  AppStore.forTesting(Database database, Directory directory) {
+    db = database;
+    root = directory;
+  }
   late final Database db;
   late final Directory root;
   late final String userId;
@@ -253,13 +262,26 @@ class AppStore {
   Future<List<RowData>> content(String table, String book, String lesson) {
     if (table == 'yzc_ai_question') return _questions(db, book, lesson);
     if (!{'yzc_words', 'yzc_content', 'yzc_grammar'}.contains(table)) throw ArgumentError('未知内容表');
-    return db.query(table, where: 'textbook_id = ? AND lessons_id = ?', whereArgs: [book, lesson],
-      orderBy: '${table == 'yzc_content' ? 'category IS NULL, category, ' : ''}sort IS NULL, sort, id');
+    final unitBlank = sqlBlankExpression('c.unit_id');
+    final lessonBlank = sqlBlankExpression('c.lesson');
+    return db.rawQuery('''SELECT c.* FROM $table c
+      JOIN yzc_lessons l ON l.id=c.lessons_id AND l.textbook_id=c.textbook_id
+      WHERE c.textbook_id=? AND c.lessons_id=?
+        AND (c.unit_id IS NULL OR $unitBlank OR c.unit_id=l.unit_id)
+        AND (c.lesson IS NULL OR $lessonBlank OR c.lesson=l.lesson)
+      ORDER BY ${table == 'yzc_content' ? 'c.category IS NULL,c.category,' : ''}c.sort IS NULL,c.sort,c.id''', [book, lesson]);
   }
   RowData _question(RowData row) => {...row, 'content': row['question'], 'definition': row['descr'], 'type': 'ai'};
   Future<List<RowData>> _questions(DatabaseExecutor tx, String book, String lesson) async {
-    final rows = await tx.query('yzc_ai_question', where: 'textbook_id=? AND lessons_id=?', whereArgs: [book, lesson], orderBy: 'sort,id');
-    return rows.map(_question).toList();
+    final unitBlank = sqlBlankExpression('q.unit_id');
+    final lessonBlank = sqlBlankExpression('q.lesson');
+    final rows = await tx.rawQuery('''SELECT q.* FROM yzc_ai_question q
+      JOIN yzc_lessons l ON l.id=q.lessons_id AND l.textbook_id=q.textbook_id
+      WHERE q.textbook_id=? AND q.lessons_id=?
+        AND (q.unit_id IS NULL OR $unitBlank OR q.unit_id=l.unit_id)
+        AND (q.lesson IS NULL OR $lessonBlank OR q.lesson=l.lesson)
+      ORDER BY q.sort,q.id''', [book, lesson]);
+    return rows.map(_question).where(isReadableQuestion).toList();
   }
   Future<void> selectBook(String book) => write(() async {
     await db.update('yzc_user_position', {'textbook_id': book, 'update_time': nowMs()}, where: 'user_id = ?', whereArgs: [userId]);
@@ -338,7 +360,7 @@ class AppStore {
     final seen = {for (final r in seenRows) '${r['textbook_id']}:${r['question_id']}': intOf(r, 'last')};
     final unique = <String, RowData>{};
     for (final q in currentPool) {
-      if (!isOpenDisplayQuestion(q)) {
+      if (isAnswerableQuestion(q)) {
         unique['${q['textbook_id']}:${q['question_id'] ?? q['id']}'] = q;
       }
     }
@@ -377,13 +399,14 @@ class AppStore {
         whereArgs: [selected['id'], review ? userId : selected['textbook_id']]);
       if (current.isEmpty) throw StateError('题库已更新，请重新打开课程后开始练习');
       final q = review ? current.single : _question(current.single);
-      if (isOpenDisplayQuestion(q)) throw StateError('开放练习不创建作答记录');
-      final options = questionOptions(q['options'], q['answer']);
-      if (options.length != 4 || options.map((o) => o['code']).toSet().length != 4 || options.any((o) => !['A', 'B', 'C', 'D'].contains(o['code']) || textOf(o, 'content').isEmpty) || !options.any((o) => o['code'] == q['answer'])) throw StateError('题目选项或答案不完整');
+      final mode = questionAnswerMode(q);
+      if (!mode.answerable) throw StateError(mode.open ? '开放练习不创建作答记录' : '题目选项或答案不完整');
+      final options = mode.options;
+      final answer = questionAnswerCode(q);
       final snapshot = newId();
       final books = review ? <RowData>[] : await tx.query('yzc_textbook', where: 'id=?', whereArgs: [q['textbook_id']]);
       final lessons = review ? <RowData>[] : await tx.query('yzc_lessons', where: 'id=? AND textbook_id=?', whereArgs: [q['lessons_id'], q['textbook_id']]);
-      await tx.insert('yzc_user_question', {'id': snapshot, 'user_id': userId, 'textbook_id': q['textbook_id'], 'lessons_id': q['lessons_id'], 'question_id': review ? q['question_id'] : q['id'], 'ver': q['ver'], 'type': q['type'] ?? 'ai', 'relation': q['relation'], 'content': q['content'], 'definition': q['definition'], 'options': encodeQuestionOptions(options), 'answer': q['answer'], 'media_json': q['media_json'], 'media_type': textOf(q, 'media_type').isEmpty ? 'text' : q['media_type'], 'media_src': q['media_src'], 'media_config': q['media_config'], 'textbook': review ? q['textbook'] : (books.isEmpty ? null : books.single['textbook']), 'title': review ? q['title'] : (lessons.isEmpty ? null : lessons.single['title']), 'create_time': time, 'update_time': time});
+      await tx.insert('yzc_user_question', {'id': snapshot, 'user_id': userId, 'textbook_id': q['textbook_id'], 'lessons_id': q['lessons_id'], 'question_id': review ? q['question_id'] : q['id'], 'ver': q['ver'], 'type': q['type'] ?? 'ai', 'relation': q['relation'], 'content': q['content'], 'definition': q['definition'], 'options': encodeQuestionOptions(options), 'answer': answer, 'media_json': q['media_json'], 'media_type': textOf(q, 'media_type').isEmpty ? 'text' : q['media_type'], 'media_src': q['media_src'], 'media_config': q['media_config'], 'textbook': review ? q['textbook'] : (books.isEmpty ? null : books.single['textbook']), 'title': review ? q['title'] : (lessons.isEmpty ? null : lessons.single['title']), 'create_time': time, 'update_time': time});
       await tx.insert('yzc_user_practice_item', {'id': newId(), 'user_id': userId, 'practice_id': session, 'question_id': snapshot, 'sort': i, 'create_time': time, 'update_time': time});
     }
     return session;

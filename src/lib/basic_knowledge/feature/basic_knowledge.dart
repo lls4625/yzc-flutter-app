@@ -3326,7 +3326,6 @@ class _LocationHotspot extends StatelessWidget {
 
 class _LocationTextBlock extends StatelessWidget {
   const _LocationTextBlock({
-    super.key,
     required this.title,
     required this.meaning,
     required this.label,

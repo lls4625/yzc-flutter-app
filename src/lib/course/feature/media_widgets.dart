@@ -52,10 +52,11 @@ class _CourseImageCardState extends State<CourseImageCard> {
 
 class CourseInteractiveImageCard extends StatefulWidget {
   const CourseInteractiveImageCard({super.key, required this.source, required this.resolvePath, required this.label,
-    required this.mediaConfig, required this.onActivate, required this.interactionEnabled});
+    required this.mediaConfig, required this.onActivate, required this.interactionEnabled, this.hotspotAvailable});
   final String source, label, mediaConfig;
   final Future<String> Function() resolvePath;
   final Future<void> Function(CourseImageHotspot hotspot) onActivate;
+  final Future<bool> Function(CourseImageHotspot hotspot)? hotspotAvailable;
   final bool interactionEnabled;
   @override
   State<CourseInteractiveImageCard> createState() => _CourseInteractiveImageCardState();
@@ -66,10 +67,10 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
   late CourseImageInteractionConfig? _config = _parseConfig();
   String? _selected;
   int _activation = 0;
+  final Map<String, Future<bool>> _availability = {};
 
   CourseImageInteractionConfig? _parseConfig() {
-    try { return CourseImageInteractionConfig.parse(widget.mediaConfig); }
-    on FormatException { return null; }
+    return CourseImageInteractionConfig.parseTolerant(widget.mediaConfig).config;
   }
 
   Future<(String, double)> _load() async {
@@ -89,6 +90,7 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
     if (widget.mediaConfig != oldWidget.mediaConfig) {
       _config = _parseConfig();
       _selected = null;
+      _availability.clear();
     }
   }
 
@@ -103,11 +105,13 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
     aspectRatio: ratio,
     child: LayoutBuilder(builder: (context, constraints) => Stack(fit: StackFit.expand, children: [
       Image.file(File(path), fit: BoxFit.contain, semanticLabel: widget.label),
-      for (final hotspot in _config!.hotspots) _hotspot(hotspot, constraints),
+      for (final hotspot in _config!.hotspots) FutureBuilder<bool>(
+        future: _availability.putIfAbsent(hotspot.id, () => widget.hotspotAvailable?.call(hotspot) ?? Future<bool>.value(true)),
+        builder: (context, snapshot) => _hotspot(hotspot, constraints, snapshot.data ?? false)),
     ])),
   );
 
-  Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints) {
+  Widget _hotspot(CourseImageHotspot hotspot, BoxConstraints constraints, bool available) {
     final selected = _selected == hotspot.id;
     final bounds = hotspot.bounds;
     final color = _color(hotspot.color);
@@ -118,12 +122,12 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
       height: constraints.maxHeight * bounds.height,
       child: Semantics(
         button: true,
-        enabled: widget.interactionEnabled,
+        enabled: widget.interactionEnabled && available,
         selected: selected,
         label: '${hotspot.semanticLabel}，点击播放读音',
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _activate(hotspot),
+          onTap: widget.interactionEnabled && available ? () => _activate(hotspot) : null,
           child: TweenAnimationBuilder<double>(
             key: ValueKey('${hotspot.id}:$selected:$_activation'),
             tween: Tween(begin: 0, end: selected ? 1 : 0),
@@ -177,7 +181,7 @@ class _CourseInteractiveImageCardState extends State<CourseInteractiveImageCard>
       return AspectRatio(aspectRatio: data?.$2 ?? 2 / 3, child: data == null
           ? const Center(child: CircularProgressIndicator())
           : _config == null
-            ? const Center(child: Text('互动插图配置无效'))
+            ? Image.file(File(data.$1), fit: BoxFit.contain, semanticLabel: widget.label, errorBuilder: (_, error, stack) => failure())
             : _interactiveImage(data.$1, data.$2));
     },
   ));

@@ -511,6 +511,7 @@ class _CourseContentTabState extends State<CourseContentTab> with WidgetsBinding
           source: textOf(row, 'media_src'), label: category == '05' ? '互动对话插图' : '互动课文插图',
           mediaConfig: textOf(row, 'media_config'),
           resolvePath: () => widget.host.resources.mediaPath(_bookId, textOf(row, 'media_src'), 'interactive_image'),
+          hotspotAvailable: (hotspot) => widget.host.resources.hasAudio(_bookId, hotspot.audioSource),
           onActivate: (hotspot) => _playHotspot(row, hotspot), interactionEnabled: !_busy && !_blocked));
         continue;
       }
