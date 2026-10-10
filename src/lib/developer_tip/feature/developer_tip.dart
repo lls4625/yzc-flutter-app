@@ -46,12 +46,12 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
 
   static const _channel = MethodChannel('yuzhichu/developer_tip');
   static const _displayOrder = [
-    'com.javalee.nihongoPath.v31.tip.medium',
-    'com.javalee.nihongoPath.v31.tip.small',
-    'com.javalee.nihongoPath.v31.tip.xlarge',
-    'com.javalee.nihongoPath.v31.tip.large',
-    'com.javalee.nihongoPath.v31.tip.strong',
-    'com.javalee.nihongoPath.v31.tip.premium',
+    'vip.ichiki.javalee.yzc.tip.medium',
+    'vip.ichiki.javalee.yzc.tip.small',
+    'vip.ichiki.javalee.yzc.tip.xlarge',
+    'vip.ichiki.javalee.yzc.tip.large',
+    'vip.ichiki.javalee.yzc.tip.strong',
+    'vip.ichiki.javalee.yzc.tip.premium',
   ];
   final List<DeveloperTipProduct> _products = [];
   bool _initialized = false, _loading = false, _busy = false, _canPay = false, _disposed = false;
@@ -335,12 +335,12 @@ class _TipCelebrationLevel {
   final Duration duration;
 
   static const all = [
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.small', '一份鼓励', _FireworkStyle.comet, 1, 40, Duration(milliseconds: 1400)),
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.medium', '暖心支持', _FireworkStyle.heart, 2, 70, Duration(milliseconds: 1800)),
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.large', '特别支持', _FireworkStyle.chrysanthemum, 3, 110, Duration(milliseconds: 2200)),
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.xlarge', '大力支持', _FireworkStyle.waterfall, 5, 170, Duration(milliseconds: 2800)),
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.premium', '顶级鼓励', _FireworkStyle.ring, 7, 240, Duration(milliseconds: 3400)),
-    _TipCelebrationLevel('com.javalee.nihongoPath.v31.tip.strong', '夯', _FireworkStyle.grandFinale, 10, 360, Duration(milliseconds: 4500)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.small', '一份鼓励', _FireworkStyle.comet, 1, 40, Duration(milliseconds: 1400)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.medium', '暖心支持', _FireworkStyle.heart, 2, 70, Duration(milliseconds: 1800)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.large', '特别支持', _FireworkStyle.chrysanthemum, 3, 110, Duration(milliseconds: 2200)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.xlarge', '大力支持', _FireworkStyle.waterfall, 5, 170, Duration(milliseconds: 2800)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.premium', '顶级鼓励', _FireworkStyle.ring, 7, 240, Duration(milliseconds: 3400)),
+    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.strong', '夯', _FireworkStyle.grandFinale, 10, 360, Duration(milliseconds: 4500)),
   ];
 
   static _TipCelebrationLevel? forProduct(String id) {

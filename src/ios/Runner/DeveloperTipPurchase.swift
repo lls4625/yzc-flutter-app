@@ -9,12 +9,12 @@ final class DeveloperTipPurchase {
     let name: String
   }
   private static let tips = [
-    Tip(id: "com.javalee.nihongoPath.v31.tip.small", name: "一份鼓励"),
-    Tip(id: "com.javalee.nihongoPath.v31.tip.medium", name: "暖心支持"),
-    Tip(id: "com.javalee.nihongoPath.v31.tip.large", name: "特别支持"),
-    Tip(id: "com.javalee.nihongoPath.v31.tip.xlarge", name: "大力支持"),
-    Tip(id: "com.javalee.nihongoPath.v31.tip.premium", name: "顶级鼓励"),
-    Tip(id: "com.javalee.nihongoPath.v31.tip.strong", name: "夯"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.small", name: "一份鼓励"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.medium", name: "暖心支持"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.large", name: "特别支持"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.xlarge", name: "大力支持"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.premium", name: "顶级鼓励"),
+    Tip(id: "vip.ichiki.javalee.yzc.tip.strong", name: "夯"),
   ]
   private static let deliveredKey = "developer_tip.delivered_transaction_ids"
   private let channel: FlutterMethodChannel

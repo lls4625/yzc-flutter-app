@@ -4,7 +4,7 @@ import StoreKit
 /// One non-consumable product; the same implementation serves Xcode and the App Store.
 @MainActor
 final class StudyRoomPurchase {
-  static let productID = "com.javalee.nihongoPath.v31.studyroom.lifetime"
+  static let productID = "vip.ichiki.javalee.yzc.studyroom.lifetime"
 
   private let channel: FlutterMethodChannel
   private var product: Product?

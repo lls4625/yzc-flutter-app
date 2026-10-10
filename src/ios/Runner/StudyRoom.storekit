@@ -25,7 +25,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.studyroom.lifetime",
+      "productID" : "vip.ichiki.javalee.yzc.studyroom.lifetime",
       "referenceName" : "自习室永久解锁",
       "type" : "NonConsumable"
     },
@@ -40,7 +40,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.small",
+      "productID" : "vip.ichiki.javalee.yzc.tip.small",
       "referenceName" : "一份鼓励",
       "type" : "Consumable"
     },
@@ -55,7 +55,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.medium",
+      "productID" : "vip.ichiki.javalee.yzc.tip.medium",
       "referenceName" : "暖心支持",
       "type" : "Consumable"
     },
@@ -70,7 +70,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.large",
+      "productID" : "vip.ichiki.javalee.yzc.tip.large",
       "referenceName" : "特别支持",
       "type" : "Consumable"
     },
@@ -85,7 +85,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.xlarge",
+      "productID" : "vip.ichiki.javalee.yzc.tip.xlarge",
       "referenceName" : "大力支持",
       "type" : "Consumable"
     },
@@ -100,7 +100,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.premium",
+      "productID" : "vip.ichiki.javalee.yzc.tip.premium",
       "referenceName" : "顶级鼓励",
       "type" : "Consumable"
     },
@@ -115,7 +115,7 @@
           "locale" : "zh_Hans"
         }
       ],
-      "productID" : "com.javalee.nihongoPath.v31.tip.strong",
+      "productID" : "vip.ichiki.javalee.yzc.tip.strong",
       "referenceName" : "夯",
       "type" : "Consumable"
     }
