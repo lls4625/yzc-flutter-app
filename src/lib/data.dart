@@ -27,6 +27,7 @@ class AppStore {
   AppStore.forTesting(Database database, Directory directory) {
     db = database;
     root = directory;
+    _ids = SnowflakeIds(Directory('${root.path}/ids'), floorId: 0);
   }
   late final Database db;
   late final Directory root;

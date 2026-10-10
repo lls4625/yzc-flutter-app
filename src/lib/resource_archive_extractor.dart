@@ -33,7 +33,9 @@ class _CheckedOutputFileStream extends OutputFileStream {
     final count = length ?? bytes.length;
     _checkLength(count);
     crc32 = getCrc32(
-        count == bytes.length ? bytes : bytes.sublist(0, count), crc32);
+      count == bytes.length ? bytes : bytes.sublist(0, count),
+      crc32,
+    );
     super.writeBytes(bytes, length: count);
     onBytes(count);
   }
@@ -54,6 +56,7 @@ void extractResourceArchiveWorker(List<Object> args) {
       throw const FormatException('ZIP 含重复条目');
     }
 
+    if (archive.files.length > 100000) throw const FormatException('ZIP 条目过多');
     final entries = <(ArchiveFile, String)>[];
     final pathTypes = <String, bool>{};
     int total = 0;
@@ -67,13 +70,15 @@ void extractResourceArchiveWorker(List<Object> args) {
       if (name.endsWith('/')) name = name.substring(0, name.length - 1);
       final parts = name.split('/');
       if (file.isSymbolicLink ||
-          parts.any((part) =>
-              part.isEmpty ||
-              part == '.' ||
-              part == '..' ||
-              part.contains('\\') ||
-              part.contains(':') ||
-              part.contains('\u0000'))) {
+          parts.any(
+            (part) =>
+                part.isEmpty ||
+                part == '.' ||
+                part == '..' ||
+                part.contains('\\') ||
+                part.contains(':') ||
+                part.contains('\u0000'),
+          )) {
         throw FormatException('ZIP 路径不安全：${file.name}');
       }
 
@@ -86,10 +91,15 @@ void extractResourceArchiveWorker(List<Object> args) {
 
       if (file.isFile) {
         if (file.size < 0) throw FormatException('ZIP 文件大小无效：$name');
+        const maxExpanded = 8 * 1024 * 1024 * 1024;
+        if (file.size > maxExpanded || total > maxExpanded - file.size) {
+          throw const FormatException('ZIP 解压大小超过限制');
+        }
         total += file.size;
         if (name == databasePath) database = true;
       }
-      if ((!file.isFile && name == mediaPath) || name.startsWith('$mediaPath/')) {
+      if ((!file.isFile && name == mediaPath) ||
+          name.startsWith('$mediaPath/')) {
         mediaDirectory = true;
       }
     }
@@ -148,7 +158,8 @@ void extractResourceArchiveWorker(List<Object> args) {
       if (actualSize != file.size ||
           (file.crc32 != null && actualCrc != file.crc32)) {
         throw FormatException(
-            'ZIP 内容校验失败：$name，声明大小 ${file.size}，实际大小 $actualSize，声明 CRC ${file.crc32}，实际 CRC $actualCrc');
+          'ZIP 内容校验失败：$name，声明大小 ${file.size}，实际大小 $actualSize，声明 CRC ${file.crc32}，实际 CRC $actualCrc',
+        );
       }
     }
     if (total == 0) port.send({'progress': 1.0});

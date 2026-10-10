@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'data.dart';
 import 'resources.dart';
 import 'resource_operation_ui.dart';
+import 'resource_transfer.dart';
 import 'ios_lesson_playback.dart';
 import 'startup_network.dart';
 import 'privacy_policy_page.dart';
@@ -766,9 +767,10 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   bool _refreshAgain = false;
   bool? _serverReady;
   int _checkRevision = 0;
-  bool _leaving = false;
+  bool _leaving = false, _wasResourceActive = false;
   bool get _pageCurrent => mounted && !_leaving && ModalRoute.of(context)?.isCurrent == true;
   bool get _operationBusy => selecting || widget.app.resources.activeBook != null;
+  bool get _canLeaveDownload => widget.app.resources.activeBook != null && widget.app.resources.stage != 'delete';
   bool get _resourceBusy => fetching || _operationBusy;
   bool _checkCurrent(int revision) => _pageCurrent && revision == _checkRevision && !_operationBusy;
   bool _canDownload(RowData book) {
@@ -780,9 +782,15 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    error = widget.app.resources.lastError;
+    _wasResourceActive = widget.app.resources.activeBook != null;
+    widget.app.resources.addListener(_resourceChanged);
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_refresh());
+      if (mounted) {
+        if (_operationBusy) { unawaited(_local()); }
+        else { unawaited(_refresh()); }
+      }
     });
   }
   @override
@@ -791,8 +799,24 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       if (_resourceBusy) { _refreshAgain = true; } else { unawaited(_refresh()); }
     }
   }
+  void _resourceChanged() {
+    final active = widget.app.resources.activeBook != null;
+    final finished = _wasResourceActive && !active;
+    _wasResourceActive = active;
+    if (finished && mounted) unawaited(_reloadFinishedResource());
+  }
+  Future<void> _reloadFinishedResource() async {
+    try {
+      await _local();
+      if (mounted) setState(() => error = widget.app.resources.lastError);
+    } catch (e, stack) {
+      SystemErrors.record(e, stack, module: 'app', operation: '刷新已完成的资源任务');
+      if (mounted) setState(() => error = '资源状态读取失败，请刷新重试。');
+    }
+  }
   @override
   void dispose() {
+    widget.app.resources.removeListener(_resourceChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -861,7 +885,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   Future<void> _refresh() async {
     if (_resourceBusy || !_pageCurrent) return;
     final revision = ++_checkRevision;
-    setState(() { fetching = true; error = null; permissionError = false; });
+    setState(() { fetching = true; error = widget.app.resources.lastError; permissionError = false; });
     try {
       widget.app.resources.clearPublishedTextbooks();
       await _local(checkRevision: revision);
@@ -897,10 +921,11 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     });
   }
   void _closeError() {
+    widget.app.resources.lastError = null;
     setState(() { error = null; permissionError = false; _errorNeedsRecheck = false; });
   }
   void _back() {
-    if (_operationBusy) {
+    if (_operationBusy && !_canLeaveDownload) {
       showResourceWait(context, _operationLabel);
       return;
     }
@@ -919,10 +944,9 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       _operationLabel = installed[id]?['status'] == 'ready' ? '资源更新' : '资源下载';
       error = null; permissionError = false; });
     try {
-      if (!(await _checkConnection()) || !mounted) return;
       try {
         await widget.app.resources.download(id);
-        await widget.app.store.selectBook(id);
+        if (select && _pageCurrent) await widget.app.store.selectBook(id);
         await widget.app.reload();
       } finally { await _local(); }
       if (_pageCurrent) {
@@ -932,10 +956,12 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       }
       if (_pageCurrent && select) await _leaveAfterOperation();
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
+      if (e is! ResourceCancelled) SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
       if (!mounted) return;
-      if (_isNetworkError(e) && !(await _checkConnection())) return;
-      if (_pageCurrent) _showOperationError('内容下载失败', e);
+      if (_pageCurrent) setState(() {
+        error = widget.app.resources.lastError ?? '内容下载失败：${_errorDetail(e)}';
+        _errorNeedsRecheck = _isNetworkError(e) || e is ResourceHashMismatch;
+      });
     } finally { _finishOperation(); }
   }
   Future<void> _select(String id) async {
@@ -1044,13 +1070,18 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
               const SizedBox(height: 7),
               Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
                 resource.activeBook == id
-                  ? '${switch (resource.stage) { 'catalog' => '获取内容信息', 'extract' => '正在解压', 'download' => '正在下载', 'delete' => '正在删除', _ => '同步数据' }}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
+                  ? '${resource.detail.isNotEmpty ? resource.detail : '正在处理资源'}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
                   : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}$statusText',
                 style: Theme.of(context).textTheme.labelMedium,
               ))]),
             ],
             if (resource.activeBook == id) ...[
               const SizedBox(height: 8), StudyLinearProgressIndicator(value: resource.progress),
+              if (resource.stage != 'delete') ...[
+                StudyButton.text(onPressed: resource.canCancel ? resource.cancelDownload : null,
+                  child: Text(resource.cancelling ? '正在取消…' : resource.canCancel ? '取消下载' : '正在安全收尾…')),
+                Text(resource.canCancel ? '可返回其他页面，下载将继续；取消会保留原有内容。' : '正在保存或恢复内容，可返回其他页面；完成后可在这里查看。'),
+              ],
             ],
           ])),
         ])),
@@ -1088,10 +1119,11 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: widget.app.resources, builder: (_, __) {
     final resource = widget.app.resources;
+    final displayError = error ?? resource.lastError;
     return PopScope(
-      canPop: !_operationBusy || _leaving,
+      canPop: !_operationBusy || _canLeaveDownload || _leaving,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _operationBusy && !_leaving) showResourceWait(context, _operationLabel);
+        if (!didPop && _operationBusy && !_canLeaveDownload && !_leaving) showResourceWait(context, _operationLabel);
       },
       child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('学习资源'),
         leading: StudyIconButton(tooltip: '返回', onPressed: _back,
@@ -1103,12 +1135,15 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       const SizedBox(height: 6),
       Text('可随时切换内容，学习记录会分别保留。', style: Theme.of(context).textTheme.bodyLarge),
       const SizedBox(height: 20),
-      if (error != null) StudyCard(child: Padding(padding: const EdgeInsets.all(12), child: Row(
+      if (displayError != null) StudyCard(child: Padding(padding: const EdgeInsets.all(12), child: Row(
         crossAxisAlignment: CrossAxisAlignment.center, children: [
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(error!),
+            Text(displayError),
             if (installed.values.any((row) => row['status'] == 'ready'))
               const Padding(padding: EdgeInsets.only(top: 8), child: Text('本地内容可继续离线学习。')),
+            if (resource.lastFailedBook != null) StudyButton.text(
+              onPressed: _resourceBusy ? null : () => _download(resource.lastFailedBook!),
+              child: const Text('重试下载')),
             if (permissionError) StudyButton.text(onPressed: _operationBusy ? null : _openNetworkSettings, child: const Text('前往设置')),
           ])),
           const SizedBox(width: 12),

@@ -38,7 +38,7 @@ class _JlptTestPageState extends State<JlptTestPage> {
         if (!mounted || generation != _generation) return;
         setState(() { _level = level; _levelRestored = true; });
       }
-      if (!widget.host.resources.isReady(_level) || widget.host.resources.busy) {
+      if (!widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level)) {
         if (mounted && generation == _generation) setState(() => _loading = false);
         return;
       }
@@ -185,7 +185,7 @@ class _JlptTestPageState extends State<JlptTestPage> {
     if (_opening || (id == null && (_loading || _choosingLevel))) return;
     setState(() => _opening = true);
     try {
-      if (id == null && (_bank == null || !widget.host.resources.isReady(_level) || widget.host.resources.busy)) {
+      if (id == null && (_bank == null || !widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level))) {
         await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => StudyResourcePage(widget.host)));
         if (!mounted) return;
@@ -236,14 +236,14 @@ class _JlptTestPageState extends State<JlptTestPage> {
       constraints: const BoxConstraints(maxWidth: 760),
       child: _loading ? const Center(child: CircularProgressIndicator())
         : _bank == null ? ListView(padding: const EdgeInsets.all(20), children: [
-            Text(_error ?? (widget.host.resources.busy
+            Text(_error ?? (widget.host.resources.isUnavailable(_level)
               ? '题库正在处理中，仍可查看历史、继续作答和重做错题。'
               : '尚未下载当前级别题库。历史记录、继续作答和错题重做仍可使用；开始新的测试需要下载题库。')),
             const SizedBox(height: 12),
             StudyButton.filledIcon(
               onPressed: _opening || _choosingLevel ? null : () => _open(),
               icon: const Icon(Icons.download_outlined),
-              label: Text(widget.host.resources.isReady(_level) || widget.host.resources.busy ? '管理题库' : '下载题库'),
+              label: Text(widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level) ? '管理题库' : '下载题库'),
             ),
             const SizedBox(height: 8),
             if (_error != null) TextButton(onPressed: _opening || _choosingLevel ? null : _load, child: const Text('重新读取')),

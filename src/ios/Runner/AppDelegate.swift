@@ -8,8 +8,7 @@ import NaturalLanguage
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  // TODO: Replace this development placeholder with the App Store numeric app ID before release.
-  private static let appStoreAppID = "0000000000"
+  private static let appStoreAppID = "6820536403"
   private var lessonPlayback: LessonPlayback?
   private var courseVideo: CourseVideoPlayback?
   private var practiceSpeech: PracticeSpeech?
