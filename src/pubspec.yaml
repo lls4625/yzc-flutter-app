@@ -1,5 +1,5 @@
 name: nihongo_path
-description: 语之初 V3，iOS SQLite 离线学习。
+description: 语之初 V3，iOS SQLite 离线学习工具。
 publish_to: none
 version: 3.1.0
 environment:

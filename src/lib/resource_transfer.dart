@@ -16,6 +16,17 @@ class ResourceHashMismatch implements Exception {
   const ResourceHashMismatch();
 }
 
+class ResourceSpaceUnavailable implements Exception {
+  const ResourceSpaceUnavailable(this.stage);
+  final String stage;
+}
+
+class ResourceSpaceInsufficient implements Exception {
+  const ResourceSpaceInsufficient(this.stage, this.available, this.required);
+  final String stage;
+  final int available, required;
+}
+
 class ResourceHttpException extends HttpException {
   ResourceHttpException(this.status, Uri uri)
     : super('资源请求失败（HTTP $status）', uri: uri);
@@ -105,15 +116,41 @@ class ResourceTransfer {
   final Future<int?> Function()? _freeSpace;
   static const reserve = 128 * 1024 * 1024;
 
-  Future<int?> capacity() async {
-    if (_freeSpace != null) return _freeSpace().timeout(requestTimeout);
-    try {
-      return await const MethodChannel('yuzhichu/device')
-          .invokeMethod<int>('freeSpace')
-          .timeout(const Duration(seconds: 5));
-    } on MissingPluginException {
-      return null; // Desktop tools may not expose the iOS capacity channel.
+  Future<int> capacity({ResourceTask? task, String stage = 'preflight'}) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      task?.check();
+      try {
+        final value = _freeSpace != null
+            ? await _freeSpace().timeout(requestTimeout)
+            : await const MethodChannel('yuzhichu/device')
+                  .invokeMethod<int>('freeSpace')
+                  .timeout(const Duration(seconds: 5));
+        if (value != null && value >= 0) return value;
+      } catch (_) {}
+      task?.check();
+      if (attempt < 2) {
+        if (task == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        } else {
+          await task.delay(const Duration(milliseconds: 200));
+        }
+      }
     }
+    throw ResourceSpaceUnavailable(stage);
+  }
+
+  Future<int> ensureCapacity(
+    int required,
+    ResourceTask task,
+    String stage,
+  ) async {
+    task.check();
+    final available = await capacity(task: task, stage: stage);
+    task.check();
+    if (available < required) {
+      throw ResourceSpaceInsufficient(stage, available, required);
+    }
+    return available;
   }
 
   bool _transient(Object error) =>
@@ -232,9 +269,8 @@ class ResourceTransfer {
     ResourceProgress report, {
     String? expectedHash,
   }) async {
-    final space = await capacity();
-    task.check();
-    if (space != null && space < reserve) throw StateError('可用存储空间不足');
+    report('space', null, '正在检查存储空间');
+    await ensureCapacity(reserve, task, 'download');
     await _retry(task, report, () async {
       report('download', null, '正在连接下载服务器');
       RandomAccessFile? output;
@@ -243,20 +279,30 @@ class ResourceTransfer {
           final expected = response.contentLength;
           if (expected > maxBytes) throw const FormatException('资源包超过大小限制');
           if (expected == 0) throw const FormatException('下载文件为空');
-          if (space != null && expected > 0 && space < expected * 3 + reserve) {
-            throw StateError('可用存储空间不足');
-          }
+          await ensureCapacity(
+            (expected > 0 ? expected : 0) + reserve,
+            task,
+            'download',
+          );
           output = await file.open(mode: FileMode.write);
           var received = 0;
+          var checkedAt = 0;
+          var checkedTime = DateTime.now();
           await for (final bytes in response.timeout(idleTimeout)) {
             task.check();
             received += bytes.length;
             if (received > maxBytes || (expected >= 0 && received > expected)) {
               throw const FormatException('资源下载长度异常');
             }
-            if (space != null && space < received * 3 + reserve)
-              throw StateError('可用存储空间不足');
             await output!.writeFrom(bytes);
+            final now = DateTime.now();
+            if (received - checkedAt >= 16 * 1024 * 1024 ||
+                now.difference(checkedTime) >= const Duration(seconds: 2)) {
+              final remaining = expected > received ? expected - received : 0;
+              await ensureCapacity(remaining + reserve, task, 'download');
+              checkedAt = received;
+              checkedTime = now;
+            }
             report(
               'download',
               expected > 0 ? received / expected : null,
@@ -276,12 +322,13 @@ class ResourceTransfer {
     report('verify', null, '正在校验资源包');
     final digest = await sha256
         .bind(
-          file.openRead().map((bytes) {
+          file.openRead().timeout(idleTimeout).map((bytes) {
             task.check();
             return bytes;
           }),
         )
-        .first;
+        .first
+        .timeout(downloadTimeout);
     task.check();
     final hash = digest.toString();
     if (expectedHash != null &&
@@ -300,7 +347,8 @@ class ResourceTransfer {
     ResourceTask task,
     ResourceProgress report,
   ) async {
-    final space = await capacity();
+    report('space', null, '正在检查解压所需空间');
+    final space = await capacity(task: task, stage: 'extract');
     task.check();
     report('extract', 0, '正在解压资源');
     task.check();
@@ -356,7 +404,8 @@ class ResourceTransfer {
           destination,
           folder,
           password,
-          space ?? -1,
+          space,
+          reserve,
         ],
         onError: errors.sendPort,
         onExit: exits.sendPort,

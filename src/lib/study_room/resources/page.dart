@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../system_errors.dart';
 import '../../glass_ui.dart';
 import '../../resource_operation_ui.dart';
+import '../../resource_operation_coordinator.dart';
 import '../host_contracts.dart';
 import 'manager.dart';
 
@@ -33,8 +34,7 @@ class _StudyResourcePageState extends State<StudyResourcePage>
   String _operationLabel = '资源下载';
   bool _confirming = false, _refreshAgain = false;
   bool get _pageCurrent => mounted && ModalRoute.of(context)?.isCurrent == true;
-  bool get _operationBusy => _confirming || widget.host.resources.busy;
-  bool get _canLeaveDownload => widget.host.resources.installing;
+  bool get _operationBusy => _confirming || widget.host.resourceOperations.busy;
   bool get _resourceBusy => _operationBusy || widget.host.resources.checking;
 
   Future<void> _refresh() async {
@@ -91,8 +91,11 @@ class _StudyResourcePageState extends State<StudyResourcePage>
   }
 
   void _back() {
-    if (_operationBusy && !_canLeaveDownload) {
-      showResourceWait(context, _operationLabel);
+    if (_operationBusy) {
+      showResourceWait(
+        context,
+        widget.host.resourceOperations.label ?? _operationLabel,
+      );
       return;
     }
     Navigator.of(context).maybePop();
@@ -122,6 +125,11 @@ class _StudyResourcePageState extends State<StudyResourcePage>
   Future<void> _remove(String level) async {
     final resources = widget.host.resources;
     if (_resourceBusy || !_pageCurrent) return;
+    final lease = widget.host.resourceOperations.acquire(
+      ResourceOperationKind.studyDelete,
+      level,
+      '自习资源删除',
+    );
     setState(() {
       _confirming = true;
       _operationLabel = '资源删除';
@@ -152,9 +160,10 @@ class _StudyResourcePageState extends State<StudyResourcePage>
       );
       if (confirmed != true || !_pageCurrent || resources.busy) return;
       setState(() => _operationLabel = '资源删除');
-      await resources.remove(level);
+      await resources.remove(level, operationLease: lease);
       if (resources.error.isEmpty) _notice('本地题库资源已删除，作答历史和错题记录已保留');
     } finally {
+      widget.host.resourceOperations.release(lease);
       if (mounted) setState(() => _confirming = false);
       _resumeRefresh();
     }
@@ -238,7 +247,11 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                               const SizedBox(height: 6),
                               Text(
                                 operating
-                                    ? '${resources.message}${resources.progress == null ? '' : ' ${(resources.progress! * 100).round()}%'}'
+                                    ? resourceOperationText(
+                                        widget.host.resourceOperations.stage,
+                                        resources.progress,
+                                        subject: '自习资源',
+                                      )
                                     : resources.checking
                                     ? '检查更新中'
                                     : !ready
@@ -285,27 +298,12 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                     ),
                   ],
                   if (operating) ...[
-                    const SizedBox(height: 12),
-                    StudyLinearProgressIndicator(value: resources.progress),
-                    if (_canLeaveDownload) ...[
-                      StudyButton.text(
-                        onPressed: resources.canCancel
-                            ? resources.cancelDownload
-                            : null,
-                        child: Text(
-                          resources.cancelling
-                              ? '正在取消…'
-                              : resources.canCancel
-                              ? '取消下载'
-                              : '正在安全收尾…',
-                        ),
-                      ),
-                      Text(
-                        resources.canCancel
-                            ? '可返回其他页面，下载将继续；取消会保留原有内容。'
-                            : '正在保存或恢复内容，可返回其他页面；完成后可在这里查看。',
-                      ),
-                    ],
+                    ResourceOperationPanel(
+                      progress: resources.progress,
+                      canCancel: resources.installing && resources.canCancel,
+                      cancelling: resources.cancelling,
+                      onCancel: resources.cancelDownload,
+                    ),
                   ],
                   // Keep the two 48px controls separate even for a broken installation.
                   if (!ready &&
@@ -390,14 +388,18 @@ class _StudyResourcePageState extends State<StudyResourcePage>
   Widget build(BuildContext context) {
     final resources = widget.host.resources;
     return AnimatedBuilder(
-      animation: resources,
+      animation: Listenable.merge([resources, widget.host.resourceOperations]),
       builder: (context, _) {
         final visibleLevels = resources.visibleLevels;
         return PopScope(
-          canPop: !_operationBusy || _canLeaveDownload,
+          canPop: !_operationBusy,
           onPopInvokedWithResult: (didPop, result) {
-            if (!didPop && _operationBusy && !_canLeaveDownload)
-              showResourceWait(context, _operationLabel);
+            if (!didPop && _operationBusy) {
+              showResourceWait(
+                context,
+                widget.host.resourceOperations.label ?? _operationLabel,
+              );
+            }
           },
           child: Scaffold(
             appBar: StudyAppBar(

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'resources/manager.dart';
+import '../resource_operation_coordinator.dart';
 
 typedef StudyWrite = Future<T> Function<T>(Future<T> Function() action);
 
@@ -21,6 +23,7 @@ class StudyRoomHost {
     required this.write,
     required this.newId,
     required this.resources,
+    required this.resourceOperations,
   });
   final String userId, rootPath, contentDatabasePath;
   final Listenable changes;
@@ -33,4 +36,5 @@ class StudyRoomHost {
   final StudyWrite write;
   final String Function() newId;
   final StudyResources resources;
+  final ResourceOperationCoordinator resourceOperations;
 }

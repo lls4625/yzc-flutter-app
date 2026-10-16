@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'data.dart';
 import 'resources.dart';
 import 'resource_operation_ui.dart';
+import 'resource_operation_coordinator.dart';
 import 'resource_transfer.dart';
 import 'ios_lesson_playback.dart';
 import 'startup_network.dart';
@@ -36,12 +37,13 @@ import 'study_room/resources/manager.dart';
 import 'study_room/resources/page.dart';
 
 class AppController extends ChangeNotifier implements CourseTabHost {
-  AppController(this.store, this.resources);
+  AppController(this.store, this.resources, this.resourceOperations);
   final AppStore store;
   late final notices = NoticeService(store);
   String get appVersionLabel => store.appVersion.isEmpty ? '版本信息不可用' : store.appVersion;
   final Resources resources;
-  late final studyResources = StudyResources(store);
+  final ResourceOperationCoordinator resourceOperations;
+  late final studyResources = StudyResources(store, operations: resourceOperations);
   final network = StartupNetwork();
   bool hasLocalTextbooks = false;
   VoidCallback? openStudyRoomPurchase;
@@ -53,6 +55,7 @@ class AppController extends ChangeNotifier implements CourseTabHost {
     userId: store.userId, rootPath: store.root.path, contentDatabasePath: store.db.path,
     changes: Listenable.merge([this, resources, studyResources]),
     database: store.db, write: store.write, newId: store.newId, resources: studyResources,
+    resourceOperations: resourceOperations,
     isUnlocked: () => studyRoomUnlocked, isPurchaseSaving: () => studyRoomPurchaseSaving,
     isBookUnavailable: (book) => resources.unavailable.contains(book),
     audioPath: resources.audioPath, playbackSpeed: () => speed,
@@ -769,8 +772,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   int _checkRevision = 0;
   bool _leaving = false, _wasResourceActive = false;
   bool get _pageCurrent => mounted && !_leaving && ModalRoute.of(context)?.isCurrent == true;
-  bool get _operationBusy => selecting || widget.app.resources.activeBook != null;
-  bool get _canLeaveDownload => widget.app.resources.activeBook != null && widget.app.resources.stage != 'delete';
+  bool get _operationBusy => selecting || widget.app.resourceOperations.busy;
   bool get _resourceBusy => fetching || _operationBusy;
   bool _checkCurrent(int revision) => _pageCurrent && revision == _checkRevision && !_operationBusy;
   bool _canDownload(RowData book) {
@@ -925,8 +927,11 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     setState(() { error = null; permissionError = false; _errorNeedsRecheck = false; });
   }
   void _back() {
-    if (_operationBusy && !_canLeaveDownload) {
-      showResourceWait(context, _operationLabel);
+    if (_operationBusy) {
+      showResourceWait(
+        context,
+        widget.app.resourceOperations.label ?? _operationLabel,
+      );
       return;
     }
     Navigator.of(context).maybePop();
@@ -974,20 +979,27 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     }
     ++_checkRevision;
     setState(() { selecting = true; _operationLabel = '内容切换'; });
+    final lease = widget.app.resourceOperations.acquire(
+      ResourceOperationKind.textbookSelect, id, '学习内容切换');
     try {
     await perform(context, () async {
       await widget.app.store.selectBook(id);
       await widget.app.reload();
       if (_pageCurrent) await _leaveAfterOperation();
     });
-    } finally { _finishOperation(); }
+    } finally {
+      widget.app.resourceOperations.release(lease);
+      _finishOperation();
+    }
   }
   Future<void> _remove(RowData book) async {
     if (_resourceBusy || !_pageCurrent) return;
     ++_checkRevision;
+    final id = textOf(book, 'id');
+    final lease = widget.app.resourceOperations.acquire(
+      ResourceOperationKind.textbookDelete, id, '学习资源删除');
     setState(() { selecting = true; _operationLabel = '资源删除'; });
     try {
-    final id = textOf(book, 'id');
     final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
       title: const Text('删除本地内容？'),
       content: Text('将删除“${textOf(book, 'textbook')} · ${textOf(book, 'volume')}”的单元、课程、单词、课文、文法、练习和音频。练习、复习及学习记录会保留。删除后只能下载服务器仍提供的内容；服务器已移除的内容将无法再次下载。'),
@@ -1000,14 +1012,17 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     setState(() => _operatingBookId = id);
     await perform(context, () async {
       try {
-        await widget.app.resources.remove(id);
+        await widget.app.resources.remove(id, operationLease: lease);
         await widget.app.reload();
       } finally {
         await _local();
       }
       if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地学习资源已删除，学习记录已保留')));
     });
-    } finally { _finishOperation(); }
+    } finally {
+      widget.app.resourceOperations.release(lease);
+      _finishOperation();
+    }
   }
   Widget _bookCard(RowData book, Resources resource) {
     final id = textOf(book, 'id');
@@ -1070,18 +1085,16 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
               const SizedBox(height: 7),
               Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
                 resource.activeBook == id
-                  ? '${resource.detail.isNotEmpty ? resource.detail : '正在处理资源'}${resource.progress == null ? '' : ' ${(resource.progress! * 100).round()}%'}'
+                  ? resourceOperationText(widget.app.resourceOperations.stage,
+                      resource.progress, subject: '学习资源')
                   : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}$statusText',
                 style: Theme.of(context).textTheme.labelMedium,
               ))]),
             ],
             if (resource.activeBook == id) ...[
-              const SizedBox(height: 8), StudyLinearProgressIndicator(value: resource.progress),
-              if (resource.stage != 'delete') ...[
-                StudyButton.text(onPressed: resource.canCancel ? resource.cancelDownload : null,
-                  child: Text(resource.cancelling ? '正在取消…' : resource.canCancel ? '取消下载' : '正在安全收尾…')),
-                Text(resource.canCancel ? '可返回其他页面，下载将继续；取消会保留原有内容。' : '正在保存或恢复内容，可返回其他页面；完成后可在这里查看。'),
-              ],
+              ResourceOperationPanel(progress: resource.progress,
+                canCancel: resource.stage != 'delete' && resource.canCancel,
+                cancelling: resource.cancelling, onCancel: resource.cancelDownload),
             ],
           ])),
         ])),
@@ -1117,13 +1130,20 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     )));
   }
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(animation: widget.app.resources, builder: (_, __) {
+  Widget build(BuildContext context) => AnimatedBuilder(animation: Listenable.merge([
+    widget.app.resources, widget.app.resourceOperations,
+  ]), builder: (_, __) {
     final resource = widget.app.resources;
     final displayError = error ?? resource.lastError;
     return PopScope(
-      canPop: !_operationBusy || _canLeaveDownload || _leaving,
+      canPop: !_operationBusy || _leaving,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _operationBusy && !_canLeaveDownload && !_leaving) showResourceWait(context, _operationLabel);
+        if (!didPop && _operationBusy && !_leaving) {
+          showResourceWait(
+            context,
+            widget.app.resourceOperations.label ?? _operationLabel,
+          );
+        }
       },
       child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('学习资源'),
         leading: StudyIconButton(tooltip: '返回', onPressed: _back,

@@ -429,6 +429,18 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
     ));
   }
 
+  bool _isPrimaryMediaRow(RowData row) {
+    final source = textOf(row, 'media_src').trim();
+    if (source.isEmpty) return false;
+    final id = textOf(row, 'id');
+    for (final item in _rows) {
+      if (textOf(item, 'media_src').trim() == source) {
+        return textOf(item, 'id') == id;
+      }
+    }
+    return true;
+  }
+
   Widget _row(RowData row) {
     final id = _itemId(row);
     final translationColor = Theme.of(context).brightness == Brightness.dark
@@ -436,7 +448,9 @@ class _CourseWordsTabState extends State<CourseWordsTab> with WidgetsBindingObse
       : const Color(0xFF616161);
     final mediaType = textOf(row, 'media_type').trim();
     final mediaSource = textOf(row, 'media_src').trim();
-    final hasMediaIndicator = mediaType.isNotEmpty && mediaSource.isNotEmpty;
+    final hasMediaIndicator = mediaType.isNotEmpty &&
+        mediaSource.isNotEmpty &&
+        _isPrimaryMediaRow(row);
     final reading = textOf(row, 'kana').replaceFirst(RegExp(r'@.*$'), '');
     final surface = plainJapanese(textOf(row, 'word'));
     return _card(key: _anchors.putIfAbsent(id, GlobalKey.new), active: _owns && _playback.playingId == id,

@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../data.dart';
 import 'config.dart';
 import '../../resource_transfer.dart';
+import '../../resource_operation_coordinator.dart';
 import '../../user_error.dart';
 import '../../system_errors.dart';
 import '../jlpt/feature/content.dart';
@@ -51,18 +52,22 @@ class StudyResources extends ChangeNotifier {
   StudyResources(
     this.store, {
     ResourceTransfer? transfer,
+    ResourceOperationCoordinator? operations,
     Uri? base,
     Future<String> Function()? password,
     this.onCheckpoint,
   }) : transfer = transfer ?? ResourceTransfer(),
+       operations = operations ?? ResourceOperationCoordinator(),
        _base = base,
        _password = password;
   final ResourceTransfer transfer;
+  final ResourceOperationCoordinator operations;
   final Uri? _base;
   final Future<String> Function()? _password;
   @visibleForTesting
   final Future<void> Function(String point)? onCheckpoint;
   ResourceTask? _task;
+  ResourceOperationLease? _operationLease;
   String? lastFailedLevel;
   bool lastCancelled = false, installing = false;
   bool _replacingMedia = false;
@@ -75,7 +80,19 @@ class StudyResources extends ChangeNotifier {
   void cancelDownload() {
     if (!canCancel) return;
     _task!.cancel();
-    _report('正在取消并恢复原资源');
+    final lease = _operationLease;
+    if (lease != null) {
+      operations.update(
+        lease,
+        ResourceOperationStage.rollback,
+        cancelling: true,
+      );
+    }
+    _report(
+      '正在取消并恢复原资源',
+      null,
+      ResourceOperationStage.rollback,
+    );
   }
 
   Future<void> _checkpoint(String point) async {
@@ -85,8 +102,30 @@ class StudyResources extends ChangeNotifier {
 
   void _transferProgress(String stage, double? value, String detail) {
     if (cancelling) return;
-    _report(detail, value);
+    final text = switch (stage) {
+      'download' => '正在下载自习资源',
+      'retry' => '连接中断，正在重试',
+      'verify' => '正在校验资源包',
+      'extract' => '正在解压自习资源',
+      'space' => '正在检查存储空间',
+      _ => '正在处理自习资源',
+    };
+    _report(text, value, _operationStage(stage));
   }
+
+  ResourceOperationStage _operationStage(String value) => switch (value) {
+    'catalog' => ResourceOperationStage.catalog,
+    'download' || 'retry' => ResourceOperationStage.download,
+    'verify' => ResourceOperationStage.verify,
+    'space' => ResourceOperationStage.spaceCheck,
+    'extract' => ResourceOperationStage.extract,
+    'validate' => ResourceOperationStage.validate,
+    'install' => ResourceOperationStage.installMedia,
+    'commit' => ResourceOperationStage.commit,
+    'cleanup' || 'delete' => ResourceOperationStage.cleanup,
+    'rollback' => ResourceOperationStage.rollback,
+    _ => ResourceOperationStage.preflight,
+  };
 
   final AppStore store;
   static const levels = ['n1', 'n2', 'n3', 'n4', 'n5'];
@@ -100,6 +139,7 @@ class StudyResources extends ChangeNotifier {
   Set<String> _invalidRemoteHashes = {};
   final Map<String, String> _installedDates = {};
   final Set<String> _available = {}, _cleanup = {}, _invalidReceipts = {};
+  final Set<String> _recoveryBlocked = {};
   bool hasPublishedCatalog = false;
   Future<void>? _checking;
   Map<String, int> questionCounts = {};
@@ -228,6 +268,8 @@ class StudyResources extends ChangeNotifier {
       SystemErrors.record(e, stack, module: 'selfstudy', operation: '设置资源备份属性');
     }
     await directory.create(recursive: true);
+    await _restoreReceipts();
+    await _recoverOperationMarkers();
     await _recoverMediaSwaps(tolerateFailure: true);
     await _restoreReceipts();
     for (final level in levels) {
@@ -378,6 +420,9 @@ class StudyResources extends ChangeNotifier {
 
   Future<void> _tryCleanup(String level) async {
     try {
+      if (_recoveryBlocked.contains(level)) {
+        throw StateError('自习资源恢复状态无法确认，已保留现有文件');
+      }
       // Restore the only rollback copy before any garbage collection.
       await _recoverMediaSwaps(onlyLevel: level);
       if (_invalidReceipts.contains(level))
@@ -413,6 +458,7 @@ class StudyResources extends ChangeNotifier {
   }) async {
     for (final level in levels) {
       if (onlyLevel != null && onlyLevel != level) continue;
+      if (_recoveryBlocked.contains(level)) continue;
       try {
         final root = Directory('${directory.path}/resources/$level');
         if (!await root.exists()) continue;
@@ -443,6 +489,91 @@ class StudyResources extends ChangeNotifier {
     }
   }
 
+  Future<void> _writeOperationMarker(
+    Directory staging,
+    Map<String, Object?> value,
+  ) async {
+    value['update_time'] = DateTime.now().toUtc().toIso8601String();
+    final marker = File('${staging.path}/operation.json');
+    final temporary = File('${marker.path}.tmp');
+    await temporary.writeAsString(
+      jsonEncode(value),
+      encoding: utf8,
+      flush: true,
+    );
+    await temporary.rename(marker.path);
+  }
+
+  Future<void> _recoverOperationMarkers() async {
+    for (final level in levels) {
+      final root = Directory('${directory.path}/staging/$level');
+      if (!await root.exists()) continue;
+      var blocked = false;
+      await for (final entry in root.list(followLinks: false)) {
+        if (entry is! Directory) continue;
+        final marker = File('${entry.path}/operation.json');
+        if (!await marker.exists()) continue;
+        try {
+          final value = jsonDecode(await marker.readAsString(encoding: utf8));
+          if (value is! Map) throw const FormatException('自习资源恢复标记无效');
+          final data = Map<String, Object?>.from(value);
+          final markerLevel = data['level'];
+          final hash = data['sha256'];
+          final operationId = entry.uri.pathSegments
+              .where((part) => part.isNotEmpty)
+              .last;
+          if (markerLevel != level ||
+              hash is! String ||
+              !RegExp(r'^[a-f0-9]{64}$').hasMatch(hash) ||
+              data['id'] != operationId ||
+              data['action'] != 'install' ||
+              data['staging'] != 'staging/$level/$operationId' ||
+              data['target'] != 'resources/$level/$hash' ||
+              data['backup'] != 'resources/$level/.replace-$hash' ||
+              data['had_target'] is! bool) {
+            throw const FormatException('自习资源恢复标记目标无效');
+          }
+          final target = '${directory.path}/resources/$level/$hash';
+          final backup = '${directory.path}/resources/$level/.replace-$hash';
+          final committed = _installed[level]?['sha256'] == hash;
+          if (committed) {
+            if (!await _studyEntityExists(target)) {
+              _available.remove(level);
+              _cleanup.add(level);
+              throw StateError('已提交的自习资源文件缺失');
+            }
+            if (await _studyEntityExists(backup)) {
+              await _deleteStudyEntity(backup);
+            }
+          } else if (await _studyEntityExists(backup)) {
+            if (await _studyEntityExists(target)) {
+              await _deleteStudyEntity(target);
+            }
+            await _moveStudyEntity(backup, target);
+          } else if (await _studyEntityExists(target)) {
+            await _deleteStudyEntity(target);
+          }
+          await entry.delete(recursive: true);
+        } catch (error, stack) {
+          blocked = true;
+          _cleanup.add(level);
+          SystemErrors.record(
+            error,
+            stack,
+            module: 'selfstudy',
+            operation: '恢复自习资源任务',
+            context: {'level': level, 'staging': entry.path},
+          );
+        }
+      }
+      if (blocked) {
+        _recoveryBlocked.add(level);
+      } else {
+        _recoveryBlocked.remove(level);
+      }
+    }
+  }
+
   Future<void> _deleteLevel(DatabaseExecutor tx, String level) async {
     final value = level.toUpperCase();
     // Delete paper items before their owning papers; the other levels stay intact.
@@ -464,12 +595,18 @@ class StudyResources extends ChangeNotifier {
 
   Future<void> cleanup(String level) async {
     if (busy || !levels.contains(level)) return;
+    final lease = operations.acquire(
+      ResourceOperationKind.cleanup,
+      level,
+      '自习资源清理',
+    );
+    _operationLease = lease;
     busy = true;
     activeLevel = level;
     error = '';
     permissionError = false;
     errorNeedsRecheck = false;
-    _report('清理资源文件');
+    _report('清理资源文件', null, ResourceOperationStage.cleanup);
     try {
       await _checking;
       await _restoreReceipts();
@@ -494,18 +631,32 @@ class StudyResources extends ChangeNotifier {
     } finally {
       busy = false;
       activeLevel = null;
+      _operationLease = null;
+      operations.release(lease);
       notifyListeners();
     }
   }
 
-  Future<void> remove(String level) async {
+  Future<void> remove(
+    String level, {
+    ResourceOperationLease? operationLease,
+  }) async {
     if (busy || !levels.contains(level)) return;
+    final lease =
+        operationLease ??
+        operations.acquire(ResourceOperationKind.studyDelete, level, '自习资源删除');
+    if (!operations.owns(lease)) throw StateError('资源任务所有权已失效');
+    _operationLease = lease;
     busy = true;
     activeLevel = level;
     error = '';
     permissionError = false;
     errorNeedsRecheck = false;
-    _report('删除 ${level.toUpperCase()} 题库');
+    _report(
+      '删除 ${level.toUpperCase()} 题库',
+      null,
+      ResourceOperationStage.cleanup,
+    );
     var committed = false;
     try {
       await _checking;
@@ -521,6 +672,7 @@ class StudyResources extends ChangeNotifier {
         }),
       );
       committed = true;
+      _recoveryBlocked.remove(level);
       await _restoreReceipts();
       await _tryCleanup(level);
       await _restoreReceipts();
@@ -548,6 +700,8 @@ class StudyResources extends ChangeNotifier {
     } finally {
       busy = false;
       activeLevel = null;
+      _operationLease = null;
+      operations.release(lease);
       notifyListeners();
     }
   }
@@ -649,9 +803,19 @@ class StudyResources extends ChangeNotifier {
     }
   }
 
-  void _report(String text, [double? value]) {
+  void _report(String text, [double? value, ResourceOperationStage? stage]) {
     message = text;
     progress = value;
+    final lease = _operationLease;
+    if (lease != null) {
+      operations.update(
+        lease,
+        stage ?? operations.stage ?? ResourceOperationStage.preflight,
+        progress: value,
+        canCancel: _task?.canCancel == true,
+        cancelling: _task?.cancelled == true,
+      );
+    }
     notifyListeners();
   }
 
@@ -663,6 +827,12 @@ class StudyResources extends ChangeNotifier {
 
   Future<void> install(String level) async {
     if (busy || !levels.contains(level)) return;
+    final lease = operations.acquire(
+      ResourceOperationKind.studyInstall,
+      level,
+      '自习资源下载',
+    );
+    _operationLease = lease;
     final task = ResourceTask();
     _task = task;
     installing = true;
@@ -673,7 +843,11 @@ class StudyResources extends ChangeNotifier {
     error = '';
     permissionError = false;
     errorNeedsRecheck = false;
-    _report('获取 ${level.toUpperCase()} 资源信息');
+    _report(
+      '获取 ${level.toUpperCase()} 资源信息',
+      null,
+      ResourceOperationStage.catalog,
+    );
     Database? source;
     Directory? staging;
     String? mediaPath;
@@ -681,6 +855,8 @@ class StudyResources extends ChangeNotifier {
     bool mediaPlaced = false;
     bool committed = false;
     bool rollbackFailed = false;
+    late String operationId;
+    late Map<String, Object?> operationMarker;
     final diagnostics = <String, Object?>{
       'base_url': StudyResourceConfig.baseUrl,
       'resource_file': '$level.zip',
@@ -688,6 +864,9 @@ class StudyResources extends ChangeNotifier {
     try {
       await _checking;
       await _restoreReceipts();
+      if (_recoveryBlocked.contains(level)) {
+        throw StateError('自习资源恢复状态无法确认，请先删除本地资源后重试');
+      }
       final manifest = await _fetchManifest();
       await _checkpoint('catalog');
       final catalog = _catalogDescriptors(manifest);
@@ -708,7 +887,8 @@ class StudyResources extends ChangeNotifier {
         _report('该级别资源已是最新版本', 1);
         return;
       }
-      staging = Directory('${directory.path}/staging/$level/${store.newId()}');
+      operationId = store.newId();
+      staging = Directory('${directory.path}/staging/$level/$operationId');
       await staging.create(recursive: true);
       await _excludeDownloadsFromBackup();
       await File('${staging.path}/study.json')
@@ -726,6 +906,19 @@ class StudyResources extends ChangeNotifier {
       await _checkpoint('download');
       final installedDescriptor = Map<String, dynamic>.from(descriptor)
         ..['sha256'] = actualHash;
+      operationMarker = <String, Object?>{
+        'id': operationId,
+        'action': 'install',
+        'level': level,
+        'sha256': actualHash,
+        'phase': 'downloaded',
+        'staging': 'staging/$level/$operationId',
+        'target': 'resources/$level/$actualHash',
+        'backup': 'resources/$level/.replace-$actualHash',
+        'had_target': false,
+        'create_time': DateTime.now().toUtc().toIso8601String(),
+      };
+      await _writeOperationMarker(staging, operationMarker);
       diagnostics['actual_sha256'] = actualHash;
       diagnostics['zip_path'] = zip.path;
       diagnostics['downloaded_bytes'] = await zip.length();
@@ -736,7 +929,7 @@ class StudyResources extends ChangeNotifier {
         readOnly: true,
         singleInstance: false,
       );
-      _report('读取资源数据');
+      _report('读取资源数据', null, ResourceOperationStage.validate);
       final sourceDb = source;
       final integrity = await sourceDb.rawQuery('PRAGMA quick_check');
       if (integrity.length != 1 || integrity.single.values.single != 'ok') {
@@ -773,14 +966,32 @@ class StudyResources extends ChangeNotifier {
       }
       await validateStudyContent(sourceDb);
       await _checkpoint('validated');
+      operationMarker['phase'] = 'validated';
+      await _writeOperationMarker(staging, operationMarker);
+      _report('正在检查安装所需空间', null, ResourceOperationStage.spaceCheck);
+      final sourceDatabaseBytes = await File(
+        '${staging.path}/extracted/$level/data.sqlite',
+      ).length();
+      await transfer.ensureCapacity(
+        sourceDatabaseBytes * 2 + ResourceTransfer.reserve,
+        task,
+        'install',
+      );
       // The validated download is authoritative. Keep the occupied target only
       // as a short-lived rollback copy until the database receipt commits.
       _replacingMedia = true;
-      _report('准备替换当前级别资源，其他级别可继续使用');
-      await _checkpoint('before-media');
+      _report(
+        '准备替换当前级别资源，其他级别可继续使用',
+        null,
+        ResourceOperationStage.prepareInstall,
+      );
       mediaPath = '${directory.path}/resources/$level/$actualHash';
       mediaBackupPath =
           '${directory.path}/resources/$level/.replace-$actualHash';
+      operationMarker['had_target'] = await _studyEntityExists(mediaPath);
+      operationMarker['phase'] = 'switching_media';
+      await _writeOperationMarker(staging, operationMarker);
+      await _checkpoint('before-media');
       await Directory(mediaPath).parent.create(recursive: true);
       if (await _studyEntityExists(mediaBackupPath))
         await _deleteStudyEntity(mediaBackupPath);
@@ -788,9 +999,11 @@ class StudyResources extends ChangeNotifier {
         await _moveStudyEntity(mediaPath, mediaBackupPath);
       await _moveStudyEntity('${staging.path}/extracted/$level/mp3', mediaPath);
       mediaPlaced = true;
+      operationMarker['phase'] = 'media_ready';
+      await _writeOperationMarker(staging, operationMarker);
       await _checkpoint('media-staged');
       await _excludeDownloadsFromBackup();
-      _report('导入自习资源');
+      _report('导入自习资源', null, ResourceOperationStage.installMedia);
       await store.write(
         () => store.db.transaction((tx) async {
           _task?.check();
@@ -886,10 +1099,13 @@ class StudyResources extends ChangeNotifier {
           }, conflictAlgorithm: ConflictAlgorithm.replace);
           task.check();
           task.finish();
-          _report('正在保存安装结果，可返回其他页面');
+          _report('正在保存安装结果', null, ResourceOperationStage.commit);
         }),
       );
       committed = true;
+      _recoveryBlocked.remove(level);
+      operationMarker['phase'] = 'db_committed';
+      await _writeOperationMarker(staging, operationMarker);
       task.finish();
       _task = null;
       await onCheckpoint?.call('cleanup');
@@ -1004,6 +1220,8 @@ class StudyResources extends ChangeNotifier {
       busy = false;
       activeLevel = null;
       progress = null;
+      _operationLease = null;
+      operations.release(lease);
       notifyListeners();
     }
   }

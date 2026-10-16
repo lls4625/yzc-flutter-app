@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'data.dart';
 import 'resources.dart';
+import 'resource_operation_coordinator.dart';
 import 'ui.dart';
 import 'system_errors.dart';
 
@@ -28,9 +29,10 @@ Future<void> main() async {
     final store = AppStore();
     await store.open();
     unawaited(SystemErrors.pruneOnLogin());
-    final resources = Resources(store);
+    final resourceOperations = ResourceOperationCoordinator();
+    final resources = Resources(store, operations: resourceOperations);
     await resources.recover();
-    final controller = AppController(store, resources);
+    final controller = AppController(store, resources, resourceOperations);
     await controller.studyResources.initialize();
     await controller.reload();
     runApp(studyGlassRoot(StudyApp(controller)));

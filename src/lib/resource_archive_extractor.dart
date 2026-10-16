@@ -119,8 +119,8 @@ void extractResourceArchiveWorker(List<Object> args) {
     if (!mediaDirectory) throw const FormatException('资源包缺少 mp3 文件夹');
 
     final capacity = args[5] as int;
-    final required = total * 2 + 512 * 1024 * 1024;
-    if (capacity >= 0 && capacity < required) {
+    final required = total + (args[6] as int);
+    if (capacity < required) {
       throw FormatException('解压及同步所需存储空间不足：可用 $capacity，需要 $required');
     }
 

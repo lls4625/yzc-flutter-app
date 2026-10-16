@@ -10,6 +10,7 @@ import 'data.dart';
 import 'ios_lesson_playback.dart';
 import 'ai_question.dart';
 import 'resource_transfer.dart';
+import 'resource_operation_coordinator.dart';
 import 'user_error.dart';
 import 'system_errors.dart';
 import 'course/feature/image_interaction_config.dart';
@@ -26,6 +27,18 @@ const optionalTextbookContentColumns = {
   'media_type',
   'media_src',
   'media_config',
+};
+const resourceJobPhases = {
+  'download',
+  'prepared',
+  'moving_audio',
+  'audio_ready',
+  'db_committed',
+  'activation_pending',
+  'cleanup_pending',
+  'rolling_back',
+  'done',
+  'failed',
 };
 
 class ResourceContentIssue {
@@ -148,23 +161,35 @@ class Resources extends ChangeNotifier {
   Resources(
     this.store, {
     ResourceTransfer? transfer,
+    ResourceOperationCoordinator? operations,
     Uri? base,
     Future<String> Function()? password,
     this.onCheckpoint,
   }) : transfer = transfer ?? ResourceTransfer(),
+       operations = operations ?? ResourceOperationCoordinator(),
        _base = base,
        _password = password;
   final ResourceTransfer transfer;
+  final ResourceOperationCoordinator operations;
   final Uri? _base;
   final Future<String> Function()? _password;
   @visibleForTesting
   final Future<void> Function(String point)? onCheckpoint;
   ResourceTask? _task;
+  ResourceOperationLease? _operationLease;
   bool get canCancel => _task?.canCancel == true;
   bool get cancelling => _task?.cancelled == true;
   void cancelDownload() {
     if (!canCancel) return;
     _task!.cancel();
+    final lease = _operationLease;
+    if (lease != null) {
+      operations.update(
+        lease,
+        ResourceOperationStage.rollback,
+        cancelling: true,
+      );
+    }
     report('cancel', null, '正在取消并恢复原内容');
   }
 
@@ -200,6 +225,16 @@ class Resources extends ChangeNotifier {
     stage = next;
     progress = value;
     detail = message;
+    final lease = _operationLease;
+    if (lease != null) {
+      operations.update(
+        lease,
+        _operationStage(next),
+        progress: value,
+        canCancel: _task?.canCancel == true,
+        cancelling: _task?.cancelled == true,
+      );
+    }
     if (changed ||
         value == 1 ||
         DateTime.now().difference(_lastNotice).inMilliseconds > 80) {
@@ -207,6 +242,21 @@ class Resources extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  ResourceOperationStage _operationStage(String value) => switch (value) {
+    'catalog' => ResourceOperationStage.catalog,
+    'space' => ResourceOperationStage.spaceCheck,
+    'download' || 'retry' => ResourceOperationStage.download,
+    'verify' => ResourceOperationStage.verify,
+    'extract' => ResourceOperationStage.extract,
+    'validate' => ResourceOperationStage.validate,
+    'sync' => ResourceOperationStage.installMedia,
+    'commit' => ResourceOperationStage.commit,
+    'activation' => ResourceOperationStage.activation,
+    'cancel' => ResourceOperationStage.rollback,
+    'delete' => ResourceOperationStage.cleanup,
+    _ => ResourceOperationStage.preflight,
+  };
 
   Future<RowData?> installation(String id) async {
     final rows = await installations(id: id);
@@ -357,8 +407,16 @@ class Resources extends ChangeNotifier {
     return row;
   }
 
-  Future<void> remove(String id) async {
+  Future<void> remove(
+    String id, {
+    ResourceOperationLease? operationLease,
+  }) async {
     if (activeBook != null) throw StateError('请等待当前内容任务完成');
+    final lease =
+        operationLease ??
+        operations.acquire(ResourceOperationKind.textbookDelete, id, '学习资源删除');
+    if (!operations.owns(lease)) throw StateError('资源任务所有权已失效');
+    _operationLease = lease;
     activeBook = id;
     report('delete', null, '正在删除学习资源');
     final playback = IosLessonPlayback.instance;
@@ -445,16 +503,24 @@ class Resources extends ChangeNotifier {
           await store.write(
             () => store.db.update(
               'yzc_resource_operation',
-              {'error': e.toString(), 'update_time': nowMs()},
+              {
+                'phase': 'cleanup_pending',
+                'error': e.toString(),
+                'update_time': nowMs(),
+              },
               where: 'id=?',
               whereArgs: [operationId],
             ),
           );
+          unavailable.remove(id);
+          lastError = '学习资源已删除，部分文件将在下次启动时继续清理。';
         } else {
           await _failOperation(operationId, e);
+          rethrow;
         }
+      } else {
+        rethrow;
       }
-      rethrow;
     } finally {
       try {
         if (!committed && blockedHere) unavailable.remove(id);
@@ -462,6 +528,8 @@ class Resources extends ChangeNotifier {
           await playback.unblockBook(id).timeout(const Duration(seconds: 5));
       } finally {
         activeBook = null;
+        _operationLease = null;
+        operations.release(lease);
         notifyListeners();
       }
     }
@@ -496,8 +564,8 @@ class Resources extends ChangeNotifier {
     await _cleanFailedStaging(id: id);
     final deletions = await store.db.query(
       'yzc_resource_operation',
-      where: 'textbook_id=? AND action=? AND status=? AND phase=?',
-      whereArgs: [id, 'delete', 'running', 'db_committed'],
+      where: 'textbook_id=? AND action=? AND status=? AND phase IN (?,?)',
+      whereArgs: [id, 'delete', 'running', 'db_committed', 'cleanup_pending'],
       orderBy: 'create_time,id',
     );
     for (final operation in deletions) {
@@ -542,6 +610,12 @@ class Resources extends ChangeNotifier {
 
   Future<void> download(String id) async {
     if (activeBook != null) throw StateError('请等待当前内容任务完成');
+    final lease = operations.acquire(
+      ResourceOperationKind.textbookInstall,
+      id,
+      '学习资源下载',
+    );
+    _operationLease = lease;
     final task = ResourceTask();
     _task = task;
     lastInstallSummary = null;
@@ -696,6 +770,15 @@ class Resources extends ChangeNotifier {
       descriptor['id'] = previousDescriptors.isEmpty
           ? store.newId()
           : previousDescriptors.single['id'];
+      report('space', null, '正在检查安装所需空间');
+      final sourceDatabaseBytes = await File(
+        '$staging/extracted/$folder/data.sqlite',
+      ).length();
+      await transfer.ensureCapacity(
+        sourceDatabaseBytes * 2 + ResourceTransfer.reserve,
+        task,
+        'install',
+      );
       await _phase(jobId, 'prepared');
       final playback = IosLessonPlayback.instance;
       for (final book in {id, ...displacedBooks}) {
@@ -723,10 +806,9 @@ class Resources extends ChangeNotifier {
           await _moveResourceEntity(targetPath, backup);
           await _excludeDownloadsFromBackup();
         }
-        await _copyAudio(
-          Directory('$staging/extracted/$folder/mp3'),
-          Directory(targetPath),
-        );
+        await _moveResourceEntity('$staging/extracted/$folder/mp3', targetPath);
+        await _excludeDownloadsFromBackup();
+        report('sync', .6, '学习资源已就位');
         await _checkpoint('media-staged');
         await store.db.update(
           'yzc_resource_job',
@@ -897,7 +979,7 @@ class Resources extends ChangeNotifier {
           // The callback is about to hand COMMIT to SQLite. Cancellation after
           // this point cannot safely undo that commit, so close its UI window.
           task.finish();
-          report('commit', null, '正在保存安装结果，可返回其他页面');
+          report('commit', null, '正在保存安装结果');
         });
       });
       committed = true;
@@ -905,12 +987,29 @@ class Resources extends ChangeNotifier {
       _task = null;
       await sourceDatabase.close();
       source = null;
-      unavailable.remove(id);
-      await playback.unblockBook(id).timeout(const Duration(seconds: 5));
-      blockedBooks.remove(id);
+      var activationPending = false;
+      try {
+        report('activation', null, '正在启用学习资源');
+        await playback.unblockBook(id).timeout(const Duration(seconds: 5));
+        unavailable.remove(id);
+        blockedBooks.remove(id);
+      } catch (activationError, activationStack) {
+        activationPending = true;
+        unavailable.add(id);
+        lastInstallSummary = '内容已安装，请重新打开 App 完成启用';
+        await _bestEffort(() => _phase(jobId, 'activation_pending'));
+        SystemErrors.record(
+          activationError,
+          activationStack,
+          module: 'textbook',
+          operation: '启用已安装内容',
+          context: {'textbook_id': id, 'job_id': jobId},
+        );
+      }
       try {
         await onCheckpoint?.call('cleanup');
-        await _cleanup(job);
+        await _cleanupFiles(job);
+        if (!activationPending) await _phase(jobId, 'done');
       } catch (cleanupError, cleanupStack) {
         SystemErrors.record(
           cleanupError,
@@ -919,7 +1018,12 @@ class Resources extends ChangeNotifier {
           operation: '内容恢复与清理',
           context: {'textbook_id': activeBook, 'stage': stage},
         );
-        await _bestEffort(() => _phase(jobId, 'cleanup_pending'));
+        await _bestEffort(
+          () => _phase(
+            jobId,
+            activationPending ? 'activation_pending' : 'cleanup_pending',
+          ),
+        );
       }
       if (previousFolder != null &&
           previousFolder.isNotEmpty &&
@@ -936,7 +1040,13 @@ class Resources extends ChangeNotifier {
           );
         }
       }
-      report('sync', 1, '安装完成（${validation.summary}）');
+      report(
+        activationPending ? 'activation' : 'sync',
+        activationPending ? null : 1,
+        activationPending
+            ? '内容已安装，请重新打开 App 完成启用'
+            : '安装完成（${validation.summary}）',
+      );
     } catch (e, stack) {
       lastCancelled = e is ResourceCancelled;
       if (!committed) {
@@ -1016,6 +1126,8 @@ class Resources extends ChangeNotifier {
       stage = '';
       progress = null;
       detail = '';
+      _operationLease = null;
+      operations.release(lease);
       notifyListeners();
     }
   }
@@ -1034,12 +1146,16 @@ class Resources extends ChangeNotifier {
   }
 
   Future<void> _phase(String id, String phase) => store.write(() async {
-    await store.db.update(
+    if (!resourceJobPhases.contains(phase)) {
+      throw StateError('资源任务阶段无效');
+    }
+    final changed = await store.db.update(
       'yzc_resource_job',
       {'phase': phase, 'update_time': nowMs()},
       where: 'id=?',
       whereArgs: [id],
     );
+    if (changed != 1) throw StateError('资源任务状态不存在');
   });
   Future<void> _extract(String zip, String destination, String folder) async {
     final password = await (_password ?? ResourceConfig.restorePassword)()
@@ -1399,45 +1515,6 @@ class Resources extends ChangeNotifier {
     String id,
     String folder,
   ) => _validate(source, id, folder);
-  Future<void> _copyAudio(Directory from, Directory to) async {
-    final files = await from
-        .list()
-        .where((f) => f is File)
-        .cast<File>()
-        .toList();
-    int total = 0, copied = 0;
-    for (final file in files) {
-      total += await file.length();
-    }
-    final capacity = await transfer.capacity();
-    _task?.check();
-    if (capacity != null && capacity < total + 128 * 1024 * 1024)
-      throw StateError('同步学习资源的空间不足');
-    await to.create(recursive: true);
-    await _excludeDownloadsFromBackup();
-    for (final file in files) {
-      _task?.check();
-      final output = await File('${to.path}/${file.uri.pathSegments.last}')
-          .open(mode: FileMode.write);
-      try {
-        await for (final bytes in file.openRead()) {
-          _task?.check();
-          await output.writeFrom(bytes);
-          copied += bytes.length;
-          report(
-            'sync',
-            total == 0 ? .6 : .6 * copied / total,
-            '复制学习资源 $copied/$total 字节',
-          );
-        }
-        await output.flush();
-      } finally {
-        await output.close();
-      }
-    }
-    report('sync', .6, '学习资源已就位');
-  }
-
   Future<void> _excludeDownloadsFromBackup() async {
     if (Platform.isIOS) {
       await const MethodChannel('yuzhichu/device')
@@ -1482,7 +1559,7 @@ class Resources extends ChangeNotifier {
     );
     for (final operation in operations) {
       if (operation['action'] == 'delete' &&
-          operation['phase'] == 'db_committed') {
+          ['db_committed', 'cleanup_pending'].contains(operation['phase'])) {
         final id = textOf(operation, 'textbook_id');
         try {
           await _finishDelete(operation);
@@ -1497,18 +1574,24 @@ class Resources extends ChangeNotifier {
             operation: '恢复内容删除',
             context: {'textbook_id': id, 'operation_id': operation['id']},
           );
-          unavailable.add(id);
+          unavailable.remove(id);
           await store.write(
             () => store.db.update(
               'yzc_resource_operation',
-              {'error': e.toString(), 'update_time': nowMs()},
+              {
+                'phase': 'cleanup_pending',
+                'error': e.toString(),
+                'update_time': nowMs(),
+              },
               where: 'id=?',
               whereArgs: [operation['id']],
             ),
           );
-          await IosLessonPlayback.instance
-              .blockBook(id)
-              .timeout(const Duration(seconds: 5));
+          await _bestEffort(
+            () => IosLessonPlayback.instance
+                .unblockBook(id)
+                .timeout(const Duration(seconds: 5)),
+          );
         }
       } else {
         await _bestEffort(
@@ -1533,9 +1616,11 @@ class Resources extends ChangeNotifier {
           ),
         );
         unavailable.add(id);
-        await IosLessonPlayback.instance
-            .blockBook(id)
-            .timeout(const Duration(seconds: 5));
+        await _bestEffort(
+          () => IosLessonPlayback.instance
+              .blockBook(id)
+              .timeout(const Duration(seconds: 5)),
+        );
       }
     }
   }
@@ -1551,6 +1636,24 @@ class Resources extends ChangeNotifier {
         throw StateError('新版音频丢失，请重新下载');
       }
       try {
+        await IosLessonPlayback.instance
+            .unblockBook(id)
+            .timeout(const Duration(seconds: 5));
+      } catch (activationError, activationStack) {
+        unavailable.add(id);
+        await _bestEffort(
+          () => _phase(textOf(job, 'id'), 'activation_pending'),
+        );
+        SystemErrors.record(
+          activationError,
+          activationStack,
+          module: 'textbook',
+          operation: '恢复内容启用',
+          context: {'textbook_id': id, 'job_id': job['id']},
+        );
+        return;
+      }
+      try {
         await onCheckpoint?.call('cleanup');
         await _cleanup(job);
       } catch (cleanupError, cleanupStack) {
@@ -1564,14 +1667,13 @@ class Resources extends ChangeNotifier {
         await _bestEffort(() => _phase(textOf(job, 'id'), 'cleanup_pending'));
       }
       unavailable.remove(id);
-      await _bestEffort(
-        () => IosLessonPlayback.instance
-            .unblockBook(id)
-            .timeout(const Duration(seconds: 5)),
-      );
       return;
     }
     final phase = textOf(job, 'phase');
+    if (!resourceJobPhases.contains(phase)) {
+      unavailable.add(id);
+      throw StateError('资源任务阶段无效，未自动修改资源文件');
+    }
     if (!['download', 'prepared'].contains(phase)) {
       final targetPath = '${store.root.path}/resources/$folder/mp3';
       final backupPath = textOf(job, 'backup');
@@ -1715,10 +1817,14 @@ class Resources extends ChangeNotifier {
   }
 
   Future<void> _cleanup(RowData job) async {
+    await _cleanupFiles(job);
+    await _phase(textOf(job, 'id'), 'done');
+  }
+
+  Future<void> _cleanupFiles(RowData job) async {
     for (final path in [textOf(job, 'backup'), textOf(job, 'staging')]) {
       if (await _resourceEntityExists(path)) await _deleteResourceEntity(path);
     }
-    await _phase(textOf(job, 'id'), 'done');
   }
 
   Future<void> _deleteFolderIfUnused(String folder) async {
