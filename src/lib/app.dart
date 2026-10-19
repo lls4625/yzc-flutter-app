@@ -15,6 +15,7 @@ import 'resource_transfer.dart';
 import 'ios_lesson_playback.dart';
 import 'startup_network.dart';
 import 'privacy_policy_page.dart';
+import 'content_copyright_page.dart';
 import 'ui.dart';
 import 'ai_question.dart';
 import 'practice_question_body.dart';
@@ -2282,14 +2283,15 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         context,
         icon: Icons.copyright_outlined,
         title: '内容与版权',
-        subtitle: '内容内容来源于网络资源，如有问题请联系作者。',
+        subtitle: '查看内容、语音、图片与版权说明',
+        onTap: () => openPage(context, const ContentCopyrightPage()),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.mail_outline,
         title: '关于',
-        subtitle: '联系我们',
+        subtitle: 'QQ交流群：1103815459',
         onTap: () => openPage(context, AppInformationPage(app)),
       ),
       const SectionTitle('资源包'),
@@ -2478,7 +2480,7 @@ class AppInformationPage extends StatelessWidget {
                     children: [
                       Text('联系我们', style: theme.textTheme.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 20),
-                      SelectableText('32661267@qq.com', style: theme.textTheme.bodyLarge?.copyWith(
+                      SelectableText('QQ交流群：1103815459', style: theme.textTheme.bodyLarge?.copyWith(
                         color: dark ? const Color(0xFF70B5FF) : const Color(0xFF007AFF))),
                     ],
                   )),

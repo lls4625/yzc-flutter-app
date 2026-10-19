@@ -27,6 +27,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/legal/privacy_policy.txt
+    - assets/legal/content_copyright.txt
     - assets/licenses/liquid_glass_widgets.txt
     - assets/database/init.sql
     - assets/branding/app-icon.png
