@@ -2272,15 +2272,6 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
       const SizedBox(height: 10),
       _settingCard(
         context,
-        icon: Icons.info_outline,
-        title: '语之初 ${app.appVersionLabel}',
-        subtitle: '语言学习初始的地方',
-        showChevron: false,
-        onTap: _onVersionTap,
-      ),
-      const SizedBox(height: 10),
-      _settingCard(
-        context,
         icon: Icons.copyright_outlined,
         title: '内容与版权',
         subtitle: '查看内容、语音、图片与版权说明',
@@ -2293,6 +2284,15 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         title: '关于',
         subtitle: 'QQ交流群：1103815459',
         onTap: () => openPage(context, AppInformationPage(app)),
+      ),
+      const SizedBox(height: 10),
+      _settingCard(
+        context,
+        icon: Icons.info_outline,
+        title: '语之初 ${app.appVersionLabel}',
+        subtitle: '语言学习初始的地方',
+        showChevron: false,
+        onTap: _onVersionTap,
       ),
       const SectionTitle('资源包'),
       _settingCard(
