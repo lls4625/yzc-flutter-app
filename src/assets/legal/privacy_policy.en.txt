@@ -1,0 +1,57 @@
+语之初 Privacy Policy
+
+Operator: 李连顺
+Privacy contact email: 32661267@qq.com
+Effective date: October 20, 2026
+Updated: October 20, 2026
+
+1. Scope
+This policy applies to language learning (including Japanese- and English-related content), kana, Study Room, resource downloads, in-app purchases, and related support services provided by 语之初. It explains how we handle and protect personal information and how you can manage it. Information handled by independent service providers such as Apple is also subject to their own privacy policies.
+
+2. Local learning data and settings
+The app stores content learning progress, study time, answer records, mistakes, review status, last learning position, Study Room practice and test data, and settings such as appearance, font, and daily goals on your device. This enables you to resume learning, view statistics, and retain learning preferences.
+The app automatically generates a local user identifier and installation identifier to associate user data on the device. It also stores device type, operating system name and version, app version, and creation, update, and last-active times for local operation and compatibility troubleshooting. These identifiers are not your real name or Apple account.
+The current client stores this learning data and these settings in a local database or app files. It does not implement uploading learning records to the operator's server or cross-device account synchronization. When changing devices, do not interpret Restore Purchases as restoring learning records.
+
+3. Resource downloads, announcements, and network information
+When checking resource updates, downloading learning and Study Room resources, and synchronizing announcements, the app requests resource catalogs, version information, resource files, and announcement files over HTTPS. The network server receives the IP address necessary to establish the connection, together with information such as the request path, request time, and protocol request headers, to deliver resources and announcements and respond to requests. Whether access and security logs are written to disk, and how long they are retained, depends on the actual service configuration.
+The current client's resource addresses use a Tencent Cloud Object Storage (COS) Shanghai-region domain. The resource request code does not proactively attach local learning records, local user identifiers, or installation identifiers.
+
+4. In-app purchases
+Study Room unlocking and voluntary tips are processed through Apple's in-app purchases. The client uses StoreKit to obtain product information and verify product identifiers, product types, and transaction status. Access to Study Room features is determined by valid entitlement status. Voluntary tips are consumable purchases and cannot be restored as entitlements. Restore Purchases only asks Apple to synchronize existing Study Room purchase entitlements; it does not restore local learning data.
+Apple handles payment accounts and payment details. The app does not ask you to give the operator your Apple account password, bank card number, or payment verification code. The current client verifies StoreKit transactions on the device and does not implement sending transactions to an operator-hosted verification server.
+Apple's information-handling explanation: https://www.apple.com/legal/privacy/data/en/app-store/
+
+5. Diagnostics and user feedback
+The app records operational errors on the device to help locate faults. Records may include the time of the error, session identifier, local user identifier, app and system versions, operating module, error code, error message, call stack, file paths, and operational context. The recording logic masks some credential fields and URL query parameters, but error details should not be treated as information that can be freely made public.
+The current client does not implement automatic diagnostic-log uploads. On the Me page, tap the version information 10 consecutive times, with no more than one second between taps, to open the temporarily displayed System Information Records entry and delete records. During startup maintenance, if there are more than 200 log entries, the app retains the latest 10. This is not a retention-period commitment expressed in days.
+When you choose to contact us by email, we receive the email address, description of the issue, and any screenshots or logs you voluntarily attach. We use these to reply, troubleshoot, and handle requests. Please do not send passwords, payment verification codes, or unrelated personal information.
+
+6. Permissions and device storage
+Resource downloads, announcement synchronization, product queries, and purchase restoration require a network connection. The usable scope of downloaded content depends on the relevant feature and whether its resources are complete. The app uses its own storage space for databases, content, audio, and temporary download files.
+Before downloading and extracting resources, the app checks available device storage to determine whether the operation can be completed. Disk-space information and information derived from it are used only on the device and are not sent off the device.
+The current version does not integrate features that read contacts, precise location, the camera, or the microphone. If future features require permissions, we will explain their purposes and request authorization as required by the system.
+
+7. Third-party processing and information protection
+The current client integrates Apple StoreKit purchase services and the resource and announcement download services described above. No advertising delivery, advertising-identifier access, or cross-app tracking components have been identified. Services provided by the system itself are subject to the corresponding system settings and provider policies.
+We handle information to the minimum extent needed to provide the services and use measures including HTTPS resource transmission, isolation of device app storage, and masking of diagnostic information to reduce risks. Keep your device secure and use the system's security protections; no protective measure can guarantee absolute security.
+If new purposes, methods, or recipients for personal information processing are needed, we will update the explanation and obtain the corresponding consent where applicable law requires it. If a personal information security incident occurs, we will take remedial measures and fulfill notification and reporting duties as required by law.
+
+8. Data retention, clearing, and system backups
+Local learning data and settings generally remain in app storage until you use the relevant clearing feature or delete app data. The scope of each operation is as follows:
+1. Clear Content Learning Records deletes the current user's content-course progress, study time, answer records, review cards, and last learning position. Appearance returns to Follow System, and the daily goal returns to 10 minutes. Downloaded content, user identity, font size, and Study Room records are retained.
+2. Clear J Practice and J Test Records deletes the current user's history, unfinished progress, answer details, mistakes, review records, level settings, and legacy records for these two features. Downloaded question banks, user identity, and data for other Study Room features are retained.
+3. The learning resources and Study Room resources pages manage their respective downloaded resources. Deleting resources should not be regarded as deleting all learning or purchase records. Error logs are cleared separately on the System Information Records page.
+4. The system's Offload App operation usually retains documents and data. Delete App removes the app and its associated local data. Removing only the icon from the Home Screen is not deleting the app. The actual effect is determined by the system's operation instructions.
+5. Device or iCloud backups may retain some app data, depending on your system settings and file backup attributes. Deleting data from the device does not delete existing system backups; manage those through Apple's backup-management options.
+6. Clearing learning records or deleting the app does not delete purchase records managed by Apple, constitute a refund, or revoke valid purchase entitlements. Purchase-record and refund matters can be handled through the channels Apple provides.
+
+9. Your rights and contacting us
+You can view learning records, adjust settings, and delete relevant local data in the app as described above. For personal information we hold, you can email the address in this policy to request access, a copy, correction, deletion, withdrawal of consent, or other rights under applicable law.
+To protect information security, we may ask for necessary verification information proportionate to your request. We will handle it promptly in accordance with law or explain why it cannot be handled. For data stored only on your device, we cannot remotely view, export, or delete it, but can provide local operating instructions. Withdrawing consent does not affect processing already performed on the basis of consent before withdrawal. Stopping certain necessary processing may prevent the relevant features from continuing to be provided.
+
+10. Protection of minors
+Minors should use the app under a guardian's guidance. Where personal information processing legally requires a guardian's consent, that consent should be obtained beforehand. Guardians who discover that a minor has inappropriately provided personal information may contact us to request investigation and handling.
+
+11. Policy updates
+Updated policies will appear on Me — Information — Privacy Policy, with the update date. For major changes involving processing purposes, information types, processing methods, or user rights, we will notify you through prominent notices or other means as required by law and obtain consent again where necessary.

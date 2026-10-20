@@ -1,5 +1,8 @@
+import 'l10n/l10n.dart';
 import 'system_errors.dart';
+
 import 'package:flutter/material.dart';
+
 import 'glass_ui.dart' show StudyButton;
 import 'ios_lesson_playback.dart';
 
@@ -12,7 +15,8 @@ class PlaybackLifecycle extends StatefulWidget {
   State<PlaybackLifecycle> createState() => _PlaybackLifecycleState();
 }
 
-class _PlaybackLifecycleState extends State<PlaybackLifecycle> with WidgetsBindingObserver {
+class _PlaybackLifecycleState extends State<PlaybackLifecycle>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -24,7 +28,13 @@ class _PlaybackLifecycleState extends State<PlaybackLifecycle> with WidgetsBindi
     try {
       await IosLessonPlayback.instance.refresh();
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'audio', operation: '播放控制', context: {'source': 'playback_scaffold.dart'});
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'audio',
+        operation: '播放控制',
+        context: {'source': 'playback_scaffold.dart'},
+      );
       // Preserve the last native state; stopping remains available for retry.
     }
   }
@@ -46,9 +56,16 @@ class _PlaybackLifecycleState extends State<PlaybackLifecycle> with WidgetsBindi
 
 /// Reserves space above each page's navigation or actions, without an overlay.
 class PlaybackScaffold extends StatelessWidget {
-  const PlaybackScaffold({super.key, this.appBar, this.body, this.backgroundColor,
-    this.bottomNavigationBar, this.floatingActionButton,
-    this.floatingActionButtonLocation, this.controlledLesson});
+  const PlaybackScaffold({
+    super.key,
+    this.appBar,
+    this.body,
+    this.backgroundColor,
+    this.bottomNavigationBar,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
+    this.controlledLesson,
+  });
 
   final PreferredSizeWidget? appBar;
   final Widget? body, bottomNavigationBar, floatingActionButton;
@@ -59,28 +76,37 @@ class PlaybackScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = IosLessonPlayback.instance;
-    return AnimatedBuilder(animation: playback, builder: (context, _) {
-      final show = playback.active &&
-        !(playback.batch && playback.lesson == controlledLesson);
-      final keyboard = show ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
-      return Scaffold(
-        appBar: appBar,
-        body: body,
-        backgroundColor: backgroundColor,
-        floatingActionButton: keyboard > 0 ? null : floatingActionButton,
-        floatingActionButtonLocation: floatingActionButtonLocation,
-        bottomNavigationBar: !show ? bottomNavigationBar : Padding(
-          padding: EdgeInsets.only(bottom: keyboard),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _PlaybackBar(key: ValueKey(playback.lesson), bottomSafeArea: bottomNavigationBar == null),
-              if (bottomNavigationBar != null) bottomNavigationBar!,
-            ],
-          ),
-        ),
-      );
-    });
+    return AnimatedBuilder(
+      animation: playback,
+      builder: (context, _) {
+        final show =
+            playback.active &&
+            !(playback.batch && playback.lesson == controlledLesson);
+        final keyboard = show ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
+        return Scaffold(
+          appBar: appBar,
+          body: body,
+          backgroundColor: backgroundColor,
+          floatingActionButton: keyboard > 0 ? null : floatingActionButton,
+          floatingActionButtonLocation: floatingActionButtonLocation,
+          bottomNavigationBar: !show
+              ? bottomNavigationBar
+              : Padding(
+                  padding: EdgeInsets.only(bottom: keyboard),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PlaybackBar(
+                        key: ValueKey(playback.lesson),
+                        bottomSafeArea: bottomNavigationBar == null,
+                      ),
+                      if (bottomNavigationBar != null) bottomNavigationBar!,
+                    ],
+                  ),
+                ),
+        );
+      },
+    );
   }
 }
 
@@ -100,7 +126,13 @@ class _PlaybackBarState extends State<_PlaybackBar> {
     try {
       await IosLessonPlayback.instance.stop();
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'audio', operation: '播放控制', context: {'source': 'playback_scaffold.dart'});
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'audio',
+        operation: '播放控制',
+        context: {'source': 'playback_scaffold.dart'},
+      );
       if (mounted) setState(() => _error = '停止失败，请重试');
     }
   }
@@ -110,33 +142,65 @@ class _PlaybackBarState extends State<_PlaybackBar> {
     final playback = IosLessonPlayback.instance;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final status = playback.stopping ? '正在停止…' : playback.paused ? '已暂停'
-      : playback.waiting ? '播放间隔中' : '播放中';
+    final status = playback.stopping
+        ? context.ui('正在停止…')
+        : playback.paused
+        ? context.ui('已暂停')
+        : playback.waiting
+        ? context.ui('播放间隔中')
+        : context.ui('播放中');
     return Material(
       color: colors.surfaceContainerLow,
       child: DecoratedBox(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: colors.outlineVariant))),
-        child: SafeArea(top: false, bottom: widget.bottomSafeArea,
-          child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(children: [
-              Icon(Icons.headphones_rounded, color: colors.primary, size: 22),
-              const SizedBox(width: 12),
-              Expanded(child: Column(mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(playback.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 2),
-                  Text(_error ?? status, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: _error == null ? colors.onSurfaceVariant : colors.error)),
-                ])),
-              const SizedBox(width: 8),
-              StudyButton.text(
-                onPressed: playback.stopping ? null : _stop,
-                style: const ButtonStyle(minimumSize: WidgetStatePropertyAll(Size(88, 48))),
-                child: Text(playback.stopping ? '正在停止' : '停止播放'),
-              ),
-            ]),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
+        ),
+        child: SafeArea(
+          top: false,
+          bottom: widget.bottomSafeArea,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.headphones_rounded, color: colors.primary, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        playback.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        context.ui(_error ?? status),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _error == null
+                              ? colors.onSurfaceVariant
+                              : colors.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StudyButton.text(
+                  onPressed: playback.stopping ? null : _stop,
+                  style: const ButtonStyle(
+                    minimumSize: WidgetStatePropertyAll(Size(88, 48)),
+                  ),
+                  child: Text(
+                    playback.stopping ? context.ui('正在停止') : context.ui('停止播放'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

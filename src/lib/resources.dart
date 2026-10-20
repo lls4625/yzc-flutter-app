@@ -1,3 +1,5 @@
+import 'content_language.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -376,6 +378,7 @@ class Resources extends ChangeNotifier {
         row['sha256'] = null;
         invalidHashes.add(id);
       }
+      row.addAll(ContentLanguage.fromTextbook(row).columns);
       // The server catalog is not an installed textbook. Persist only on install.
       rows[id] = row;
     }
@@ -710,6 +713,7 @@ class Resources extends ChangeNotifier {
           sourceDatabase,
           id,
           '$staging/extracted/$folder',
+          catalog: remoteBook,
         );
       } on FormatException catch (e, stack) {
         SystemErrors.record(
@@ -869,6 +873,7 @@ class Resources extends ChangeNotifier {
                     key == 'resource_file' ||
                     key == 'sha256',
               );
+          book.addAll(ContentLanguage.fromTextbook(book).columns);
           final bookChanged = await tx.update(
             'yzc_textbook',
             book,
@@ -876,10 +881,12 @@ class Resources extends ChangeNotifier {
             whereArgs: [id],
           );
           if (bookChanged == 0) await tx.insert('yzc_textbook', book);
-          // The current server catalog is authoritative for every matching
-          // textbook field. Keep only the installed textbook's primary key.
+          // Catalog display/download fields update only at commit. Validated
+          // package identity is authoritative for the two language columns.
           final publishedBook = Map<String, Object?>.from(remoteBook)
-            ..remove('id');
+            ..remove('id')
+            ..remove('source_language')
+            ..remove('explanation_language');
           await tx.update(
             'yzc_textbook',
             publishedBook,
@@ -1174,8 +1181,9 @@ class Resources extends ChangeNotifier {
   Future<TextbookValidationResult> _validate(
     Database source,
     String id,
-    String folder,
-  ) async {
+    String folder, {
+    RowData? catalog,
+  }) async {
     final issues = <ResourceContentIssue>[];
     final skippedRows = <String, Set<String>>{};
     void isolate(String table, Object? id, String message) {
@@ -1216,7 +1224,12 @@ class Resources extends ChangeNotifier {
       final local = await store.db.rawQuery('PRAGMA table_info($table)');
       // Download metadata belongs to the app/server, and can be absent in old ZIPs.
       final metadata = table == 'yzc_textbook'
-          ? {'resource_file', 'sha256'}
+          ? {
+              'resource_file',
+              'sha256',
+              'source_language',
+              'explanation_language',
+            }
           : <String>{};
       final actualContent = actual
           .where((column) => !metadata.contains(column['name']))
@@ -1245,6 +1258,23 @@ class Resources extends ChangeNotifier {
     final books = await source.query('yzc_textbook');
     if (books.length != 1 || books.single['id'] != id)
       throw const FormatException('包内内容 ID 不匹配');
+    final language = ContentLanguage.fromTextbook(books.single);
+    if (catalog != null)
+      language.requireSame(ContentLanguage.fromTextbook(catalog));
+    final installed = await store.db.query(
+      'yzc_textbook',
+      where: 'id=?',
+      whereArgs: [id],
+    );
+    if (installed.isNotEmpty) {
+      final previousLanguage = ContentLanguage.tryFromTextbook(
+        installed.single,
+      );
+      // A corrupt/unmarked old row must remain repairable by an explicitly
+      // marked validated package. A valid installed identity cannot change.
+      if (previousLanguage != null) language.requireSame(previousLanguage);
+    }
+
     for (final table in tables) {
       final wrong =
           Sqflite.firstIntValue(
@@ -1513,8 +1543,9 @@ class Resources extends ChangeNotifier {
   Future<TextbookValidationResult> validateForTesting(
     Database source,
     String id,
-    String folder,
-  ) => _validate(source, id, folder);
+    String folder, {
+    RowData? catalog,
+  }) => _validate(source, id, folder, catalog: catalog);
   Future<void> _excludeDownloadsFromBackup() async {
     if (Platform.isIOS) {
       await const MethodChannel('yuzhichu/device')

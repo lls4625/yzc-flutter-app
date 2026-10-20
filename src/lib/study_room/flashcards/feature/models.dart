@@ -1,3 +1,5 @@
+import '../../../content_language.dart';
+
 import 'dart:convert';
 
 enum FlashDirection {
@@ -23,7 +25,10 @@ class FlashWord {
     required this.chinese,
     required this.pos,
     required this.source,
+    required this.sourceLanguage,
+    required this.explanationLanguage,
   });
+  final String sourceLanguage, explanationLanguage;
   final String bookId, lessonId, id, japanese, kana, chinese, pos, source;
   String get key => jsonEncode([bookId, lessonId, id]);
   Map<String, Object?> toJson() => {
@@ -35,6 +40,8 @@ class FlashWord {
     'chinese': chinese,
     'pos': pos,
     'source': source,
+    'source_language': sourceLanguage,
+    'explanation_language': explanationLanguage,
   };
   factory FlashWord.fromJson(Map<String, dynamic> row) => FlashWord(
     bookId: row['book'] as String,
@@ -45,6 +52,12 @@ class FlashWord {
     chinese: row['chinese'] as String,
     pos: row['pos'] as String,
     source: row['source'] as String,
+    sourceLanguage: ContentLanguage.fromTextbook({...row, 'id': row['book']})
+        .sourceLanguage,
+    explanationLanguage: ContentLanguage.fromTextbook({
+      ...row,
+      'id': row['book'],
+    }).explanationLanguage,
   );
 }
 

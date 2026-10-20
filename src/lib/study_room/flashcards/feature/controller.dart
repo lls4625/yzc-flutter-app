@@ -1,5 +1,6 @@
 import '../../../user_error.dart';
 import '../../../system_errors.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -12,12 +13,14 @@ import 'repository.dart';
 enum FlashStage { setup, review, result }
 
 class FlashController extends ChangeNotifier {
-  FlashController(this.host)
-    : store = FlashDatabaseStore(host),
+  FlashController(this.host, {String Function()? albumTitle})
+    : _albumTitle = albumTitle ?? (() => 'Flashcards'),
+      store = FlashDatabaseStore(host),
       catalog = FlashCatalog(host) {
     host.changes.addListener(_hostChanged);
   }
   final StudyRoomHost host;
+  final String Function() _albumTitle;
   final FlashStore store;
   final FlashCatalog catalog;
   bool busy = false, flipped = false, _opened = false, _disposed = false;
@@ -49,11 +52,9 @@ class FlashController extends ChangeNotifier {
       !resourceBlocked;
   bool get permitted => host.isUnlocked() && !host.isPurchaseSaving();
   bool get hasDraft => session != null && !session!.complete;
-  bool get resourceBlocked =>
-      (stage == FlashStage.setup
-          ? bookId.isNotEmpty && host.isBookUnavailable(bookId)
-          : session != null &&
-                host.isBookUnavailable(session!.words.first.bookId));
+  bool get resourceBlocked => (stage == FlashStage.setup
+      ? bookId.isNotEmpty && host.isBookUnavailable(bookId)
+      : session != null && host.isBookUnavailable(session!.words.first.bookId));
   List<FlashWord> _buildQueue() {
     final items = words
         .where((w) => !onlyWeak || mastery[w.key]?.known == false)
@@ -67,7 +68,8 @@ class FlashController extends ChangeNotifier {
   int _audioRequest = 0;
   bool _audioStarting = false;
   bool get pronunciationPlaying =>
-      stage == FlashStage.review && session != null &&
+      stage == FlashStage.review &&
+      session != null &&
       _audio.lesson == _audioIdentity &&
       _audio.playingId == session!.words[reviewIndex].key &&
       _audio.isPlaying;
@@ -98,8 +100,8 @@ class FlashController extends ChangeNotifier {
         return;
       await _audio.start({
         'lesson': _audioIdentity,
-        'title': '${word.japanese} · 闪卡复习',
-        'albumTitle': '闪卡复习',
+        'title': '${word.japanese} · ${_albumTitle()}',
+        'albumTitle': _albumTitle(),
         'words': true,
         'batch': false,
         'speed': 1.0,
@@ -117,7 +119,13 @@ class FlashController extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'flashcards', operation: '闪卡操作', context: {'source': 'study_room/flashcards/feature/controller.dart'});
+      SystemErrors.record(
+        e,
+        caughtStack,
+        module: 'flashcards',
+        operation: '闪卡操作',
+        context: {'source': 'study_room/flashcards/feature/controller.dart'},
+      );
       if (!_disposed && request == _audioRequest) {
         error = userError(e, fallback: '单词读音播放失败，请重试');
         notifyListeners();
@@ -132,7 +140,12 @@ class FlashController extends ChangeNotifier {
     if (_audio.lesson == _audioIdentity) {
       unawaited(
         _audio.stop().catchError((Object e, StackTrace stack) {
-          SystemErrors.record(e, stack, module: 'flashcards', operation: '停止读音');
+          SystemErrors.record(
+            e,
+            stack,
+            module: 'flashcards',
+            operation: '停止读音',
+          );
           debugPrint('Flashcard audio stop failed: $e');
         }),
       );
@@ -157,7 +170,13 @@ class FlashController extends ChangeNotifier {
       try {
         await action();
       } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'flashcards', operation: '闪卡操作', context: {'source': 'study_room/flashcards/feature/controller.dart'});
+        SystemErrors.record(
+          e,
+          caughtStack,
+          module: 'flashcards',
+          operation: '闪卡操作',
+          context: {'source': 'study_room/flashcards/feature/controller.dart'},
+        );
         error = userError(e, fallback: '闪卡数据处理失败，请重试；已有记录不会自动删除');
       } finally {
         busy = false;
@@ -297,7 +316,7 @@ class FlashController extends ChangeNotifier {
   Future<void> _validateSession() async {
     _requirePermission();
     if (await catalog.version(session!.words.first.bookId) !=
-            session!.version) {
+        session!.version) {
       throw StateError('内容版本已变化，请返回设置放弃草稿，重新选择课程');
     }
   }
@@ -410,7 +429,13 @@ class FlashController extends ChangeNotifier {
     try {
       await store.close();
     } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'flashcards', operation: '闪卡操作', context: {'source': 'study_room/flashcards/feature/controller.dart'});
+      SystemErrors.record(
+        e,
+        caughtStack,
+        module: 'flashcards',
+        operation: '闪卡操作',
+        context: {'source': 'study_room/flashcards/feature/controller.dart'},
+      );
       debugPrint('Flashcard storage close failed: $e');
     }
   }

@@ -41,11 +41,18 @@ class StudyRoomPage extends StatelessWidget {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        '為せば成る',
+                        host.learningTarget == 'en'
+                            ? 'Every Step Counts'
+                            : '為せば成る',
                         style: TextStyle(
                           fontFamily: 'Hiragino Mincho ProN',
-                          locale: const Locale('ja', 'JP'),
-                          fontFamilyFallback: const ['Hiragino Mincho Pro', 'serif'],
+                          locale: host.learningTarget == 'en'
+                              ? const Locale('en')
+                              : const Locale('ja', 'JP'),
+                          fontFamilyFallback: const [
+                            'Hiragino Mincho Pro',
+                            'serif',
+                          ],
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 3,
@@ -68,14 +75,23 @@ class StudyRoomPage extends StatelessWidget {
                         width: 24,
                         child: StudyDivider(color: ink.withValues(alpha: .35)),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          '今日も、一歩',
-                          style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
-                            fontSize: 11,
-                            letterSpacing: 2,
-                            color: ink.withValues(alpha: .8),
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            host.learningTarget == 'en'
+                                ? 'One small step today.'
+                                : '今日も、一歩',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'Hiragino Sans',
+                              locale: host.learningTarget == 'en'
+                                  ? const Locale('en')
+                                  : const Locale('ja', 'JP'),
+                              fontSize: 11,
+                              letterSpacing: 2,
+                              color: ink.withValues(alpha: .8),
+                            ),
                           ),
                         ),
                       ),

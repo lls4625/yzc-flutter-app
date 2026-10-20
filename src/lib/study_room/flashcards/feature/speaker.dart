@@ -1,3 +1,5 @@
+import '../../../l10n/l10n.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../foundation/native_audio_transport.dart';
@@ -65,7 +67,19 @@ class _FlashcardSpeakerState extends State<FlashcardSpeaker>
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: widget.controller.pronunciationPlaying ? '正在朗读单词' : '点击卡片播放读音',
+    label: widget.controller.pronunciationPlaying
+        ? context.tr(
+            '正在朗读单词',
+            '正在朗讀單字',
+            'Playing word pronunciation',
+            '単語の発音を再生中',
+          )
+        : context.tr(
+            '点击卡片播放读音',
+            '點擊卡片播放讀音',
+            'Tap the card to hear pronunciation',
+            'カードをタップして発音を再生',
+          ),
     child: AnimatedBuilder(
       animation: _animation,
       builder: (context, _) => Icon(

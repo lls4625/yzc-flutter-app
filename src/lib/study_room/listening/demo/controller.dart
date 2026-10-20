@@ -1,3 +1,5 @@
+import '../../demo_localization/ui.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,19 +12,29 @@ import 'models.dart';
 String listeningDemoError(Object? error, {String fallback = '操作失败，请重试'}) =>
     error is StateError ? error.message.toString() : fallback;
 
-Future<void> demoPerform(BuildContext context, Future<void> Function() action) async {
+Future<void> demoPerform(
+  BuildContext context,
+  Future<void> Function() action,
+) async {
   try {
     await action();
   } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-      GlassSnackBar(content: Text(listeningDemoError(e))),
-    );
+    if (context.mounted)
+      ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(
+          content: Builder(
+            builder: (context) => Text(studyUi(context, listeningDemoError(e))),
+          ),
+        ),
+      );
   }
 }
 
 /// In-memory settings and tour commands belonging exclusively to this demo.
 class ListeningDemoController extends ChangeNotifier {
-  ListeningDemoController() { _audio.addListener(_changed); }
+  ListeningDemoController() {
+    _audio.addListener(_changed);
+  }
   final navigator = GlobalKey<NavigatorState>();
   final catalog = ListeningDemoCatalog();
   final _audio = NativeAudioTransport.instance;
@@ -49,14 +61,26 @@ class ListeningDemoController extends ChangeNotifier {
   bool get source => _settings['show_source'] != 0;
   bool get translation => _settings['show_definition'] != 0;
 
-  void _changed() { if (!_disposed) notifyListeners(); }
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
   Future<void> load() => catalog.load();
-  void selectionReady() { ready = true; _changed(); }
-  void reportError(String message) { error = message; _changed(); }
+  void selectionReady() {
+    ready = true;
+    _changed();
+  }
+
+  void reportError(String message) {
+    error = message;
+    _changed();
+  }
+
   Future<void> setting(String key, Object value) async {
     _settings[key] = value;
     _changed();
   }
+
   Future<void> resetDemo() async {
     await stop();
     if (_disposed) return;
@@ -70,6 +94,7 @@ class ListeningDemoController extends ChangeNotifier {
     await resetSelectionAction?.call();
     _changed();
   }
+
   void selectAll() => selectAllAction?.call();
   void demonstrateOrder() => orderAction?.call();
   Future<void> start({int? index}) async {
@@ -81,19 +106,34 @@ class ListeningDemoController extends ChangeNotifier {
     }
     if (playbackError != null) throw StateError(playbackError!);
   }
-  Future<void> setSpeed(double value) async { await speedAction?.call(value); }
-  Future<void> setRepeat(int value) async { await repeatAction?.call(value); }
-  Future<void> setInterval(int value) async { await intervalAction?.call(value); }
+
+  Future<void> setSpeed(double value) async {
+    await speedAction?.call(value);
+  }
+
+  Future<void> setRepeat(int value) async {
+    await repeatAction?.call(value);
+  }
+
+  Future<void> setInterval(int value) async {
+    await intervalAction?.call(value);
+  }
+
   Future<void> stop() async {
     ++playbackGeneration;
     if (owns) await _audio.stop();
   }
+
   @override
   void dispose() {
     _disposed = true;
     foreground = false;
     _audio.removeListener(_changed);
-    unawaited(stop().catchError((Object e) { debugPrint('Demo audio stop failed: $e'); }));
+    unawaited(
+      stop().catchError((Object e) {
+        debugPrint('Demo audio stop failed: $e');
+      }),
+    );
     super.dispose();
   }
 }
@@ -101,15 +141,22 @@ class ListeningDemoController extends ChangeNotifier {
 /// Bundled sample catalog. No database, host or installed-resource access.
 class ListeningDemoCatalog {
   ListeningDemoData? data;
-  Future<void> load() async { data ??= await ListeningDemoData.load(); }
+  Future<void> load() async {
+    data ??= await ListeningDemoData.load();
+  }
+
   Future<List<ListeningDemoRow>> textbooks() async => [data!.book];
   Future<List<ListeningDemoRow>> lessons(String book) async => [data!.lesson];
   Future<String> version(String book) async => 'bundled-listening-demo-v1';
-  Future<List<ListeningDemoRow>> content(String table, String book, String lesson) async =>
-      switch (table) {
-        'yzc_words' => data!.words,
-        'yzc_content' => data!.content,
-        _ => throw ArgumentError('未知样例内容类型'),
-      };
-  Future<String> audioPath(String book, String filename) async => data!.audioPath(filename);
+  Future<List<ListeningDemoRow>> content(
+    String table,
+    String book,
+    String lesson,
+  ) async => switch (table) {
+    'yzc_words' => data!.words,
+    'yzc_content' => data!.content,
+    _ => throw ArgumentError('未知样例内容类型'),
+  };
+  Future<String> audioPath(String book, String filename) async =>
+      data!.audioPath(filename);
 }

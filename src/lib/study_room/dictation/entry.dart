@@ -1,3 +1,5 @@
+import '../../l10n/l10n.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,9 +20,15 @@ class DictationEntry extends StatefulWidget {
 
 class _DictationEntryState extends State<DictationEntry> {
   bool _opening = false;
-  static const title = '听写';
-  static const caption = '把听见的，写下来';
-  static const description = '听清每一个音，写下每一个词，让理解更加扎实。';
+  String get title => context.tr('听写', '聽寫', 'Dictation', 'ディクテーション');
+  String get caption =>
+      context.tr('把听见的，写下来', '把聽見的，寫下來', 'Write what you hear', '聴いた言葉を書き取る');
+  String get description => context.tr(
+    '听清每一个音，写下每一个词，让理解更加扎实。',
+    '聽清每一個音，寫下每一個詞，讓理解更加紮實。',
+    'Listen closely and write each word to deepen your understanding.',
+    '音をしっかり聴き、単語を書き取って理解を深めましょう。',
+  );
   static const icon = Icons.edit_note_rounded;
   static const colors = [Color(0xFF5D718A), Color(0xFF303F58)];
   Future<void> _open({required bool demo}) async {
@@ -30,9 +38,9 @@ class _DictationEntryState extends State<DictationEntry> {
       if (!demo && !await widget.access.ensure(context)) return;
       if (!mounted) return;
       if (demo) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => buildDictationDemo()),
-        );
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => buildDictationDemo()));
       } else {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -64,7 +72,8 @@ class _DictationEntryState extends State<DictationEntry> {
         container: true,
         explicitChildNodes: true,
         button: true,
-        label: '$title，${widget.host.isUnlocked() ? '进入功能' : '查看演示'}',
+        label:
+            '$title，${widget.host.isUnlocked() ? context.tr('进入功能', '進入功能', 'Open feature', '機能を開く') : context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
         onTap: openCard,
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -145,7 +154,7 @@ class _DictationEntryState extends State<DictationEntry> {
                                       style: const TextStyle(
                                         fontFamily: 'Songti SC',
                                         locale: Locale('zh', 'CN'),
-                                        fontFamilyFallback: ['STSong', 'serif'],
+
                                         fontSize: 22,
                                         fontWeight: FontWeight.w600,
                                         color: cream,
@@ -158,8 +167,8 @@ class _DictationEntryState extends State<DictationEntry> {
                                 Semantics(
                                   button: true,
                                   label: widget.host.isUnlocked()
-                                      ? '进入$title'
-                                      : '购买解锁$title',
+                                      ? '${context.tr('进入', '進入', 'Open', '開く')} $title'
+                                      : '${context.tr('购买解锁', '購買解鎖', 'Unlock', '購入して解放')} $title',
                                   onTap: openCornerAction,
                                   child: ExcludeSemantics(
                                     child: GestureDetector(
@@ -215,7 +224,8 @@ class _DictationEntryState extends State<DictationEntry> {
                             const SizedBox(height: 20),
                             Semantics(
                               button: true,
-                              label: '查看$title演示',
+                              label:
+                                  '$title · ${context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
                               onTap: openDemo,
                               child: ExcludeSemantics(
                                 child: GestureDetector(

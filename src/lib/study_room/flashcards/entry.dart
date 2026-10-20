@@ -1,3 +1,5 @@
+import '../../l10n/l10n.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,9 +20,19 @@ class FlashcardsEntry extends StatefulWidget {
 
 class _FlashcardsEntryState extends State<FlashcardsEntry> {
   bool _opening = false;
-  static const title = '闪卡';
-  static const caption = '翻一张，记牢一点。';
-  static const description = '日中双向回忆，集中复习不熟的单词。';
+  String get title => context.tr('闪卡', '單字卡', 'Flashcards', 'フラッシュカード');
+  String get caption => context.tr(
+    '翻一张，记牢一点。',
+    '翻一張，記牢一點。',
+    'One card, one stronger memory.',
+    '1枚めくって、少しずつ定着。',
+  );
+  String get description => context.tr(
+    '原文与释义双向回忆，集中复习不熟的单词。',
+    '原文與釋義雙向回憶，集中複習不熟的單字。',
+    'Recall words and meanings both ways, focusing on unfamiliar words.',
+    '原文と意味の両方向で思い出し、苦手な単語を集中復習。',
+  );
   static const icon = Icons.style_rounded;
   static const colors = [Color(0xFF577263), Color(0xFF304D40)];
   Future<void> _open({required bool demo}) async {
@@ -60,7 +72,8 @@ class _FlashcardsEntryState extends State<FlashcardsEntry> {
         container: true,
         explicitChildNodes: true,
         button: true,
-        label: '$title，${widget.host.isUnlocked() ? '进入功能' : '查看演示'}',
+        label:
+            '$title，${widget.host.isUnlocked() ? context.tr('进入功能', '進入功能', 'Open feature', '機能を開く') : context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
         onTap: openCard,
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -141,7 +154,7 @@ class _FlashcardsEntryState extends State<FlashcardsEntry> {
                                       style: const TextStyle(
                                         fontFamily: 'Songti SC',
                                         locale: Locale('zh', 'CN'),
-                                        fontFamilyFallback: ['STSong', 'serif'],
+
                                         fontSize: 22,
                                         fontWeight: FontWeight.w600,
                                         color: cream,
@@ -154,8 +167,8 @@ class _FlashcardsEntryState extends State<FlashcardsEntry> {
                                 Semantics(
                                   button: true,
                                   label: widget.host.isUnlocked()
-                                      ? '进入$title'
-                                      : '购买解锁$title',
+                                      ? '${context.tr('进入', '進入', 'Open', '開く')} $title'
+                                      : '${context.tr('购买解锁', '購買解鎖', 'Unlock', '購入して解放')} $title',
                                   onTap: openCornerAction,
                                   child: ExcludeSemantics(
                                     child: GestureDetector(
@@ -211,7 +224,8 @@ class _FlashcardsEntryState extends State<FlashcardsEntry> {
                             const SizedBox(height: 20),
                             Semantics(
                               button: true,
-                              label: '查看$title演示',
+                              label:
+                                  '$title · ${context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
                               onTap: openDemo,
                               child: ExcludeSemantics(
                                 child: GestureDetector(

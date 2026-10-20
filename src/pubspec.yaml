@@ -5,6 +5,9 @@ version: 3.1.0
 environment:
   sdk: ^3.13.2
 dependencies:
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   flutter:
     sdk: flutter
   liquid_glass_widgets:
@@ -24,10 +27,10 @@ dev_dependencies:
     sdk: flutter
   sqflite_common_ffi: ^2.3.6
 flutter:
+  generate: true
   uses-material-design: true
   assets:
-    - assets/legal/privacy_policy.txt
-    - assets/legal/content_copyright.txt
+    - assets/legal/
     - assets/licenses/liquid_glass_widgets.txt
     - assets/database/init.sql
     - assets/branding/app-icon.png

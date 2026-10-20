@@ -1,4 +1,6 @@
+import '../../demo_localization/ui.dart';
 import '../../../lesson_presentation.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -22,7 +24,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
   @override
   void initState() {
     super.initState();
-    c = FlashDemoController();
+    c = FlashDemoController(playbackLabel: () => studyUi(context, '闪卡复习'));
     unawaited(c.load());
   }
 
@@ -39,16 +41,16 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
       return await showGlassDialog<bool>(
             context: context,
             builder: (dialogContext) => GlassAlertDialog(
-              title: const Text('未完成的复习'),
-              content: Text(message),
+              title: Text(studyUi(context, '未完成的复习')),
+              content: Text(studyUi(context, message)),
               actions: [
                 StudyButton.text(
                   onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('取消'),
+                  child: Text(studyUi(context, '取消')),
                 ),
                 StudyButton.filled(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('确定'),
+                  child: Text(studyUi(context, '确定')),
                 ),
               ],
             ),
@@ -76,7 +78,10 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
 
   Widget _heading(String text) => Padding(
     padding: const EdgeInsets.only(top: 18, bottom: 10),
-    child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+    child: Text(
+      studyUi(context, text),
+      style: Theme.of(context).textTheme.titleMedium,
+    ),
   );
 
   Widget _optionRow<T>(
@@ -88,7 +93,10 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
     padding: const EdgeInsets.only(top: 12),
     child: Row(
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          studyUi(context, title),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Semantics(
@@ -96,7 +104,10 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
             child: AbsorbPointer(
               absorbing: c.busy,
               child: StudySegments<T>(
-                values: values,
+                values: {
+                  for (final entry in values.entries)
+                    entry.key: studyUi(context, entry.value),
+                },
                 selected: selected,
                 onChanged: (value) {
                   if (!c.busy && value != selected) onChanged(value);
@@ -111,7 +122,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
 
   Widget _message(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Text(text),
+    child: Text(studyUi(context, text)),
   );
 
   Widget _setup() {
@@ -120,7 +131,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Text(_bookTitle),
+          child: Text(studyUi(context, _bookTitle)),
         ),
         Expanded(
           child: LayoutBuilder(
@@ -128,7 +139,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
               final heading =
                   TextPainter(
                     text: TextSpan(
-                      text: '本内容课程 · 点击勾选 / 再次点击取消',
+                      text: studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消'),
                       style: DefaultTextStyle.of(context).style,
                     ),
                     textDirection: Directionality.of(context),
@@ -160,16 +171,21 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          child: Text('本内容课程 · 点击勾选 / 再次点击取消'),
+                          child: Text(
+                            studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消'),
+                          ),
                         ),
                         Expanded(
                           child: c.lessons.isEmpty
                               ? SingleChildScrollView(
                                   padding: const EdgeInsets.all(20),
                                   child: Text(
-                                    c.books.isEmpty
-                                        ? '演示样例暂不可用，请重新播放。'
-                                        : '演示课程暂不可用，请重新播放。',
+                                    studyUi(
+                                      context,
+                                      c.books.isEmpty
+                                          ? '演示样例暂不可用，请重新播放。'
+                                          : '演示课程暂不可用，请重新播放。',
+                                    ),
                                   ),
                                 )
                               : Padding(
@@ -226,7 +242,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                                 lesson['id'].toString(),
                             },
                           ),
-                    child: const Text('全部单词'),
+                    child: Text(studyUi(context, '全部单词')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -235,7 +251,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                     onPressed: c.busy || c.lessonIds.isEmpty
                         ? null
                         : () => c.configure(selectedLessons: <String>{}),
-                    child: const Text('取消选择'),
+                    child: Text(studyUi(context, '取消选择')),
                   ),
                 ),
               ],
@@ -250,9 +266,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
     primary: false,
     padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
     children: [
-      _message(
-        '第1课 · 中国人、日本人\n使用内置样例体验闪卡，演示记录不会影响正式学习。',
-      ),
+      _message('第1课 · 中国人、日本人\n使用内置样例体验闪卡，演示记录不会影响正式学习。'),
       _optionRow<FlashDemoDirection>(
         '回忆方向',
         {
@@ -290,7 +304,10 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '上次：${c.session!.direction.label} · 已完成 ${c.session!.index}/${c.session!.words.length}',
+                  studyUi(
+                    context,
+                    '上次：${studyUi(context, c.session!.direction.label)} · 已完成 ${c.session!.index}/${c.session!.words.length}',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -298,7 +315,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                     Expanded(
                       child: StudyButton.text(
                         onPressed: c.busy ? null : c.resume,
-                        child: const Text('继续上次'),
+                        child: Text(studyUi(context, '继续上次')),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -312,7 +329,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                                   await c.discard();
                                 }
                               },
-                        child: const Text('放弃草稿'),
+                        child: Text(studyUi(context, '放弃草稿')),
                       ),
                     ),
                   ],
@@ -329,10 +346,10 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Text(c.error!)),
+                Expanded(child: Text(studyUi(context, c.error!))),
                 const SizedBox(width: 12),
                 StudyIconButton(
-                  tooltip: '关闭提示',
+                  tooltip: studyUi(context, '关闭提示'),
                   onPressed: c.dismissError,
                   icon: const Icon(Icons.close_rounded),
                 ),
@@ -367,14 +384,13 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
             const SizedBox(height: 16),
             Semantics(
               button: true,
-              label: '点击播放单词读音',
+              label: studyUi(context, '点击播放单词读音'),
               child: StudyCard(
                 key: _demoTargets.card,
                 color: colors.surfaceContainerLow,
                 clipBehavior: Clip.antiAlias,
                 child: StudyInkWell(
-                  onTap:
-                      c.busy || c.advancing
+                  onTap: c.busy || c.advancing
                       ? null
                       : () => unawaited(c.playPronunciation()),
                   child: ConstrainedBox(
@@ -388,11 +404,14 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            c.flipped
-                                ? '本词条答案'
-                                : jp
-                                ? '想一想中文意思'
-                                : '想一想日语怎么说',
+                            studyUi(
+                              context,
+                              c.flipped
+                                  ? '本词条答案'
+                                  : jp
+                                  ? '想一想中文意思'
+                                  : '想一想日语怎么说',
+                            ),
                           ),
                           const SizedBox(height: 22),
                           Text(
@@ -400,8 +419,12 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.headlineLarge
                                 ?.copyWith(
-                                  fontFamily: (c.flipped ? !jp : jp) ? 'Hiragino Mincho ProN' : 'Songti SC',
-                                  locale: (c.flipped ? !jp : jp) ? const Locale('ja', 'JP') : const Locale('zh', 'CN'),
+                                  fontFamily: (c.flipped ? !jp : jp)
+                                      ? 'Hiragino Mincho ProN'
+                                      : 'Songti SC',
+                                  locale: (c.flipped ? !jp : jp)
+                                      ? const Locale('ja', 'JP')
+                                      : const Locale('zh', 'CN'),
                                   height: 1.5,
                                 ),
                           ),
@@ -409,13 +432,27 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                               word.kana.isNotEmpty &&
                               word.kana != text) ...[
                             const SizedBox(height: 12),
-                            Text(word.kana, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP')), textAlign: TextAlign.center),
+                            Text(
+                              word.kana,
+                              style: const TextStyle(
+                                fontFamily: 'Hiragino Sans',
+                                locale: Locale('ja', 'JP'),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                           if (c.flipped) ...[
                             const SizedBox(height: 12),
                             Text(
                               jp ? word.japanese : word.chinese,
-                              style: TextStyle(fontFamily: jp ? 'Hiragino Sans' : 'PingFang SC', locale: jp ? const Locale('ja', 'JP') : const Locale('zh', 'CN')),
+                              style: TextStyle(
+                                fontFamily: jp
+                                    ? 'Hiragino Sans'
+                                    : 'PingFang SC',
+                                locale: jp
+                                    ? const Locale('ja', 'JP')
+                                    : const Locale('zh', 'CN'),
+                              ),
                               textAlign: TextAlign.center,
                             ),
                             if (word.pos.isNotEmpty)
@@ -440,7 +477,9 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
             child: Row(
               children: [
-                Expanded(child: Text(session.direction.label)),
+                Expanded(
+                  child: Text(studyUi(context, session.direction.label)),
+                ),
                 Text('${c.reviewIndex + 1} / ${session.words.length}'),
               ],
             ),
@@ -465,8 +504,8 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Semantics(
                         liveRegion: true,
-                        child: const Text(
-                          '已标记不熟，记住答案后继续。',
+                        child: Text(
+                          studyUi(context, '已标记不熟，记住答案后继续。'),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -474,13 +513,17 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                     StudyButton.filled(
                       key: _demoTargets.next,
                       onPressed: c.busy ? null : c.next,
-                      child: Text(session.complete ? '查看本轮结果' : '下一张'),
+                      child: Text(
+                        studyUi(context, session.complete ? '查看本轮结果' : '下一张'),
+                      ),
                     ),
                   ] else ...[
                     StudyButton.outlined(
                       key: _demoTargets.flip,
                       onPressed: c.busy || c.advancing ? null : c.flip,
-                      child: Text(c.flipped ? '回到正面' : '查看答案'),
+                      child: Text(
+                        studyUi(context, c.flipped ? '回到正面' : '查看答案'),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -489,7 +532,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                           child: StudyButton.outlined(
                             key: _demoTargets.weak,
                             onPressed: !c.canRate ? null : () => c.mark(false),
-                            child: const Text('不熟'),
+                            child: Text(studyUi(context, '不熟')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -497,7 +540,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                           child: StudyButton.filled(
                             key: _demoTargets.known,
                             onPressed: !c.canRate ? null : () => c.mark(true),
-                            child: const Text('认识'),
+                            child: Text(studyUi(context, '认识')),
                           ),
                         ),
                       ],
@@ -506,7 +549,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                   const SizedBox(height: 20),
                   StudyButton.text(
                     onPressed: c.busy ? null : c.setup,
-                    child: const Text('暂存退出'),
+                    child: Text(studyUi(context, '暂存退出')),
                   ),
                 ],
               ),
@@ -529,11 +572,13 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
     final session = c.session!;
     final children = <Widget>[
       Text(
-        '这一轮完成了',
+        studyUi(context, '这一轮完成了'),
         key: _demoTargets.result,
         style: Theme.of(context).textTheme.headlineMedium,
       ),
-      _message('${session.direction.label} · 复习 ${session.words.length} 词'),
+      _message(
+        '${studyUi(context, session.direction.label)} · 复习 ${session.words.length} 词',
+      ),
       _heading(
         '认识 ${session.words.length - session.weak.length}　／　不熟 ${session.weak.length}',
       ),
@@ -546,16 +591,14 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
       if (session.weak.isNotEmpty) ...[
         StudyButton.filled(
           key: _demoTargets.retry,
-          onPressed: c.busy
-              ? null
-              : c.retryWeak,
-          child: Text('再练本轮不熟 · ${session.weak.length}词'),
+          onPressed: c.busy ? null : c.retryWeak,
+          child: Text(studyUi(context, '再练本轮不熟 · ${session.weak.length}词')),
         ),
         const SizedBox(height: 8),
       ],
       StudyButton.text(
         onPressed: c.busy ? null : c.setup,
-        child: const Text('返回复习设置'),
+        child: Text(studyUi(context, '返回复习设置')),
       ),
     ];
     return SingleChildScrollView(
@@ -570,11 +613,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
   @override
   Widget build(BuildContext context) {
     final page = _buildPage();
-    return FlashDemoGuide(
-      controller: c,
-      targets: _demoTargets,
-      child: page,
-    );
+    return FlashDemoGuide(controller: c, targets: _demoTargets, child: page);
   }
 
   Widget _buildPage() => AnimatedBuilder(
@@ -583,12 +622,12 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
       canPop: true,
       child: Scaffold(
         appBar: StudyAppBar(
-          title: const Text('闪卡复习 · 演示'),
+          title: Text(studyUi(context, '闪卡复习 · 演示')),
           actions: [
             if (c.stage == FlashDemoStage.setup)
               StudyIconButton(
                 key: _demoTargets.start,
-                tooltip: '开始复习',
+                tooltip: studyUi(context, '开始复习'),
                 onPressed: c.busy ? null : _start,
                 icon: const Icon(Icons.play_circle_outline_rounded),
               ),
@@ -609,7 +648,7 @@ class _FlashcardsDemoPageState extends State<FlashcardsDemoPage> {
                       child: Semantics(
                         liveRegion: true,
                         child: Text(
-                          c.error!,
+                          studyUi(context, c.error!),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                           ),

@@ -21,7 +21,7 @@ final class StudyRoomPurchase {
     channel.setMethodCallHandler { [weak self] call, result in
       Task { @MainActor [weak self] in
         guard let self = self else {
-          result(FlutterError(code: "unavailable", message: "购买服务暂不可用", details: nil))
+          result(FlutterError(code: "unavailable", message: "unavailable", details: nil))
           return
         }
         await self.handle(call, result: result)
@@ -49,7 +49,7 @@ final class StudyRoomPurchase {
       "canPay": AppStore.canMakePayments,
     ]
     if let product = product { state["price"] = product.displayPrice }
-    if let message = message { state["message"] = message }
+    if let message = message { state["messageCode"] = message }
     return state
   }
 
@@ -88,7 +88,7 @@ final class StudyRoomPurchase {
     }
     unlocked = entitled
     if verificationFailed && !entitled {
-      message = "购买验证失败，请稍后恢复购买"
+      message = "verification"
     }
     publish()
   }
@@ -105,13 +105,13 @@ final class StudyRoomPurchase {
         await transaction.finish()
       } else {
         // Leave undelivered purchases unfinished so StoreKit can redeliver them.
-        if message == nil { message = "购买权益尚未同步，请稍后恢复购买" }
+        if message == nil { message = "sync_pending" }
         publish()
       }
     case .unverified(let transaction, _):
       guard transaction.productID == Self.productID else { return }
       await refreshEntitlements()
-      message = "购买验证失败，请稍后恢复购买"
+      message = "verification"
       publish()
       // Do not grant access or finish a transaction that failed verification.
     }
@@ -127,9 +127,9 @@ final class StudyRoomPurchase {
         let products = try await Product.products(for: [Self.productID])
         product = products.first { $0.id == Self.productID && $0.type == .nonConsumable }
         if product == nil {
-          message = "商品暂不可用，请稍后重新加载"
+          message = "product_unavailable"
         } else if !AppStore.canMakePayments {
-          message = "当前设备不允许购买，可尝试恢复购买"
+          message = "restricted"
         } else {
           message = nil
         }
@@ -137,13 +137,13 @@ final class StudyRoomPurchase {
         result(snapshot())
       } catch {
         product = nil
-        message = "商品加载失败，请检查网络后重试"
+        message = "product"
         publish()
         result(FlutterError(code: "product", message: message, details: String(describing: error)))
       }
     case "purchase", "restore":
       guard !operationInProgress else {
-        result(FlutterError(code: "busy", message: "正在处理购买，请稍候", details: nil))
+        result(FlutterError(code: "busy", message: "busy", details: nil))
         return
       }
       operationInProgress = true
@@ -154,14 +154,14 @@ final class StudyRoomPurchase {
           // Explicit user action only: sync may ask the user to sign in.
           try await AppStore.sync()
           await refreshEntitlements()
-          if !unlocked && message == nil { message = "未找到自习室购买记录" }
+          if !unlocked && message == nil { message = "restore_empty" }
         } else {
           guard AppStore.canMakePayments else {
-            result(FlutterError(code: "restricted", message: "当前设备不允许购买", details: nil))
+            result(FlutterError(code: "restricted", message: "restricted", details: nil))
             return
           }
           guard let product = product else {
-            result(FlutterError(code: "product", message: "请先重新加载商品", details: nil))
+            result(FlutterError(code: "product_unavailable", message: "product_unavailable", details: nil))
             return
           }
           await refreshEntitlements()
@@ -172,21 +172,21 @@ final class StudyRoomPurchase {
               case .verified(let transaction):
                 guard transaction.productID == Self.productID,
                       transaction.productType == .nonConsumable else {
-                  result(FlutterError(code: "product_mismatch", message: "购买商品不匹配，请恢复购买", details: nil))
+                  result(FlutterError(code: "product_mismatch", message: "product_mismatch", details: nil))
                   return
                 }
                 await receive(value)
               case .unverified:
                 await receive(value)
-                result(FlutterError(code: "verification", message: "购买验证失败，请稍后恢复购买", details: nil))
+                result(FlutterError(code: "verification", message: "verification", details: nil))
                 return
               }
             case .pending:
-              message = "购买待批准，批准后将自动解锁"
+              message = "pending"
             case .userCancelled:
-              message = "已取消购买"
+              message = "cancelled"
             @unknown default:
-              message = "购买尚未完成，请稍后恢复购买"
+              message = "incomplete"
             }
           }
         }
@@ -195,7 +195,7 @@ final class StudyRoomPurchase {
       } catch {
         // Refresh without sync so a failed request cannot erase valid offline ownership.
         await refreshEntitlements()
-        message = call.method == "restore" ? "恢复购买失败，请稍后重试" : "购买失败，请稍后重试"
+        message = call.method == "restore" ? "restore" : "purchase"
         publish()
         result(FlutterError(code: call.method, message: message, details: String(describing: error)))
       }

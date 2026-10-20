@@ -1,3 +1,5 @@
+import '../../../content_typography.dart';
+
 import 'package:flutter/material.dart';
 
 Widget keepSpace(bool visible, Widget child) => Visibility(
@@ -21,6 +23,7 @@ class ListeningRubyText extends StatelessWidget {
     this.text, {
     required this.ruby,
     this.source = true,
+    this.sourceLanguage = 'ja',
     this.centered = false,
     this.active = false,
     this.fontSize = 19,
@@ -28,12 +31,28 @@ class ListeningRubyText extends StatelessWidget {
     super.key,
   });
   final String text;
+  final String sourceLanguage;
   final bool ruby, source, centered, active;
   final double fontSize;
   final Color? color;
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    if (sourceLanguage == 'en')
+      return keepSpace(
+        source,
+        Text(
+          text,
+          textAlign: centered ? TextAlign.center : TextAlign.start,
+          style: contentTextStyle('en').copyWith(
+            fontSize: fontSize,
+            height: 1.5,
+            color: active
+                ? (dark ? const Color(0xFFFFB366) : const Color(0xFFB85C00))
+                : color,
+          ),
+        ),
+      );
     final tokens = <Widget>[];
     void add(String surface, String reading) {
       final highlighted = active && surface.trim().isNotEmpty;
@@ -45,7 +64,9 @@ class ListeningRubyText extends StatelessWidget {
               ruby,
               Text(
                 reading.isEmpty ? ' ' : reading,
-                style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+                style: const TextStyle(
+                  fontFamily: 'Hiragino Sans',
+                  locale: Locale('ja', 'JP'),
                   fontSize: 12,
                   height: 1.3,
                   color: Color(0xFF32AA43),
@@ -56,7 +77,9 @@ class ListeningRubyText extends StatelessWidget {
               source,
               Text(
                 surface,
-                style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+                style: TextStyle(
+                  fontFamily: 'Hiragino Sans',
+                  locale: Locale('ja', 'JP'),
                   fontSize: fontSize,
                   height: 1.5,
                   fontWeight: FontWeight.normal,

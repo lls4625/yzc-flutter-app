@@ -1,3 +1,5 @@
+import '../../l10n/l10n.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,9 +20,19 @@ class ListeningEntry extends StatefulWidget {
 
 class _ListeningEntryState extends State<ListeningEntry> {
   bool _opening = false;
-  static const title = '磨耳朵';
-  static const caption = '听见日语的节奏';
-  static const description = '让日语融入日常，反复聆听，慢慢培养语感。';
+  String get title => context.tr('磨耳朵', '磨耳朵', 'Listening', 'リスニング');
+  String get caption => context.tr(
+    '听见语言的节奏',
+    '聽見語言的節奏',
+    'Hear the rhythm of language',
+    '言葉のリズムを聴く',
+  );
+  String get description => context.tr(
+    '让语言融入日常，反复聆听，慢慢培养语感。',
+    '讓語言融入日常，反覆聆聽，慢慢培養語感。',
+    'Bring language into everyday life. Listen again and build your intuition.',
+    '毎日の生活に言葉を。繰り返し聴いて、少しずつ語感を育てましょう。',
+  );
   static const icon = Icons.headphones_rounded;
   static const colors = [Color(0xFF466D67), Color(0xFF213F3D)];
   Future<void> _open({required bool demo}) async {
@@ -60,7 +72,8 @@ class _ListeningEntryState extends State<ListeningEntry> {
         container: true,
         explicitChildNodes: true,
         button: true,
-        label: '$title，${widget.host.isUnlocked() ? '进入功能' : '查看演示'}',
+        label:
+            '$title，${widget.host.isUnlocked() ? context.tr('进入功能', '進入功能', 'Open feature', '機能を開く') : context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
         onTap: openCard,
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -141,7 +154,7 @@ class _ListeningEntryState extends State<ListeningEntry> {
                                       style: const TextStyle(
                                         fontFamily: 'Songti SC',
                                         locale: Locale('zh', 'CN'),
-                                        fontFamilyFallback: ['STSong', 'serif'],
+
                                         fontSize: 22,
                                         fontWeight: FontWeight.w600,
                                         color: cream,
@@ -154,8 +167,8 @@ class _ListeningEntryState extends State<ListeningEntry> {
                                 Semantics(
                                   button: true,
                                   label: widget.host.isUnlocked()
-                                      ? '进入$title'
-                                      : '购买解锁$title',
+                                      ? '${context.tr('进入', '進入', 'Open', '開く')} $title'
+                                      : '${context.tr('购买解锁', '購買解鎖', 'Unlock', '購入して解放')} $title',
                                   onTap: openCornerAction,
                                   child: ExcludeSemantics(
                                     child: GestureDetector(
@@ -211,7 +224,8 @@ class _ListeningEntryState extends State<ListeningEntry> {
                             const SizedBox(height: 20),
                             Semantics(
                               button: true,
-                              label: '查看$title演示',
+                              label:
+                                  '$title · ${context.tr('查看演示', '查看示範', 'View demo', 'デモを見る')}',
                               onTap: openDemo,
                               child: ExcludeSemantics(
                                 child: GestureDetector(

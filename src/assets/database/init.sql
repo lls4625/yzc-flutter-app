@@ -56,6 +56,8 @@ CREATE TABLE `yzc_textbook` (
   `sfky` varchar(32) NULL DEFAULT NULL,
   `resource_file` varchar(255) NULL DEFAULT NULL,
   `sha256` varchar(64) NULL DEFAULT NULL,
+  `source_language` TEXT,
+  `explanation_language` TEXT,
   PRIMARY KEY (`id`)
 );
 
@@ -149,6 +151,8 @@ CREATE TABLE yzc_user_setting (
  onboarding int DEFAULT 0,
  daily_goal int DEFAULT 10,
  theme varchar(64) DEFAULT 'system',
+ ui_locale TEXT DEFAULT 'system',
+ learning_target TEXT DEFAULT 'ja',
  playback_speed int DEFAULT 10,
  show_source int DEFAULT 1,
  show_ruby int DEFAULT 1,

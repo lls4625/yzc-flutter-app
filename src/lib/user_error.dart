@@ -9,6 +9,15 @@ import 'package:sqflite/sqflite.dart';
 
 // Only fixed, user-facing labels may leave this boundary. Never return exception text.
 String userError(Object? error, {String fallback = '操作失败，请重试'}) {
+  if (error is PlatformException && error.code == 'content_language')
+    return '内容语言信息无效，请更新资源或联系维护者';
+  if (error is PlatformException && error.code == 'speech_voice')
+    return '当前内容语言的朗读声音不可用，请检查系统语音设置';
+  if (error is FormatException &&
+      (error.message.startsWith('Missing package language') ||
+          error.message.startsWith('Invalid package language') ||
+          error.message == 'Package language identity mismatch'))
+    return '内容语言信息无效，请更新资源或联系维护者';
   if (error is ResourceCancelled) return '已取消';
   if (error is ResourceHashMismatch) return '资源包与目录版本不一致，请刷新目录后重试';
   if (error is ResourceSpaceUnavailable) return '暂时无法检查存储空间，请重试';

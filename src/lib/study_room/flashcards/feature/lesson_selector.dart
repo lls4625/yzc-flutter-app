@@ -1,3 +1,5 @@
+import '../../demo_localization/ui.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../glass_ui.dart';
@@ -39,7 +41,8 @@ class FlashLessonSelector extends StatelessWidget {
             button: true,
             selected: checked,
             enabled: action != null,
-            label: '${lesson.title}单词，$status',
+            label:
+                '${lesson.title}, ${studyUi(context, '单词')}, ${studyUi(context, status)}',
             onTap: action,
             child: ExcludeSemantics(
               child: StudyPanel(
@@ -84,8 +87,8 @@ class FlashLessonSelector extends StatelessWidget {
                                   color: scheme.primary,
                                 ),
                                 const SizedBox(width: 2),
-                                const Text(
-                                  '单词',
+                                Text(
+                                  studyUi(context, '单词'),
                                   style: TextStyle(fontSize: 10),
                                 ),
                                 const SizedBox(width: 2),

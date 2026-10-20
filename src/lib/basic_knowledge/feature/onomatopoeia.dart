@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../playback_scaffold.dart';
 import '../../ui.dart';
+import 'knowledge_localization.dart';
+import '../../l10n/l10n.dart';
 
 const _accent = Color(0xFF6657A5);
 const _categoryOrder = <String>[
@@ -33,7 +35,7 @@ class _OnomatopoeiaPageState extends State<OnomatopoeiaPage> {
   Widget build(BuildContext context) {
     final entries = _filteredEntries;
     return PlaybackScaffold(
-      appBar: const StudyAppBar(title: Text('拟声拟态词')),
+      appBar: const StudyAppBar(title: KnowledgeText('拟声拟态词')),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -64,8 +66,13 @@ class _OnomatopoeiaPageState extends State<OnomatopoeiaPage> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              '显示 ${entries.length} / ${_onomatopoeiaEntries.length} 个词条。建议学习层级表示首次学习的参考难度，并非 JLPT 官方词表；选择某一级仅显示该级词条。',
+            KnowledgeText(
+              context.tr(
+                '显示 ${entries.length} / ${_onomatopoeiaEntries.length} 个词条。建议学习层级表示首次学习的参考难度，并非 JLPT 官方词表；选择某一级仅显示该级词条。',
+                '顯示 ${entries.length} / ${_onomatopoeiaEntries.length} 個詞條。建議學習層級表示初次學習的參考難度，並非 JLPT 官方詞表；選擇某一級只顯示該級詞條。',
+                'Showing ${entries.length} / ${_onomatopoeiaEntries.length} entries. Suggested levels indicate introductory difficulty, not an official JLPT vocabulary list. Selecting a level shows only its entries.',
+                '${_onomatopoeiaEntries.length}語中${entries.length}語を表示。推奨レベルは初めて学ぶ際の難易度の目安で、JLPT公式語彙表ではありません。選んだレベルの語だけを表示します。',
+              ),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12,
@@ -77,7 +84,7 @@ class _OnomatopoeiaPageState extends State<OnomatopoeiaPage> {
             else
               for (final category in _categoryOrder)
                 if (entries.any((entry) => entry.category == category)) ...[
-                  SectionTitle(category),
+                  SectionTitle(knowledgeText(context, category)),
                   for (final entry in entries.where(
                     (entry) => entry.category == category,
                   )) ...[
@@ -105,7 +112,7 @@ class _LevelChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChoiceChip(
-    label: Text(label),
+    label: KnowledgeText(label),
     selected: selected,
     showCheckmark: false,
     selectedColor: _accent.withValues(alpha: .16),
@@ -134,14 +141,14 @@ class _OnomatopoeiaGuide extends StatelessWidget {
             children: [
               Icon(Icons.auto_awesome_outlined, color: _accent, size: 21),
               SizedBox(width: 8),
-              Text(
+              KnowledgeText(
                 'オノマトペ快速认识',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(
+          KnowledgeText(
             '日语用声音直接描写声音、动作、状态和感受。常见五类为拟声、拟音、拟态、拟容、拟情；同一个词也可能因场景不同跨越多类。',
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -196,7 +203,7 @@ class _GuideTag extends StatelessWidget {
       color: _accent.withValues(alpha: .09),
       borderRadius: BorderRadius.circular(999),
     ),
-    child: Text(
+    child: KnowledgeText(
       label,
       style: const TextStyle(
         color: _accent,
@@ -259,7 +266,10 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                     'assets/basic_knowledge/onomatopoeia_rain.jpg',
                     fit: BoxFit.cover,
                     cacheWidth: 960,
-                    semanticLabel: '同一街道从零星雨点、持续细雨到猛烈大雨的三段式插画',
+                    semanticLabel: knowledgeText(
+                      context,
+                      '同一街道从零星雨点、持续细雨到猛烈大雨的三段式插画',
+                    ),
                   ),
                   for (var index = 0; index < _choices.length; index++)
                     Positioned(
@@ -271,7 +281,7 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                         button: true,
                         selected: _selected == index,
                         label:
-                            '${_choices[index].word}，${_choices[index].label}',
+                            '${_choices[index].word}，${knowledgeText(context, _choices[index].label)}',
                         child: InkWell(
                           onTap: () => setState(() => _selected = index),
                           child: AnimatedContainer(
@@ -297,7 +307,7 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                               ),
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: Text(
+                                child: KnowledgeText(
                                   _choices[index].word,
                                   style: const TextStyle(
                                     color: Colors.white,
@@ -323,8 +333,8 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                 key: ValueKey(choice.word),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${choice.word} · ${choice.label}',
+                  KnowledgeText(
+                    '${choice.word} · ${knowledgeText(context, choice.label)}',
                     style: const TextStyle(
                       color: _accent,
                       fontSize: 17,
@@ -332,7 +342,10 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(choice.detail, style: const TextStyle(height: 1.5)),
+                  KnowledgeText(
+                    choice.detail,
+                    style: const TextStyle(height: 1.5),
+                  ),
                   const SizedBox(height: 8),
                   _OnomatopoeiaRubyText(
                     choice.example,
@@ -340,7 +353,7 @@ class _OnomatopoeiaHeroState extends State<_OnomatopoeiaHero> {
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
                   const SizedBox(height: 3),
-                  Text(
+                  KnowledgeText(
                     choice.translation,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -388,7 +401,7 @@ class _OnomatopoeiaEntryCard extends StatelessWidget {
       title: Row(
         children: [
           Expanded(
-            child: Text(
+            child: KnowledgeText(
               entry.word,
               style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
             ),
@@ -400,12 +413,18 @@ class _OnomatopoeiaEntryCard extends StatelessWidget {
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),
-        child: Text(entry.meaning, style: const TextStyle(height: 1.4)),
+        child: KnowledgeText(
+          entry.meaning,
+          style: const TextStyle(height: 1.4),
+        ),
       ),
       children: [
         _EntryDetail(label: '常见搭配', text: entry.usage),
         _EntryDetail(label: '例句', text: entry.example),
-        _EntryDetail(label: '中文', text: entry.translation),
+        _EntryDetail(
+          label: context.tr('释义', '釋義', 'Meaning', '意味'),
+          text: entry.translation,
+        ),
         _EntryDetail(label: '考试关注', text: entry.focus, isLast: true),
       ],
     ),
@@ -427,7 +446,7 @@ class _EntryBadge extends StatelessWidget {
           : _accent.withValues(alpha: .11),
       borderRadius: BorderRadius.circular(999),
     ),
-    child: Text(
+    child: KnowledgeText(
       label,
       style: TextStyle(
         color: secondary
@@ -459,7 +478,7 @@ class _EntryDetail extends StatelessWidget {
       children: [
         SizedBox(
           width: 68,
-          child: Text(
+          child: KnowledgeText(
             label,
             style: const TextStyle(
               color: _accent,
@@ -489,7 +508,7 @@ class _EmptyResult extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(height: 10),
-        const Text('没有符合条件的词条'),
+        const KnowledgeText('没有符合条件的词条'),
       ],
     ),
   );
@@ -510,6 +529,7 @@ class _OnomatopoeiaRubyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = knowledgeText(context, this.text);
     final resolvedColor =
         color ?? Theme.of(context).colorScheme.onSurfaceVariant;
     final baseStyle = TextStyle(
@@ -527,10 +547,13 @@ class _OnomatopoeiaRubyText extends StatelessWidget {
 
     final tokens = <Widget>[];
     void addPlain(String value) {
-      for (final rune in value.runes) {
+      for (final token in RegExp(
+        r"[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*|\s+|.",
+        unicode: true,
+      ).allMatches(value)) {
         tokens.add(
           Text(
-            String.fromCharCode(rune),
+            token.group(0)!,
             style: baseStyle.copyWith(color: resolvedColor),
           ),
         );

@@ -1,4 +1,7 @@
+import '../../demo_localization/sample_glosses.dart';
+import '../../demo_localization/ui.dart';
 import '../../../lesson_presentation.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -37,7 +40,8 @@ class _ListeningDemoPageState extends State<ListeningDemoPage> {
       child: Navigator(
         key: controller.navigator,
         onGenerateRoute: (_) => PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => ListeningDemoSelectionPage(controller, targets),
+          pageBuilder: (_, __, ___) =>
+              ListeningDemoSelectionPage(controller, targets),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
@@ -62,10 +66,12 @@ class ListeningDemoSelectionPage extends StatefulWidget {
   final ListeningDemoController controller;
   final ListeningDemoTargets targets;
   @override
-  State<ListeningDemoSelectionPage> createState() => _ListeningDemoSelectionPageState();
+  State<ListeningDemoSelectionPage> createState() =>
+      _ListeningDemoSelectionPageState();
 }
 
-class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage> {
+class _ListeningDemoSelectionPageState
+    extends State<ListeningDemoSelectionPage> {
   ListeningDemoRow? book;
   List<_DemoCard> cards = [], selected = [];
   bool loading = true;
@@ -129,11 +135,7 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
     setState(() => selected.insert(to, selected.removeAt(from)));
   }
 
-  Widget _selectedTile(
-    _DemoCard item,
-    int index, {
-    bool highlighted = false,
-  }) {
+  Widget _selectedTile(_DemoCard item, int index, {bool highlighted = false}) {
     final scheme = Theme.of(context).colorScheme;
     return StudyPanel(
       color: highlighted ? scheme.primaryContainer : scheme.surfaceContainerLow,
@@ -180,7 +182,10 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                       children: [
                         Icon(item.icon, size: 14, color: scheme.primary),
                         const SizedBox(width: 4),
-                        Text(item.label, style: const TextStyle(fontSize: 12)),
+                        Text(
+                          studyUi(context, item.label),
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 4),
                         const Icon(Icons.drag_indicator_rounded, size: 14),
                       ],
@@ -190,7 +195,10 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               ),
             ),
             StudyIconButton(
-              tooltip: '取消选择${item.course}${item.label}',
+              tooltip: studyUi(
+                context,
+                '取消选择${item.course}${studyUi(context, item.label)}',
+              ),
               onPressed: () => _toggle(item),
               icon: const Icon(Icons.close_rounded, size: 18),
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),
@@ -320,10 +328,10 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
           builder: (dialogContext) => GlassAlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('选择内容')),
+                Expanded(child: Text(studyUi(context, '选择内容'))),
                 const SizedBox(width: 12),
                 StudyIconButton(
-                  tooltip: '关闭',
+                  tooltip: studyUi(context, '关闭'),
                   onPressed: () => Navigator.pop(dialogContext),
                   icon: const Icon(Icons.close_rounded),
                 ),
@@ -333,22 +341,30 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
+                if (books.isEmpty) Text(studyUi(context, '暂无可用内容，请先在内容库完成下载。')),
                 for (final row in books) ...[
                   if (row != books.first) const SizedBox(height: 12),
                   Semantics(
-                    selected: listeningDemoText(row, 'id') == listeningDemoText(book ?? {}, 'id'),
-                    child: listeningDemoText(row, 'id') == listeningDemoText(book ?? {}, 'id')
+                    selected:
+                        listeningDemoText(row, 'id') ==
+                        listeningDemoText(book ?? {}, 'id'),
+                    child:
+                        listeningDemoText(row, 'id') ==
+                            listeningDemoText(book ?? {}, 'id')
                         ? StudyButton.filled(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, listeningDemoText(row, 'id')),
+                            onPressed: () => Navigator.pop(
+                              dialogContext,
+                              listeningDemoText(row, 'id'),
+                            ),
                             child: Text(
                               '${row['textbook']} ${row['volume'] ?? ''}',
                             ),
                           )
                         : StudyButton.text(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, listeningDemoText(row, 'id')),
+                            onPressed: () => Navigator.pop(
+                              dialogContext,
+                              listeningDemoText(row, 'id'),
+                            ),
                             child: Text(
                               '${row['textbook']} ${row['volume'] ?? ''}',
                             ),
@@ -360,7 +376,9 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
             actions: const [],
           ),
         );
-        if (chosen == null || !mounted || chosen == listeningDemoText(book ?? {}, 'id'))
+        if (chosen == null ||
+            !mounted ||
+            chosen == listeningDemoText(book ?? {}, 'id'))
           return;
         await widget.controller.setting('book', chosen);
         if (mounted) await _load();
@@ -391,12 +409,8 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
     try {
       await Navigator.of(context).push(
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => _DemoPlayerPage(
-            widget.controller,
-            book!,
-            queue,
-            widget.targets,
-          ),
+          pageBuilder: (_, __, ___) =>
+              _DemoPlayerPage(widget.controller, book!, queue, widget.targets),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
@@ -414,11 +428,11 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
       demoIdentity: widget.controller.identity,
       appBar: StudyAppBar(
         centerTitle: true,
-        title: const Text('课程排序'),
+        title: Text(studyUi(context, '课程排序 · 演示')),
         leading: BackButton(onPressed: widget.controller.closeAction),
         actions: [
           StudyIconButton(
-            tooltip: '选择内容',
+            tooltip: studyUi(context, '选择内容'),
             onPressed: loading || confirming || choosingBook
                 ? null
                 : _chooseBook,
@@ -426,7 +440,7 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
           ),
           StudyIconButton(
             key: widget.targets.start,
-            tooltip: '确认并开始循环播放',
+            tooltip: studyUi(context, '确认并开始循环播放'),
             onPressed: loading || choosingBook || selected.isEmpty || confirming
                 ? null
                 : _confirm,
@@ -456,8 +470,11 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(error!),
-                  StudyButton.text(onPressed: _load, child: const Text('重新读取')),
+                  Text(studyUi(context, error!)),
+                  StudyButton.text(
+                    onPressed: _load,
+                    child: Text(studyUi(context, '重新读取')),
+                  ),
                 ],
               ),
             )
@@ -466,12 +483,12 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('请先选择本次收听的内容'),
+                  Text(studyUi(context, '请先选择本次收听的内容')),
                   StudyButton.filled(
                     onPressed: () async {
                       await _chooseBook();
                     },
-                    child: const Text('选择内容'),
+                    child: Text(studyUi(context, '选择内容')),
                   ),
                 ],
               ),
@@ -494,17 +511,22 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  child: Text('播放顺序 · 已选 ${selected.length} 项　长按拖动排序'),
+                  child: Text(
+                    studyUi(context, '播放顺序 · 已选 ${selected.length} 项　长按拖动排序'),
+                  ),
                 ),
                 Expanded(
-                  child: SizedBox(key: widget.targets.order, child: selected.isEmpty
-                      ? Center(
-                          child: Text(
-                            '从下方选择课程，组成你的收听顺序',
-                            style: TextStyle(color: scheme.onSurfaceVariant),
-                          ),
-                        )
-                      : _selectedGrid()),
+                  child: SizedBox(
+                    key: widget.targets.order,
+                    child: selected.isEmpty
+                        ? Center(
+                            child: Text(
+                              studyUi(context, '从下方选择课程，组成你的收听顺序'),
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                          )
+                        : _selectedGrid(),
+                  ),
                 ),
                 const StudyDivider(height: 1),
                 Padding(
@@ -512,109 +534,118 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  child: Text(
-                    '本内容课程 · 点击勾选 / 再次点击取消',
-                  ),
+                  child: Text(studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消')),
                 ),
                 Expanded(
-                  child: SizedBox(key: widget.targets.selection, child: cards.isEmpty
-                      ? const Center(child: Text('本内容暂无课程'))
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = constraints.maxWidth >= 320 ? 6 : 4;
-                            return GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    mainAxisExtent: 60,
-                                    crossAxisSpacing: 4,
-                                    mainAxisSpacing: 4,
-                                  ),
-                              itemCount: cards.length,
-                              itemBuilder: (context, index) {
-                                final item = cards[index];
-                                final checked = selectedKeys.contains(item.key);
-                                return Semantics(
-                                  selected: checked,
-                                  button: true,
-                                  label: '${item.course}${item.label}',
-                                  child: StudyPanel(
-                                    color: checked
-                                        ? scheme.primaryContainer
-                                        : scheme.surfaceContainerLow,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
-                                        color: checked
-                                            ? scheme.primary
-                                            : scheme.outlineVariant,
-                                        width: checked ? 2 : 1,
-                                      ),
+                  child: SizedBox(
+                    key: widget.targets.selection,
+                    child: cards.isEmpty
+                        ? Center(child: Text(studyUi(context, '本内容暂无课程')))
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final columns = constraints.maxWidth >= 320
+                                  ? 6
+                                  : 4;
+                              return GridView.builder(
+                                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      mainAxisExtent: 60,
+                                      crossAxisSpacing: 4,
+                                      mainAxisSpacing: 4,
                                     ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: StudyInkWell(
-                                      onTap: () => _toggle(item),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Text(
-                                                item.course,
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
+                                itemCount: cards.length,
+                                itemBuilder: (context, index) {
+                                  final item = cards[index];
+                                  final checked = selectedKeys.contains(
+                                    item.key,
+                                  );
+                                  return Semantics(
+                                    selected: checked,
+                                    button: true,
+                                    label:
+                                        '${item.course}${studyUi(context, item.label)}',
+                                    child: StudyPanel(
+                                      color: checked
+                                          ? scheme.primaryContainer
+                                          : scheme.surfaceContainerLow,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: checked
+                                              ? scheme.primary
+                                              : scheme.outlineVariant,
+                                          width: checked ? 2 : 1,
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: StudyInkWell(
+                                        onTap: () => _toggle(item),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(4),
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Text(
+                                                  item.course,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 5),
-                                            FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    item.icon,
-                                                    size: 13,
-                                                    color: scheme.primary,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Text(
-                                                    item.label,
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
+                                              const SizedBox(height: 5),
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      item.icon,
+                                                      size: 13,
+                                                      color: scheme.primary,
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Icon(
-                                                    checked
-                                                        ? Icons
-                                                              .check_circle_rounded
-                                                        : Icons
-                                                              .radio_button_unchecked,
-                                                    size: 12,
-                                                    color: checked
-                                                        ? scheme.primary
-                                                        : scheme
-                                                              .onSurfaceVariant,
-                                                  ),
-                                                ],
+                                                    const SizedBox(width: 2),
+                                                    Text(
+                                                      studyUi(
+                                                        context,
+                                                        item.label,
+                                                      ),
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    Icon(
+                                                      checked
+                                                          ? Icons
+                                                                .check_circle_rounded
+                                                          : Icons
+                                                                .radio_button_unchecked,
+                                                      size: 12,
+                                                      color: checked
+                                                          ? scheme.primary
+                                                          : scheme
+                                                                .onSurfaceVariant,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
                   ),
                 ),
               ],
@@ -633,12 +664,12 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                   children: [
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty ? null : _selectAll,
-                      child: const Text('全部'),
+                      child: Text(studyUi(context, '全部')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: selected.isEmpty ? null : _cancelAll,
-                      child: const Text('取消'),
+                      child: Text(studyUi(context, '取消')),
                     ),
                   ],
                 ),
@@ -653,14 +684,14 @@ class _ListeningDemoSelectionPageState extends State<ListeningDemoSelectionPage>
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(true),
-                      child: const Text('全部单词'),
+                      child: Text(studyUi(context, '全部单词')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(false),
-                      child: const Text('全部课文'),
+                      child: Text(studyUi(context, '全部课文')),
                     ),
                   ],
                 ),
@@ -686,12 +717,7 @@ class _DemoListItem {
 }
 
 class _DemoPlayerPage extends StatefulWidget {
-  const _DemoPlayerPage(
-    this.controller,
-    this.book,
-    this.queue,
-    this.targets,
-  );
+  const _DemoPlayerPage(this.controller, this.book, this.queue, this.targets);
   final ListeningDemoController controller;
   final ListeningDemoTargets targets;
   final ListeningDemoRow book;
@@ -763,10 +789,10 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
       final pathCache = <String, String>{};
       for (final card in widget.queue) {
         final rows = await widget.controller.catalog.content(
-                card.words ? 'yzc_words' : 'yzc_content',
-                bookId,
-                listeningDemoText(card.lesson, 'id'),
-              );
+          card.words ? 'yzc_words' : 'yzc_content',
+          bookId,
+          listeningDemoText(card.lesson, 'id'),
+        );
         if (!mounted) return;
         final sectionIndex = nextSections.length;
         final clipStart = nextClips.length;
@@ -825,7 +851,8 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
         lastPlaying = null;
       });
       if (generation == widget.controller.playbackGeneration &&
-          playback.stopRevision == stopRevision && !playback.stopping)
+          playback.stopRevision == stopRevision &&
+          !playback.stopping)
         await _start();
       _extendCooldown();
     } catch (e) {
@@ -848,7 +875,11 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
   }
 
   Future<void> _start({int startIndex = 0, bool single = false}) async {
-    if (!mounted || !widget.controller.foreground || clips.isEmpty || playback.stopping) return;
+    if (!mounted ||
+        !widget.controller.foreground ||
+        clips.isEmpty ||
+        playback.stopping)
+      return;
     final stopRevision = playback.stopRevision;
     final generation = widget.controller.playbackGeneration;
     if (!mounted) return;
@@ -865,8 +896,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
     final section = sectionByClip[listeningDemoText(clips[startIndex], 'id')]!;
     await playback.start({
       'lesson': identity,
-      'title': '${listeningDemoText(widget.book, 'textbook')} ${listeningDemoText(widget.book, 'volume')} · 磨耳朵',
-      'albumTitle': '磨耳朵 · 全内容循环',
+      'title':
+          '${listeningDemoText(widget.book, 'textbook')} ${listeningDemoText(widget.book, 'volume')} · ${studyUi(context, '磨耳朵')}',
+      'albumTitle': studyUi(context, '磨耳朵 · 全内容循环'),
       'words': sections[section].card.words,
       'batch': !single,
       'speed': speed,
@@ -875,8 +907,10 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
       'clips': single ? [clips[startIndex]] : clips,
       'startIndex': single ? 0 : startIndex,
     });
-    if ((!mounted || !widget.controller.foreground ||
-        generation != widget.controller.playbackGeneration) && owns) {
+    if ((!mounted ||
+            !widget.controller.foreground ||
+            generation != widget.controller.playbackGeneration) &&
+        owns) {
       await playback.stop();
     }
   }
@@ -994,20 +1028,20 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => GlassAlertDialog(
-          title: const Text('播放速度'),
+          title: Text(studyUi(context, '播放速度')),
           content: Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             children: [
               StudyIconButton(
-                tooltip: '减少 0.1',
+                tooltip: studyUi(context, '减少 0.1'),
                 onPressed: value <= 5 ? null : () => update(() => value--),
                 icon: const Icon(Icons.remove),
               ),
               Text('${(value / 10).toStringAsFixed(1)}'),
               StudyIconButton(
-                tooltip: '增加 0.1',
+                tooltip: studyUi(context, '增加 0.1'),
                 onPressed: value >= 30 ? null : () => update(() => value++),
                 icon: const Icon(Icons.add),
               ),
@@ -1016,11 +1050,11 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
           actions: [
             StudyButton.text(
               onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              child: Text(studyUi(context, '取消')),
             ),
             StudyButton.filled(
               onPressed: () => Navigator.pop(context, value),
-              child: const Text('确定'),
+              child: Text(studyUi(context, '确定')),
             ),
           ],
         ),
@@ -1046,7 +1080,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                     shape: BoxShape.circle,
                   ),
                 ),
-                title: Text(label),
+                title: Text(studyUi(context, label)),
                 value: enabled,
                 onChanged: (value) async {
                   await demoPerform(
@@ -1060,9 +1094,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const StudyListTile(
+                StudyListTile(
                   title: Text(
-                    '显示内容',
+                    studyUi(context, '显示内容'),
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -1106,7 +1140,8 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
     widget.controller.repeatAction = null;
     widget.controller.intervalAction = null;
     final ready = widget.controller.playerReady;
-    if (ready != null && !ready.isCompleted) ready.completeError(StateError('演示播放页已关闭'));
+    if (ready != null && !ready.isCompleted)
+      ready.completeError(StateError('演示播放页已关闭'));
     unawaited(widget.controller.stop());
     super.dispose();
   }
@@ -1129,7 +1164,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${section.card.course} · ${section.card.label}',
+                          '${section.card.course} · ${studyUi(context, section.card.label)}',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
@@ -1181,7 +1216,10 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
     final id = '${section.card.key}:${row['id']}';
     final active = owns && playback.playingId == id;
     final scheme = Theme.of(context).colorScheme;
-    final reading = listeningDemoText(row, 'kana').replaceFirst(RegExp(r'@.*$'), '');
+    final reading = listeningDemoText(
+      row,
+      'kana',
+    ).replaceFirst(RegExp(r'@.*$'), '');
     final surface = demoPlainJapanese(listeningDemoText(row, 'word'));
     final clipIndex = clipIndexById[id];
     return StudyCard(
@@ -1211,7 +1249,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                               showRuby,
                               Text(
                                 reading,
-                                style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+                                style: const TextStyle(
+                                  fontFamily: 'Hiragino Sans',
+                                  locale: Locale('ja', 'JP'),
                                   fontSize: 12,
                                   height: 1.3,
                                   color: Color(0xFF32AA43),
@@ -1226,7 +1266,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                                     : listeningDemoText(row, 'kanji').isNotEmpty
                                     ? listeningDemoText(row, 'kanji')
                                     : reading,
-                                style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+                                style: const TextStyle(
+                                  fontFamily: 'Hiragino Sans',
+                                  locale: Locale('ja', 'JP'),
                                   fontSize: 19,
                                   height: 1.5,
                                 ),
@@ -1278,11 +1320,17 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                       ? Alignment.centerRight
                       : Alignment.centerLeft,
                   child: Text(
-                    listeningDemoText(row, 'definition'),
+                    demoSampleGloss(
+                      context,
+                      row['id'],
+                      listeningDemoText(row, 'definition'),
+                    ),
                     textAlign: section.card.words
                         ? TextAlign.right
                         : TextAlign.left,
-                    style: TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'),
+                    style: TextStyle(
+                      fontFamily: 'PingFang SC',
+                      locale: Locale('zh', 'CN'),
                       fontSize: 16,
                       height: 1.5,
                       color: scheme.onSurfaceVariant,
@@ -1291,7 +1339,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                 ),
               ),
               if (listeningDemoText(row, 'phonetic').isEmpty)
-                const Text('暂无音频', style: TextStyle(fontSize: 11)),
+                Text(studyUi(context, '暂无音频'), style: TextStyle(fontSize: 11)),
             ],
           ),
         ),
@@ -1315,11 +1363,14 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
       controlledLesson: identity,
       appBar: StudyAppBar(
         centerTitle: true,
-        title: const Text('磨耳朵'),
+        title: Text(studyUi(context, '磨耳朵 · 演示')),
         actions: [
-          SizedBox(key: widget.targets.speed, child: StudySpeedButton(onPressed: _speed, speed: speed)),
+          SizedBox(
+            key: widget.targets.speed,
+            child: StudySpeedButton(onPressed: _speed, speed: speed),
+          ),
           StudyIconButton.transparent(
-            tooltip: '显示内容',
+            tooltip: studyUi(context, '显示内容'),
             onPressed: _displayOptions,
             showPressHighlight: false,
             padding: const EdgeInsets.all(2),
@@ -1338,7 +1389,12 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                 children: [
                   const StudyCircularProgressIndicator(),
                   const SizedBox(height: 16),
-                  Text('正在准备课程 $prepared / ${widget.queue.length}'),
+                  Text(
+                    studyUi(
+                      context,
+                      '正在准备课程 $prepared / ${widget.queue.length}',
+                    ),
+                  ),
                 ],
               ),
             )
@@ -1349,10 +1405,10 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(error!, textAlign: TextAlign.center),
+                    Text(studyUi(context, error!), textAlign: TextAlign.center),
                     StudyButton.text(
                       onPressed: busy ? null : _prepare,
-                      child: const Text('重新准备'),
+                      child: Text(studyUi(context, '重新准备')),
                     ),
                   ],
                 ),
@@ -1364,13 +1420,18 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
               children: [
                 StudyListTile(
                   leading: Icon(current.card.icon),
-                  title: Text('${current.card.course} · ${current.card.label}'),
+                  title: Text(
+                    '${current.card.course} · ${studyUi(context, current.card.label)}',
+                  ),
                   subtitle: Text(
-                    '${currentSection + 1} / ${sections.length} 项 · ${owns && playback.active
-                        ? playback.batch
-                              ? '按所选顺序循环播放'
-                              : '单条播放，播完停止'
-                        : '等待手动播放'}',
+                    studyUi(
+                      context,
+                      '${currentSection + 1} / ${sections.length} 项 · ${owns && playback.active
+                          ? playback.batch
+                                ? '按所选顺序循环播放'
+                                : '单条播放，播完停止'
+                          : '等待手动播放'}',
+                    ),
                   ),
                 ),
                 if (silentCards.isNotEmpty)
@@ -1380,24 +1441,27 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                       vertical: 4,
                     ),
                     child: Text(
-                      '暂无音频，自动跳过：${silentCards.join('、')}',
+                      studyUi(context, '暂无音频，自动跳过：${silentCards.join('、')}'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
                 if (blocked)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('内容正在同步或需要修复，暂时无法播放。'),
+                    child: Text(studyUi(context, '内容正在同步或需要修复，暂时无法播放。')),
                   ),
                 if (playbackError != null)
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
-                      listeningDemoError(
-                        StateError(playbackError),
-                        fallback: '音频播放失败',
+                      studyUi(
+                        context,
+                        listeningDemoError(
+                          StateError(playbackError),
+                          fallback: '音频播放失败',
+                        ),
                       ),
                     ),
                   ),
@@ -1413,39 +1477,46 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: SizedBox(key: widget.targets.playback, child: queueActive
-                      ? ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          child: StudyButton.text(
-                            onPressed: buttonsDisabled ? null : _stopQueue,
-                            child: const Text('停止播放'),
+                  child: SizedBox(
+                    key: widget.targets.playback,
+                    child: queueActive
+                        ? ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: StudyButton.text(
+                              onPressed: buttonsDisabled ? null : _stopQueue,
+                              child: Text(studyUi(context, '停止播放')),
+                            ),
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minHeight: 48,
+                                ),
+                                child: StudyButton.text(
+                                  onPressed: buttonsDisabled
+                                      ? null
+                                      : () => _playFrom(resumeIndex),
+                                  child: Text(studyUi(context, '继续播放')),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minHeight: 48,
+                                ),
+                                child: StudyButton.text(
+                                  onPressed: buttonsDisabled
+                                      ? null
+                                      : () => _playFrom(0),
+                                  child: Text(studyUi(context, '从头播放')),
+                                ),
+                              ),
+                            ],
                           ),
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 48),
-                              child: StudyButton.text(
-                                onPressed: buttonsDisabled
-                                    ? null
-                                    : () => _playFrom(resumeIndex),
-                                child: const Text('继续播放'),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 48),
-                              child: StudyButton.text(
-                                onPressed: buttonsDisabled
-                                    ? null
-                                    : () => _playFrom(0),
-                                child: const Text('从头播放'),
-                              ),
-                            ),
-                          ],
-                        )),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1458,7 +1529,7 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                         child: StudyButton.text(
                           key: widget.targets.repeat,
                           onPressed: settingsDisabled ? null : _changeRepeat,
-                          child: Text('循环 $repeat 次'),
+                          child: Text(studyUi(context, '循环 $repeat 次')),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1467,7 +1538,9 @@ class _DemoPlayerPageState extends State<_DemoPlayerPage>
                         child: StudyButton.text(
                           key: widget.targets.interval,
                           onPressed: settingsDisabled ? null : _changeInterval,
-                          child: Text('间隔 $intervalSeconds 秒'),
+                          child: Text(
+                            studyUi(context, '间隔 $intervalSeconds 秒'),
+                          ),
                         ),
                       ),
                     ],

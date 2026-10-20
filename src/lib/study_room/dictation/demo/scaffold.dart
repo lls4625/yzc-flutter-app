@@ -1,3 +1,5 @@
+import '../../demo_localization/ui.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../glass_ui.dart';
@@ -28,9 +30,7 @@ class DictationDemoScaffold extends StatelessWidget {
     return AnimatedBuilder(
       animation: playback,
       builder: (context, _) {
-        final show =
-            playback.active &&
-            playback.lesson != controlledLesson;
+        final show = playback.active && playback.lesson != controlledLesson;
         final keyboard = show ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
         return Scaffold(
           appBar: appBar,
@@ -112,14 +112,14 @@ class _PlaybackBarState extends State<_PlaybackBar> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        playback.title,
+                        studyUi(context, playback.title),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _error ?? status,
+                        studyUi(context, _error ?? status),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -137,7 +137,9 @@ class _PlaybackBarState extends State<_PlaybackBar> {
                   style: const ButtonStyle(
                     minimumSize: WidgetStatePropertyAll(Size(88, 48)),
                   ),
-                  child: Text(playback.stopping ? '正在停止' : '停止播放'),
+                  child: Text(
+                    studyUi(context, playback.stopping ? '正在停止' : '停止播放'),
+                  ),
                 ),
               ],
             ),

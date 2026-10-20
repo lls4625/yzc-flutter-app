@@ -1,4 +1,9 @@
+import '../../demo_localization/sample_glosses.dart';
+import '../../demo_guide_l10n.dart';
+import '../../demo_localization/ui.dart';
+import '../../../l10n/l10n.dart';
 import '../../../lesson_presentation.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -30,10 +35,12 @@ class DictationDemoSelectionPage extends StatefulWidget {
   const DictationDemoSelectionPage(this.controller, {super.key});
   final DictationDemoController controller;
   @override
-  State<DictationDemoSelectionPage> createState() => _DictationDemoSelectionPageState();
+  State<DictationDemoSelectionPage> createState() =>
+      _DictationDemoSelectionPageState();
 }
 
-class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage> {
+class _DictationDemoSelectionPageState
+    extends State<DictationDemoSelectionPage> {
   RowData? book;
   List<_DictationCard> cards = [], selected = [];
   bool loading = true;
@@ -148,7 +155,10 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
                       children: [
                         Icon(item.icon, size: 14, color: scheme.primary),
                         const SizedBox(width: 4),
-                        Text(item.label, style: const TextStyle(fontSize: 12)),
+                        Text(
+                          studyUi(context, item.label),
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 4),
                         const Icon(Icons.drag_indicator_rounded, size: 14),
                       ],
@@ -158,7 +168,10 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
               ),
             ),
             StudyIconButton(
-              tooltip: '取消选择${item.course}${item.label}',
+              tooltip: studyUi(
+                context,
+                '取消选择${item.course}${studyUi(context, item.label)}',
+              ),
               onPressed: () => _toggle(item),
               icon: const Icon(Icons.close_rounded, size: 18),
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),
@@ -276,10 +289,10 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
           builder: (dialogContext) => GlassAlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('选择内容')),
+                Expanded(child: Text(studyUi(context, '选择内容'))),
                 const SizedBox(width: 12),
                 StudyIconButton(
-                  tooltip: '关闭',
+                  tooltip: studyUi(context, '关闭'),
                   onPressed: () => Navigator.pop(dialogContext),
                   icon: const Icon(Icons.close_rounded),
                 ),
@@ -289,7 +302,7 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
+                if (books.isEmpty) Text(studyUi(context, '暂无可用内容，请先在内容库完成下载。')),
                 for (final row in books) ...[
                   if (row != books.first) const SizedBox(height: 12),
                   Semantics(
@@ -347,7 +360,12 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
     try {
       await Navigator.of(context).push(
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => _DictationPage(widget.controller, book!, queue, key: widget.controller.practiceKey),
+          pageBuilder: (_, __, ___) => _DictationPage(
+            widget.controller,
+            book!,
+            queue,
+            key: widget.controller.practiceKey,
+          ),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
@@ -367,70 +385,138 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
     }
   }
 
-  Widget _stepper(String label, String key, int value, int min, int max, String unit) {
+  Widget _stepper(
+    String label,
+    String key,
+    int value,
+    int min,
+    int max,
+    String unit,
+  ) {
     final disabled = savingRule || confirming;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(label, style: Theme.of(context).textTheme.titleSmall),
-      const SizedBox(height: 4),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        StudyIconButton(
-          tooltip: '减少$label',
-          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-          padding: EdgeInsets.zero,
-          onPressed: disabled || value <= min ? null : () => _saveRule(key, value - 1),
-          icon: const Icon(Icons.remove_rounded, size: 20),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          studyUi(context, label),
+          style: Theme.of(context).textTheme.titleSmall,
         ),
-        Flexible(child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text('$value$unit', textAlign: TextAlign.center),
-        )),
-        StudyIconButton(
-          tooltip: '增加$label',
-          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-          padding: EdgeInsets.zero,
-          onPressed: disabled || value >= max ? null : () => _saveRule(key, value + 1),
-          icon: const Icon(Icons.add_rounded, size: 20),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            StudyIconButton(
+              tooltip: studyUi(context, '减少$label'),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              onPressed: disabled || value <= min
+                  ? null
+                  : () => _saveRule(key, value - 1),
+              icon: const Icon(Icons.remove_rounded, size: 20),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  '$value ${studyUi(context, unit)}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            StudyIconButton(
+              tooltip: studyUi(context, '增加$label'),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              padding: EdgeInsets.zero,
+              onPressed: disabled || value >= max
+                  ? null
+                  : () => _saveRule(key, value + 1),
+              icon: const Icon(Icons.add_rounded, size: 20),
+            ),
+          ],
         ),
-      ]),
-    ]);
+      ],
+    );
   }
 
   Widget _rules() => Padding(
     key: widget.controller.rulesTarget,
     padding: const EdgeInsets.symmetric(horizontal: 16),
-    child: Column(children: [
-      Row(children: [
-        Text('停顿方式', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(width: 12),
-        Expanded(child: AbsorbPointer(
-          absorbing: savingRule || confirming,
-          child: StudySegments<bool>(
-            values: const {false: '整体停顿', true: '每句停顿'},
-            selected: widget.controller.pauseEach,
-            onChanged: (value) => _saveRule('pause_each', value),
-          ),
-        )),
-      ]),
-      const SizedBox(height: 4),
-      Row(children: [
-        Text('听写顺序', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(width: 12),
-        Expanded(child: AbsorbPointer(
-          absorbing: savingRule || confirming,
-          child: StudySegments<bool>(
-            values: const {false: '顺序', true: '随机'},
-            selected: widget.controller.randomOrder,
-            onChanged: (value) => _saveRule('random_order', value),
-          ),
-        )),
-      ]),
-      const SizedBox(height: 8),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: _stepper('重复次数', 'repeats', widget.controller.repeats, 1, 5, '次')),
-        const SizedBox(width: 20),
-        Expanded(child: _stepper('间隔时间', 'interval', widget.controller.interval, 1, 10, '秒')),
-      ]),
-    ]),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Text(
+              studyUi(context, '停顿方式'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: savingRule || confirming,
+                child: StudySegments<bool>(
+                  values: {
+                    false: studyUi(context, '整体停顿'),
+                    true: studyUi(context, '每句停顿'),
+                  },
+                  selected: widget.controller.pauseEach,
+                  onChanged: (value) => _saveRule('pause_each', value),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Text(
+              studyUi(context, '听写顺序'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AbsorbPointer(
+                absorbing: savingRule || confirming,
+                child: StudySegments<bool>(
+                  values: {
+                    false: studyUi(context, '顺序'),
+                    true: studyUi(context, '随机'),
+                  },
+                  selected: widget.controller.randomOrder,
+                  onChanged: (value) => _saveRule('random_order', value),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _stepper(
+                '重复次数',
+                'repeats',
+                widget.controller.repeats,
+                1,
+                5,
+                '次',
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: _stepper(
+                '间隔时间',
+                'interval',
+                widget.controller.interval,
+                1,
+                10,
+                '秒',
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
   );
 
   @override
@@ -440,10 +526,10 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
     return DictationDemoScaffold(
       appBar: StudyAppBar(
         centerTitle: true,
-        title: const Text('课程排序 · 演示'),
+        title: Text(studyUi(context, '课程排序 · 演示')),
         actions: [
           StudyIconButton(
-            tooltip: '选择内容',
+            tooltip: studyUi(context, '选择内容'),
             onPressed: loading || confirming || choosingBook
                 ? null
                 : _chooseBook,
@@ -451,8 +537,13 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
           ),
           StudyIconButton(
             key: widget.controller.startTarget,
-            tooltip: '开始听写',
-            onPressed: loading || choosingBook || selected.isEmpty || confirming || savingRule
+            tooltip: studyUi(context, '开始听写'),
+            onPressed:
+                loading ||
+                    choosingBook ||
+                    selected.isEmpty ||
+                    confirming ||
+                    savingRule
                 ? null
                 : _confirm,
             icon: AnimatedSwitcher(
@@ -481,8 +572,11 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(error!),
-                  StudyButton.text(onPressed: _load, child: const Text('重新读取')),
+                  Text(studyUi(context, error!)),
+                  StudyButton.text(
+                    onPressed: _load,
+                    child: Text(studyUi(context, '重新读取')),
+                  ),
                 ],
               ),
             )
@@ -491,163 +585,202 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('请先选择本次听写的内容'),
+                  Text(studyUi(context, '请先选择本次听写的内容')),
                   StudyButton.filled(
                     onPressed: () async {
                       await _chooseBook();
                     },
-                    child: const Text('选择内容'),
+                    child: Text(studyUi(context, '选择内容')),
                   ),
                 ],
               ),
             )
-          : LayoutBuilder(builder: (context, bounds) => SingleChildScrollView(
-              child: SizedBox(
-                height: max(bounds.maxHeight, 460.0 +
-                    (MediaQuery.textScalerOf(context).scale(14) - 14) * 8),
-                child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: Text(
-                    '${textOf(book!, 'textbook')} ${textOf(book!, 'volume')}'
-                        .trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall,
+          : LayoutBuilder(
+              builder: (context, bounds) => SingleChildScrollView(
+                child: SizedBox(
+                  height: max(
+                    bounds.maxHeight,
+                    460.0 +
+                        (MediaQuery.textScalerOf(context).scale(14) - 14) * 8,
                   ),
-                ),
-                _rules(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text('播放顺序 · 已选 ${selected.length} 项　长按拖动排序'),
-                ),
-                Expanded(
-                  child: selected.isEmpty
-                      ? Center(
-                          child: Text(
-                            '从下方选择课程，组成你的听写顺序',
-                            style: TextStyle(color: scheme.onSurfaceVariant),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Text(
+                          '${textOf(book!, 'textbook')} ${textOf(book!, 'volume')}'
+                              .trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                      _rules(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          studyUi(
+                            context,
+                            '播放顺序 · 已选 ${selected.length} 项　长按拖动排序',
                           ),
-                        )
-                      : _selectedGrid(),
-                ),
-                const StudyDivider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: const Text('本内容课程 · 点击勾选 / 再次点击取消'),
-                ),
-                Expanded(
-                  child: SizedBox(key: widget.controller.selectionTarget, child: cards.isEmpty
-                      ? const Center(child: Text('本内容暂无课程'))
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = constraints.maxWidth >= 320 ? 6 : 4;
-                            return GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    mainAxisExtent: 60,
-                                    crossAxisSpacing: 4,
-                                    mainAxisSpacing: 4,
+                        ),
+                      ),
+                      Expanded(
+                        child: selected.isEmpty
+                            ? Center(
+                                child: Text(
+                                  studyUi(context, '从下方选择课程，组成你的听写顺序'),
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
                                   ),
-                              itemCount: cards.length,
-                              itemBuilder: (context, index) {
-                                final item = cards[index];
-                                final checked = selectedKeys.contains(item.key);
-                                return Semantics(
-                                  selected: checked,
-                                  button: true,
-                                  label: '${item.course}${item.label}',
-                                  child: StudyPanel(
-                                    color: checked
-                                        ? scheme.primaryContainer
-                                        : scheme.surfaceContainerLow,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
-                                        color: checked
-                                            ? scheme.primary
-                                            : scheme.outlineVariant,
-                                        width: checked ? 2 : 1,
+                                ),
+                              )
+                            : _selectedGrid(),
+                      ),
+                      const StudyDivider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Text(studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消')),
+                      ),
+                      Expanded(
+                        child: SizedBox(
+                          key: widget.controller.selectionTarget,
+                          child: cards.isEmpty
+                              ? Center(child: Text(studyUi(context, '本内容暂无课程')))
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final columns = constraints.maxWidth >= 320
+                                        ? 6
+                                        : 4;
+                                    return GridView.builder(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        8,
+                                        0,
+                                        8,
+                                        8,
                                       ),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: StudyInkWell(
-                                      onTap: () => _toggle(item),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Text(
-                                                item.course,
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: columns,
+                                            mainAxisExtent: 60,
+                                            crossAxisSpacing: 4,
+                                            mainAxisSpacing: 4,
+                                          ),
+                                      itemCount: cards.length,
+                                      itemBuilder: (context, index) {
+                                        final item = cards[index];
+                                        final checked = selectedKeys.contains(
+                                          item.key,
+                                        );
+                                        return Semantics(
+                                          selected: checked,
+                                          button: true,
+                                          label:
+                                              '${item.course}${studyUi(context, item.label)}',
+                                          child: StudyPanel(
+                                            color: checked
+                                                ? scheme.primaryContainer
+                                                : scheme.surfaceContainerLow,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              side: BorderSide(
+                                                color: checked
+                                                    ? scheme.primary
+                                                    : scheme.outlineVariant,
+                                                width: checked ? 2 : 1,
+                                              ),
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: StudyInkWell(
+                                              onTap: () => _toggle(item),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  4,
+                                                ),
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    FittedBox(
+                                                      fit: BoxFit.scaleDown,
+                                                      child: Text(
+                                                        item.course,
+                                                        style: const TextStyle(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 5),
+                                                    FittedBox(
+                                                      fit: BoxFit.scaleDown,
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            item.icon,
+                                                            size: 13,
+                                                            color:
+                                                                scheme.primary,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 2,
+                                                          ),
+                                                          Text(
+                                                            studyUi(
+                                                              context,
+                                                              item.label,
+                                                            ),
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontSize: 10,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 2,
+                                                          ),
+                                                          Icon(
+                                                            checked
+                                                                ? Icons
+                                                                      .check_circle_rounded
+                                                                : Icons
+                                                                      .radio_button_unchecked,
+                                                            size: 12,
+                                                            color: checked
+                                                                ? scheme.primary
+                                                                : scheme
+                                                                      .onSurfaceVariant,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(height: 5),
-                                            FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    item.icon,
-                                                    size: 13,
-                                                    color: scheme.primary,
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Text(
-                                                    item.label,
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Icon(
-                                                    checked
-                                                        ? Icons
-                                                              .check_circle_rounded
-                                                        : Icons
-                                                              .radio_button_unchecked,
-                                                    size: 12,
-                                                    color: checked
-                                                        ? scheme.primary
-                                                        : scheme
-                                                              .onSurfaceVariant,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                         ),
-                )),
-              ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            )),
+            ),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -662,12 +795,12 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
                   children: [
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty ? null : _selectAll,
-                      child: const Text('全部'),
+                      child: Text(studyUi(context, '全部')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: selected.isEmpty ? null : _cancelAll,
-                      child: const Text('取消'),
+                      child: Text(studyUi(context, '取消')),
                     ),
                   ],
                 ),
@@ -682,14 +815,14 @@ class _DictationDemoSelectionPageState extends State<DictationDemoSelectionPage>
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(true),
-                      child: const Text('全部单词'),
+                      child: Text(studyUi(context, '全部单词')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(false),
-                      child: const Text('全部课文'),
+                      child: Text(studyUi(context, '全部课文')),
                     ),
                   ],
                 ),

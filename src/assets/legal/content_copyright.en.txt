@@ -1,0 +1,77 @@
+Voice and Content Information
+
+Updated: October 20, 2026
+
+1. Content creation
+
+For 语之初's own learning content and the N5–N1 content in J Practice and J Test, the app author develops the ideas, defines the learning objectives, and leads the content design and arrangement, using OpenAI Codex to assist with generation and organization.
+
+This content includes text generated with artificial intelligence assistance and is intended for language learning (including Japanese- and English-related content), practice, and self-assessment. J Practice and J Test currently provide Japanese-learning questions only. If you find errors in the content or pronunciation, please share your feedback through the app's feedback channels.
+
+The N5–N1 content in J Practice and J Test consists of simulated Japanese exercises independently organized and produced for this app. It is not official Japanese-Language Proficiency Test (JLPT) test material or an official publication, and it does not indicate recognition or endorsement by the examination organizers. “J Test” is the name of a module in this app and has no official affiliation with J.TEST, the Test of Practical Japanese.
+
+2. Image sources
+
+For the instructional illustrations, interactive images, and tap-to-hear vocabulary cards in the app's own learning content, as well as the question illustrations in J Practice and J Test, the app author defines the teaching objectives, scenes, and visual requirements. The images are produced with the assistance of AI image-generation tools and undergo manual selection, organization, and necessary checks that the images correspond to the text.
+
+These images are teaching aids for this app. They are not official Japanese-Language Proficiency Test (JLPT) question images or official publications, and do not indicate recognition or endorsement by the examination organizers, the organizers of J.TEST, or the providers of the image-generation tools.
+
+3. Voice sources
+
+The following voices are generated using text-to-speech technology and are AI-synthesized voices.
+
+(1) Microsoft Azure Speech
+
+The text-to-speech (Text to Speech, TTS) feature of Microsoft Azure Speech is used to generate:
+
+1. Word pronunciations in the app's own learning content;
+2. Listening audio in the N5–N1 content of J Practice and J Test;
+3. Question-format instruction audio shared by the listening content above.
+
+(2) VOICEVOX
+
+VOICEVOX speech synthesis software and its voice libraries are used to generate lesson-text audio in the app's own learning content:
+
+1. Lesson text and dialogue with characters: 四国めたん, 玄野武宏;
+2. Instructional narration without characters, including lesson titles and text: 剣崎雌雄.
+
+Voice-library credits:
+
+VOICEVOX:四国めたん
+VOICEVOX:玄野武宏（CV:ガロ）
+VOICEVOX:剣崎雌雄
+
+These credits identify the production tools, technical services, and voice-library sources. They do not indicate that the relevant providers participated in writing the app's content, reviewing its questions, or endorsing the app.
+
+4. Copyright and related rights
+
+In this app, the app author owns the corresponding copyright in textual expression personally created by the author that constitutes a work under applicable law, original selection and arrangement of content, and the author's original selection, design, and organization of images that constitute works under applicable law. Using tools such as OpenAI Codex and AI image-generation tools to assist production does not change ownership of the portions in which the author lawfully holds copyright.
+
+Audio produced for this app is generated using tools such as Microsoft Azure Speech and VOICEVOX. The app author reserves the rights they lawfully hold in the relevant audio. The use and distribution of the audio are subject to the applicable service terms and voice-library licenses.
+
+Rights in third-party software, models, voice libraries, character likenesses, trademarks, and other third-party materials remain with their respective rights holders. Licenses to use production tools and voice libraries do not confer ownership of those tools or libraries, or exclusive rights to the voices. This statement claims no exclusive rights to general vocabulary, language rules, public-domain content, or third-party materials.
+
+Except as otherwise provided by law or with the appropriate authorization, no one may reproduce, adapt, distribute, or disseminate over information networks, without permission, content in this app in which the author lawfully holds copyright.
+
+5. Related services and voice libraries
+
+Microsoft Azure Speech
+https://learn.microsoft.com/azure/ai-services/speech-service/overview
+
+VOICEVOX
+https://voicevox.hiroshiba.jp/
+
+VOICEVOX voice-library terms of use and credits
+https://github.com/VOICEVOX/voicevox_vvm/blob/main/TERMS.txt
+
+四国めたん voice terms of use
+https://zunko.jp/con_ongen_kiyaku.html
+
+玄野武宏 voice terms of use
+https://www.virvoxproject.com/voicevoxの利用規約
+
+剣崎雌雄 voice terms of use
+https://frontier.creatia.cc/fanclubs/413/posts/4507
+
+OpenAI Terms of Use
+https://openai.com/policies/terms-of-use/

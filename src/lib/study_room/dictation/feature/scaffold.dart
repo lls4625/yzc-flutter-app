@@ -1,4 +1,6 @@
+import '../../demo_localization/ui.dart';
 import '../../../system_errors.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../glass_ui.dart';
@@ -29,9 +31,7 @@ class DictationScaffold extends StatelessWidget {
     return AnimatedBuilder(
       animation: playback,
       builder: (context, _) {
-        final show =
-            playback.active &&
-            playback.lesson != controlledLesson;
+        final show = playback.active && playback.lesson != controlledLesson;
         final keyboard = show ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
         return Scaffold(
           appBar: appBar,
@@ -76,7 +76,13 @@ class _PlaybackBarState extends State<_PlaybackBar> {
     try {
       await NativeAudioTransport.instance.stop();
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'dictation', operation: '停止音频', context: {'source': 'study_room/dictation/feature/scaffold.dart'});
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'dictation',
+        operation: '停止音频',
+        context: {'source': 'study_room/dictation/feature/scaffold.dart'},
+      );
       if (mounted) setState(() => _error = '停止失败，请重试');
     }
   }
@@ -139,7 +145,9 @@ class _PlaybackBarState extends State<_PlaybackBar> {
                   style: const ButtonStyle(
                     minimumSize: WidgetStatePropertyAll(Size(88, 48)),
                   ),
-                  child: Text(playback.stopping ? '正在停止' : '停止播放'),
+                  child: Text(
+                    studyUi(context, playback.stopping ? '正在停止' : '停止播放'),
+                  ),
                 ),
               ],
             ),

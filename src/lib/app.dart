@@ -1,12 +1,19 @@
+import 'l10n/l10n.dart';
 import 'lesson_presentation.dart';
 import 'content_typography.dart';
+import 'content_language.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
+
 import 'playback_scaffold.dart';
+
 import 'package:flutter/services.dart';
+
 import 'data.dart';
 import 'resources.dart';
 import 'resource_operation_ui.dart';
@@ -41,26 +48,40 @@ class AppController extends ChangeNotifier implements CourseTabHost {
   AppController(this.store, this.resources, this.resourceOperations);
   final AppStore store;
   late final notices = NoticeService(store);
-  String get appVersionLabel => store.appVersion.isEmpty ? '版本信息不可用' : store.appVersion;
+  String get appVersionLabel =>
+      store.appVersion.isEmpty ? '版本信息不可用' : store.appVersion;
   final Resources resources;
   final ResourceOperationCoordinator resourceOperations;
-  late final studyResources = StudyResources(store, operations: resourceOperations);
+  late final studyResources = StudyResources(
+    store,
+    operations: resourceOperations,
+  );
   final network = StartupNetwork();
   bool hasLocalTextbooks = false;
   VoidCallback? openStudyRoomPurchase;
-  late final studyRoomPurchase = StudyRoomPurchaseController()..addListener(notifyListeners);
-  late final developerTip = DeveloperTipController()..addListener(notifyListeners);
+  late final studyRoomPurchase = StudyRoomPurchaseController()
+    ..addListener(notifyListeners);
+  late final developerTip = DeveloperTipController()
+    ..addListener(notifyListeners);
   bool get studyRoomUnlocked => studyRoomPurchase.unlocked;
   bool get studyRoomPurchaseSaving => studyRoomPurchase.saving;
   late final studyRoomHost = StudyRoomHost(
-    userId: store.userId, rootPath: store.root.path, contentDatabasePath: store.db.path,
+    userId: store.userId,
+    rootPath: store.root.path,
+    contentDatabasePath: store.db.path,
     changes: Listenable.merge([this, resources, studyResources]),
-    database: store.db, write: store.write, newId: store.newId, resources: studyResources,
+    database: store.db,
+    write: store.write,
+    newId: store.newId,
+    resources: studyResources,
     resourceOperations: resourceOperations,
-    isUnlocked: () => studyRoomUnlocked, isPurchaseSaving: () => studyRoomPurchaseSaving,
+    isUnlocked: () => studyRoomUnlocked,
+    isPurchaseSaving: () => studyRoomPurchaseSaving,
     isBookUnavailable: (book) => resources.unavailable.contains(book),
-    audioPath: resources.audioPath, playbackSpeed: () => speed,
+    audioPath: resources.audioPath,
+    playbackSpeed: () => speed,
     openPurchase: () => openStudyRoomPurchase?.call(),
+    learningTarget: () => learningTarget,
   );
   RowData settings = {}, position = {}, stats = {};
   // Full reloads invalidate the home snapshot; time-only statistics do not.
@@ -72,8 +93,11 @@ class AppController extends ChangeNotifier implements CourseTabHost {
     await developerTip.reload();
     position = await store.position();
     stats = await store.statistics();
-    hasLocalTextbooks = (await resources.installations()).any((row) =>
-      row['status'] == 'ready' && !resources.unavailable.contains(textOf(row, 'textbook_id')));
+    hasLocalTextbooks = (await resources.installations()).any(
+      (row) =>
+          row['status'] == 'ready' &&
+          !resources.unavailable.contains(textOf(row, 'textbook_id')),
+    );
     _homeDataRevision++;
     notifyListeners();
   });
@@ -91,8 +115,18 @@ class AppController extends ChangeNotifier implements CourseTabHost {
   });
   Future<void> setting(String key, Object value) async {
     await store.setSetting(key, value);
-    await reload();
+    if (key == 'ui_locale' || key == 'learning_target') {
+      // UI preferences must not reload purchases, content, answers, or audio sessions.
+      settings = {...settings, key: value};
+      notifyListeners();
+    } else {
+      await reload();
+    }
   }
+
+  Locale? get uiLocale => uiLocaleFromSetting(textOf(settings, 'ui_locale'));
+  String get learningTarget =>
+      textOf(settings, 'learning_target') == 'en' ? 'en' : 'ja';
   bool get ruby => intOf(settings, 'show_ruby', 1) == 1;
   bool get source => intOf(settings, 'show_source', 1) == 1;
   bool get translation => intOf(settings, 'show_definition', 1) == 1;
@@ -112,16 +146,26 @@ class AppController extends ChangeNotifier implements CourseTabHost {
   }
 }
 
-Future<void> perform(BuildContext context, Future<void> Function() action) async {
-  try { await action(); } catch (e, stack) {
+Future<void> perform(
+  BuildContext context,
+  Future<void> Function() action,
+) async {
+  try {
+    await action();
+  } catch (e, stack) {
     SystemErrors.record(e, stack, module: 'app', operation: '页面操作');
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text(userError(e))));
+    if (context.mounted)
+      ScaffoldMessenger.of(context)
+          .showSnackBar(GlassSnackBar(content: Text(context.ui(userError(e)))));
   }
 }
+
 void openPage(BuildContext context, Widget page) {
-  Navigator.of(context).push(page is CourseLessonPage
-    ? _LessonPageRoute(builder: (_) => page)
-    : MaterialPageRoute<void>(builder: (_) => page));
+  Navigator.of(context).push(
+    page is CourseLessonPage
+        ? _LessonPageRoute(builder: (_) => page)
+        : MaterialPageRoute<void>(builder: (_) => page),
+  );
 }
 
 class _LessonPageRoute extends MaterialPageRoute<void> {
@@ -132,18 +176,43 @@ class _LessonPageRoute extends MaterialPageRoute<void> {
 }
 
 int lessonPercent(List<RowData> progress, String lessonId) {
-  final count = progress.where((r) => r['lessons_id'] == lessonId && ['word', 'content', 'grammar'].contains(r['category'])).map((r) => r['category']).toSet().length;
+  final count = progress
+      .where(
+        (r) =>
+            r['lessons_id'] == lessonId &&
+            ['word', 'content', 'grammar'].contains(r['category']),
+      )
+      .map((r) => r['category'])
+      .toSet()
+      .length;
   return count == 3 ? 100 : count * 33;
 }
 
 Color bookColor(RowData book) {
-  final intermediate = intOf(book, 'lvl', 1) > 1 || textOf(book, 'textbook').contains('中级');
+  final intermediate =
+      intOf(book, 'lvl', 1) > 1 || textOf(book, 'textbook').contains('中级');
   final second = textOf(book, 'volume').contains('下');
-  return intermediate ? (second ? const Color(0xFF294A61) : const Color(0xFF365D74)) : (second ? const Color(0xFF9B4036) : const Color(0xFFB55345));
+  return intermediate
+      ? (second ? const Color(0xFF294A61) : const Color(0xFF365D74))
+      : (second ? const Color(0xFF9B4036) : const Color(0xFFB55345));
 }
 
 String chineseNumber(int number) {
-  const values = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+  const values = [
+    '零',
+    '一',
+    '二',
+    '三',
+    '四',
+    '五',
+    '六',
+    '七',
+    '八',
+    '九',
+    '十',
+    '十一',
+    '十二',
+  ];
   return number >= 0 && number < values.length ? values[number] : '$number';
 }
 
@@ -151,18 +220,45 @@ class StudyApp extends StatelessWidget {
   const StudyApp(this.app, {super.key});
   final AppController app;
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(animation: app, builder: (_, __) => MaterialApp(
-    title: '语之初', debugShowCheckedModeBanner: false,
-    navigatorObservers: [appRouteObserver, courseRouteObserver],
-    theme: studyTheme(Brightness.light),
-    darkTheme: studyTheme(Brightness.dark),
-    themeMode: switch (textOf(app.settings, 'theme')) { 'light' => ThemeMode.light, 'dark' => ThemeMode.dark, _ => ThemeMode.system },
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(textScaler: app.fontScale == 0
-        ? MediaQuery.textScalerOf(context) : TextScaler.linear(app.fontScale / 100)),
-      child: PlaybackLifecycle(child: studyGlassPageScope(context, child ?? const SizedBox.shrink()))),
-    home: Welcome(app),
-  ));
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: app,
+    builder: (_, __) => MaterialApp(
+      title: '语之初',
+      debugShowCheckedModeBanner: false,
+      locale: app.uiLocale,
+      supportedLocales: supportedUiLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localeListResolutionCallback: (locales, _) => resolveUiLocale(locales),
+      navigatorObservers: [appRouteObserver, courseRouteObserver],
+      theme: studyTheme(Brightness.light),
+      darkTheme: studyTheme(Brightness.dark),
+      themeMode: switch (textOf(app.settings, 'theme')) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
+      builder: (context, child) => Theme(
+        data: studyTheme(
+          Theme.of(context).brightness,
+          locale: Localizations.localeOf(context),
+        ),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: app.fontScale == 0
+                ? MediaQuery.textScalerOf(context)
+                : TextScaler.linear(app.fontScale / 100),
+          ),
+          child: PlaybackLifecycle(
+            child: studyGlassPageScope(
+              context,
+              child ?? const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+      home: Welcome(app),
+    ),
+  );
 }
 
 class Welcome extends StatefulWidget {
@@ -207,25 +303,77 @@ class _WelcomeState extends State<Welcome> {
 
   @override
   Widget build(BuildContext context) {
-    if (_entered) return NoticeHost(service: widget.app.notices, child: HomeShell(widget.app));
+    if (_entered)
+      return NoticeHost(
+        service: widget.app.notices,
+        child: HomeShell(widget.app),
+      );
     return PlaybackScaffold(
-      body: SafeArea(child: LayoutBuilder(builder: (context, viewport) => SingleChildScrollView(
-      padding: const EdgeInsets.all(28), child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: math.max(0.0, viewport.maxHeight - 56)),
-        child: IntrinsicHeight(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    const Spacer(),
-    ClipRRect(borderRadius: BorderRadius.circular(24), child: Image.asset('assets/branding/app-icon.png', width: 72, height: 72, fit: BoxFit.cover)),
-    const SizedBox(height: 28),
-    Text('语言之初，\n从这里生长。', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700, height: 1.18)),
-    const SizedBox(height: 14),
-    Text('从一本内容、一段声音开始，让词汇、语法与表达慢慢生根。', style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.7, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-    const Spacer(),
-    Text('$_secondsRemaining 秒后自动进入', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-    const SizedBox(height: 22),
-    SizedBox(width: double.infinity, child: StudyButton.filled(onPressed: _enterHome, child: const Text('开始学习'))),
-    const SizedBox(height: 10),
-    Center(child: Text('无需账号 · 全部学习记录保存在本机', style: Theme.of(context).textTheme.bodySmall)),
-  ])))))));
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, viewport) => SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: math.max(0.0, viewport.maxHeight - 56),
+              ),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Spacer(),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/branding/app-icon.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      context.ui('语言之初，\n从这里生长。'),
+                      style: Theme.of(context).textTheme.displaySmall
+                          ?.copyWith(fontWeight: FontWeight.w700, height: 1.18),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      context.ui('从一本内容、一段声音开始，让词汇、语法与表达慢慢生根。'),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        height: 1.7,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      context.l10n.autoEnter(_secondsRemaining),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: StudyButton.filled(
+                        onPressed: _enterHome,
+                        child: Text(context.ui('开始学习')),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Text(
+                        context.ui('无需账号 · 全部学习记录保存在本机'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -235,7 +383,9 @@ class HomeShell extends StatefulWidget {
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
-class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, RouteAware {
+
+class _HomeShellState extends State<HomeShell>
+    with WidgetsBindingObserver, RouteAware {
   static const _studyRoomTab = 4;
   int tab = 0;
   int _courseVisit = 0;
@@ -245,13 +395,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
   ModalRoute<dynamic>? _route;
   bool _foreground = true, _routeVisible = true;
   bool _refreshingStatistics = false, _refreshStatisticsAgain = false;
-  bool get _statisticsVisible => mounted && _foreground && _routeVisible && (tab == 0 || tab == 3);
+  bool get _statisticsVisible =>
+      mounted && _foreground && _routeVisible && (tab == 0 || tab == 3);
 
   @override
   void initState() {
     super.initState();
-    _foreground = WidgetsBinding.instance.lifecycleState == null ||
-      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.app.addListener(_scheduleStatisticsRefresh);
     widget.app.openStudyRoomPurchase = _openStudyRoomPurchase;
@@ -268,6 +420,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
       if (route != null) appRouteObserver.subscribe(this, route);
     }
   }
+
   @override
   void didUpdateWidget(HomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -279,6 +432,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
       _requestStatisticsRefresh();
     }
   }
+
   @override
   void didPush() => _requestStatisticsRefresh();
   @override
@@ -286,11 +440,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
     _routeVisible = false;
     _statisticsTimer?.cancel();
   }
+
   @override
   void didPopNext() {
     _routeVisible = true;
     _requestStatisticsRefresh();
   }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
@@ -313,7 +469,14 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
   // Open purchase details directly from the current page.
   void _openStudyRoomPurchase() {
     if (!mounted) return;
-    openPage(context, StudyRoomPurchasePage(widget.app.studyRoomPurchase));
+    openPage(
+      context,
+      StudyRoomPurchasePage(
+        widget.app.studyRoomPurchase,
+        learningTarget: () => widget.app.learningTarget,
+        changes: widget.app,
+      ),
+    );
   }
 
   void _requestStatisticsRefresh() {
@@ -337,8 +500,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
       SystemErrors.record(e, stack, module: 'app', operation: '刷新学习统计');
       // Retry on re-entry/resume; a failed query must not start a rapid loop.
       _statisticsTimer?.cancel();
-      if (_statisticsVisible) ScaffoldMessenger.of(context).showSnackBar(
-        GlassSnackBar(content: const Text('学习统计刷新失败，请重新进入页面重试')));
+      if (_statisticsVisible)
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(
+            content: Text(
+              context.tr(
+                '学习统计刷新失败，请重新进入页面重试',
+                '學習統計重新整理失敗，請重新進入頁面再試',
+                'Could not refresh learning statistics. Reopen this page and try again.',
+                '学習統計を更新できませんでした。ページを開き直してください。',
+              ),
+            ),
+          ),
+        );
     } finally {
       _refreshingStatistics = false;
     }
@@ -348,12 +522,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
     _statisticsTimer?.cancel();
     if (!_statisticsVisible) return;
     final now = DateTime.now();
-    final midnight = DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch;
+    final midnight = DateTime(
+      now.year,
+      now.month,
+      now.day + 1,
+    ).millisecondsSinceEpoch;
     final nextDue = intOf(widget.app.stats, 'next_review_time');
     final next = nextDue > 0 ? math.min(nextDue, midnight) : midnight;
     final delay = next - now.millisecondsSinceEpoch;
-    _statisticsTimer = Timer(Duration(milliseconds: delay > 0 ? delay : 1), _requestStatisticsRefresh);
+    _statisticsTimer = Timer(
+      Duration(milliseconds: delay > 0 ? delay : 1),
+      _requestStatisticsRefresh,
+    );
   }
+
   @override
   void dispose() {
     _statisticsTimer?.cancel();
@@ -364,23 +546,48 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver, Rout
     appRouteObserver.unsubscribe(this);
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) => PlaybackScaffold(
     backgroundColor: tab == _studyRoomTab
-      ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF25231F) : const Color(0xFFF3E9D6))
-      : null,
-    body: IndexedStack(index: tab, children: [HomePanel(widget.app, onNavigate: _selectTab), CoursePanel(widget.app, key: ValueKey('course-$_courseVisit')), ReviewPanel(widget.app, active: tab == 2),
-      ProfilePanel(widget.app, scrollController: _profileScrollController, purchaseSectionKey: _purchaseSectionKey),
-      StudyRoomModule(widget.app.studyRoomHost)]),
-    bottomNavigationBar: Column(mainAxisSize: MainAxisSize.min, children: [
-      StudyNavigationBar(selectedIndex: tab, isStudyRoomUnlocked: widget.app.studyRoomUnlocked,
-        onDestinationSelected: (value) async {
-      if (value == 1 && textOf(widget.app.position, 'textbook_id').isEmpty) {
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LibraryPage(widget.app)));
-      }
-      if (mounted) _selectTab(value);
-    }),
-    ]),
+        ? (Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF25231F)
+              : const Color(0xFFF3E9D6))
+        : null,
+    body: IndexedStack(
+      index: tab,
+      children: [
+        HomePanel(widget.app, onNavigate: _selectTab),
+        CoursePanel(widget.app, key: ValueKey('course-$_courseVisit')),
+        ReviewPanel(widget.app, active: tab == 2),
+        ProfilePanel(
+          widget.app,
+          scrollController: _profileScrollController,
+          purchaseSectionKey: _purchaseSectionKey,
+        ),
+        StudyRoomModule(widget.app.studyRoomHost),
+      ],
+    ),
+    bottomNavigationBar: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        StudyNavigationBar(
+          selectedIndex: tab,
+          isStudyRoomUnlocked: widget.app.studyRoomUnlocked,
+          onDestinationSelected: (value) async {
+            if (value == 1 &&
+                textOf(widget.app.position, 'textbook_id').isEmpty) {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LibraryPage(widget.app),
+                ),
+              );
+            }
+            if (mounted) _selectTab(value);
+          },
+        ),
+      ],
+    ),
   );
 }
 
@@ -408,6 +615,7 @@ class _HomePanelState extends State<HomePanel> {
     widget.app.addListener(_changed);
     _changed();
   }
+
   void _changed() {
     if (!mounted) return;
     if (_observedRevision != widget.app.homeDataRevision) {
@@ -418,6 +626,7 @@ class _HomePanelState extends State<HomePanel> {
       setState(() {});
     }
   }
+
   @override
   void didUpdateWidget(HomePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -430,6 +639,7 @@ class _HomePanelState extends State<HomePanel> {
     _observedRevision = -1;
     _changed();
   }
+
   Future<void> _load() async {
     if (!mounted) return;
     final bookId = textOf(widget.app.position, 'textbook_id');
@@ -441,7 +651,10 @@ class _HomePanelState extends State<HomePanel> {
     final request = ++_request;
     _loadingBookId = bookId;
     _loadAgain = false;
-    setState(() { loading = true; error = null; });
+    setState(() {
+      loading = true;
+      error = null;
+    });
     try {
       final store = widget.app.store;
       final result = await Future.wait<List<RowData>>([
@@ -451,69 +664,132 @@ class _HomePanelState extends State<HomePanel> {
         store.homeOverviewCounts(),
         store.bookPosition(bookId),
       ]);
-      final installed = bookId.isEmpty ? null : await widget.app.resources.installation(bookId);
-      if (!mounted || request != _request || _loadAgain ||
-          bookId != textOf(widget.app.position, 'textbook_id')) return;
+      final installed = bookId.isEmpty
+          ? null
+          : await widget.app.resources.installation(bookId);
+      if (!mounted ||
+          request != _request ||
+          _loadAgain ||
+          bookId != textOf(widget.app.position, 'textbook_id'))
+        return;
       final saved = result[4].isEmpty ? null : result[4].single;
       final matches = result[1].where((r) => r['id'] == saved?['lessons_id']);
       final counts = result[3].single;
       setState(() {
         book = result[0].isEmpty ? null : result[0].single;
-        lessons = result[1]; progressRows = result[2];
-        current = matches.isNotEmpty ? matches.first : lessons.isEmpty ? null : lessons.first;
+        lessons = result[1];
+        progressRows = result[2];
+        current = matches.isNotEmpty
+            ? matches.first
+            : lessons.isEmpty
+            ? null
+            : lessons.first;
         canResume = matches.isNotEmpty;
-        resourceReady = installed?['status'] == 'ready' && !widget.app.resources.unavailable.contains(bookId);
-        _loadedBookId = bookId; _hasSnapshot = true; loading = false;
+        resourceReady =
+            installed?['status'] == 'ready' &&
+            !widget.app.resources.unavailable.contains(bookId);
+        _loadedBookId = bookId;
+        _hasSnapshot = true;
+        loading = false;
         completedPractices = intOf(counts, 'completed_practices');
         mistakeCount = intOf(counts, 'mistakes');
-        completedTotal = intOf(counts, 'completed_lessons'); error = null;
+        completedTotal = intOf(counts, 'completed_lessons');
+        error = null;
       });
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'app', operation: '读取学习概览');
-      if (mounted && request == _request && !_loadAgain) setState(() {
-        loading = false; error = userError(e, fallback: '学习数据读取失败');
-      });
+      if (mounted && request == _request && !_loadAgain)
+        setState(() {
+          loading = false;
+          error = userError(e, fallback: '学习数据读取失败');
+        });
     } finally {
       if (mounted && request == _request) {
         _loadingBookId = null;
-        if (_loadAgain || bookId != textOf(widget.app.position, 'textbook_id')) {
+        if (_loadAgain ||
+            bookId != textOf(widget.app.position, 'textbook_id')) {
           unawaited(_load());
         }
       }
     }
   }
+
   Future<void> _continue() async {
-    if (loading || error != null || _loadedBookId != textOf(widget.app.position, 'textbook_id')) return;
+    if (loading ||
+        error != null ||
+        _loadedBookId != textOf(widget.app.position, 'textbook_id'))
+      return;
     final request = _request;
     final book = this.book, current = this.current;
-    if (book == null || current == null) { openPage(context, LibraryPage(widget.app)); return; }
-    final installed = await widget.app.resources.installation(textOf(book, 'id'));
-    if (!mounted || request != _request || loading || _loadedBookId != textOf(widget.app.position, 'textbook_id')) return;
-    if (installed?['status'] != 'ready' || widget.app.resources.unavailable.contains(book['id'])) {
+    if (book == null || current == null) {
+      openPage(context, LibraryPage(widget.app));
+      return;
+    }
+    final installed = await widget.app.resources.installation(
+      textOf(book, 'id'),
+    );
+    if (!mounted ||
+        request != _request ||
+        loading ||
+        _loadedBookId != textOf(widget.app.position, 'textbook_id'))
+      return;
+    if (installed?['status'] != 'ready' ||
+        widget.app.resources.unavailable.contains(book['id'])) {
       openPage(context, LibraryPage(widget.app));
     } else {
-      openPage(context, CourseLessonPage(widget.app, book, current,
-        openPractice: (context, id) => Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)))));
+      openPage(
+        context,
+        CourseLessonPage(
+          widget.app,
+          book,
+          current,
+          openPractice: (context, id) => Navigator.of(context).push<void>(
+            MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)),
+          ),
+        ),
+      );
     }
   }
+
   @override
-  void dispose() { widget.app.removeListener(_changed); super.dispose(); }
+  void dispose() {
+    widget.app.removeListener(_changed);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasCurrentSnapshot = _hasSnapshot && _loadedBookId == textOf(widget.app.position, 'textbook_id');
+    final hasCurrentSnapshot =
+        _hasSnapshot &&
+        _loadedBookId == textOf(widget.app.position, 'textbook_id');
     final book = hasCurrentSnapshot ? this.book : null;
     final current = hasCurrentSnapshot ? this.current : null;
     final lessons = hasCurrentSnapshot ? this.lessons : <RowData>[];
-    final currentLabel = current == null ? '' : lessonLabel(current);
-    final progress = current == null ? 0.0 : lessonPercent(progressRows, textOf(current, 'id')) / 100;
-    final completed = lessons.where((row) => lessonPercent(progressRows, textOf(row, 'id')) == 100).length;
+    final currentLabel = current == null
+        ? ''
+        : lessonLabel(current, locale: Localizations.localeOf(context));
+    final progress = current == null
+        ? 0.0
+        : lessonPercent(progressRows, textOf(current, 'id')) / 100;
+    final completed = lessons
+        .where((row) => lessonPercent(progressRows, textOf(row, 'id')) == 100)
+        .length;
     final textbookProgress = lessons.isEmpty ? 0.0 : completed / lessons.length;
     final waiting = error == null && !hasCurrentSnapshot;
-    final unavailable = !resourceReady || widget.app.resources.unavailable.contains(_loadedBookId);
-    final studyHint = waiting ? '正在读取所选内容…' : error != null && !hasCurrentSnapshot ? '学习数据读取失败，请重试'
-      : book == null ? '请选择内容开始学习' : unavailable ? '学习资源不可用，请前往内容选择页处理'
-      : current == null ? '本内容暂无课程，请前往内容选择页' : '';
+    final unavailable =
+        !resourceReady ||
+        widget.app.resources.unavailable.contains(_loadedBookId);
+    final studyHint = waiting
+        ? context.ui('正在读取所选内容…')
+        : error != null && !hasCurrentSnapshot
+        ? context.ui('学习数据读取失败，请重试')
+        : book == null
+        ? context.ui('请选择内容开始学习')
+        : unavailable
+        ? context.ui('学习资源不可用，请前往内容选择页处理')
+        : current == null
+        ? context.ui('本内容暂无课程，请前往内容选择页')
+        : '';
     return PageBody(
       children: [
         Row(
@@ -528,7 +804,7 @@ class _HomePanelState extends State<HomePanel> {
                 children: [
                   const Icon(Icons.local_fire_department, color: Colors.orange),
                   Text(
-                    ' ${intOf(widget.app.stats, 'streak')} 天',
+                    context.l10n.dayCount(intOf(widget.app.stats, 'streak')),
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -545,118 +821,161 @@ class _HomePanelState extends State<HomePanel> {
         ),
         const SizedBox(height: 8),
         Text(
-          '今日も、言葉のはじまり。',
-          style: Theme.of(context).textTheme.headlineSmall
-              ?.copyWith(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 20, fontWeight: FontWeight.w600, height: 1.4),
+          context.tr(
+            '今天，也从语言开始。',
+            '今天，也從語言開始。',
+            'A new beginning with words, every day.',
+            '今日も、言葉のはじまり。',
+          ),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 20),
-        if (!waiting && studyHint.isNotEmpty) StudyCard(child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Row(children: [
-            Expanded(child: Text(studyHint)),
-          ]),
-        )) else Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [indigo, Color(0xFF526D82)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        if (!waiting && studyHint.isNotEmpty)
+          StudyCard(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Row(children: [Expanded(child: Text(studyHint))]),
             ),
-            borderRadius: BorderRadius.circular(26),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                book == null
-                    ? '当前学习课程'
-                    : '当前学习课程 · ${textOf(book, 'textbook')} ${textOf(book, 'volume')}${currentLabel.isEmpty ? '' : ' · $currentLabel'}',
-                style: const TextStyle(color: Colors.white70),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [indigo, Color(0xFF526D82)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 6),
-              Text(
-                waiting ? '正在读取所选内容…' : current == null ? '请选择内容开始学习' : textOf(current, 'title'),
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontFamily: waiting || current == null ? 'PingFang SC' : 'Hiragino Sans', locale: waiting || current == null ? const Locale('zh', 'CN') : const Locale('ja', 'JP'),
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  book == null
+                      ? context.ui('当前学习课程')
+                      : '${context.l10n.currentLesson} · ${textOf(book, 'textbook')} ${textOf(book, 'volume')}${currentLabel.isEmpty ? '' : ' · $currentLabel'}',
+                  style: const TextStyle(color: Colors.white70),
                 ),
-              ),
-              if (!waiting && book == null) ...[
-                const SizedBox(height: 5),
-                const Text(
-                  '完成单词、课文、文法后，本课进度为 100%',
+                const SizedBox(height: 6),
+                Text(
+                  waiting
+                      ? context.ui('正在读取所选内容…')
+                      : current == null
+                      ? context.ui('请选择内容开始学习')
+                      : textOf(current, 'title'),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.merge(
+                        waiting || current == null || book == null
+                            ? null
+                            : _packageStyle(book),
+                      )
+                      .copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (!waiting && book == null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    context.ui('完成单词、课文、文法后，本课进度为 100%'),
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Text(
+                  context.ui('课程进度'),
                   style: TextStyle(color: Colors.white70),
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: StudyLinearProgressIndicator(
+                          value: progress,
+                          minHeight: 9,
+                          backgroundColor: Colors.white24,
+                          color: const Color(0xFFF4C95D),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      waiting ? '—%' : '${(progress * 100).round()}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  context.ui('内容进度'),
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: StudyLinearProgressIndicator(
+                          value: textbookProgress,
+                          minHeight: 9,
+                          backgroundColor: Colors.white24,
+                          color: const Color(0xFFF4C95D),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      waiting ? '—/—' : '$completed/${lessons.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ],
-              const SizedBox(height: 18),
-              const Text('课程进度', style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: StudyLinearProgressIndicator(
-                        value: progress,
-                        minHeight: 9,
-                        backgroundColor: Colors.white24,
-                        color: const Color(0xFFF4C95D),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    waiting ? '—%' : '${(progress * 100).round()}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              const Text('内容进度', style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: StudyLinearProgressIndicator(
-                        value: textbookProgress,
-                        minHeight: 9,
-                        backgroundColor: Colors.white24,
-                        color: const Color(0xFFF4C95D),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    waiting ? '—/—' : '$completed/${lessons.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-        if (error != null) StudyButton.text(onPressed: () => unawaited(_load()),
-          child: Text(hasCurrentSnapshot ? '刷新失败，当前显示上次数据，点击重试' : '学习概览读取失败，点击重试')),
-        const SectionTitle('快捷学习'),
+        if (error != null)
+          StudyButton.text(
+            onPressed: () => unawaited(_load()),
+            child: Text(
+              hasCurrentSnapshot
+                  ? context.ui('刷新失败，当前显示上次数据，点击重试')
+                  : context.ui('学习概览读取失败，点击重试'),
+            ),
+          ),
+        SectionTitle(context.ui('快捷学习')),
         StudyCardRow(
           children: [
             Expanded(
               child: QuickCard(
                 icon: Icons.play_arrow_rounded,
-                title: waiting ? '正在加载' : error != null && !hasCurrentSnapshot ? '暂不可用'
-                    : studyHint.isNotEmpty ? '选择内容' : canResume ? '继续学习' : '开始学习',
+                title: waiting
+                    ? context.ui('正在加载')
+                    : error != null && !hasCurrentSnapshot
+                    ? context.ui('暂不可用')
+                    : studyHint.isNotEmpty
+                    ? context.ui('选择内容')
+                    : canResume
+                    ? context.ui('继续学习')
+                    : context.ui('开始学习'),
                 subtitle: studyHint.isNotEmpty
                     ? studyHint
-                    : current == null ? '请选择内容开始学习' : '${lessonLabel(current)} · ${textOf(current, 'title')}',
+                    : current == null
+                    ? context.ui('请选择内容开始学习')
+                    : '${lessonLabel(current, locale: Localizations.localeOf(context))} · ${textOf(current, 'title')}',
                 subtitleColor: Colors.grey,
                 subtitleMaxLines: 1,
                 onTap: () => perform(context, _continue),
@@ -666,57 +985,74 @@ class _HomePanelState extends State<HomePanel> {
             Expanded(
               child: QuickCard(
                 icon: Icons.refresh,
-                title: '到期复习',
-                subtitle: '${intOf(widget.app.stats, 'due')} 张卡片',
+                title: context.ui('到期复习'),
+                subtitle: context.l10n.cardCount(
+                  intOf(widget.app.stats, 'due'),
+                ),
                 onTap: () => widget.onNavigate(2),
               ),
             ),
           ],
         ),
-        const SectionTitle('学习概览'),
-        StudyCardRow(children: [
-          Expanded(child: QuickCard(
-            icon: Icons.assignment_outlined,
-            title: '练习记录',
-            subtitle: '$completedPractices 次练习已完成',
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => HistoryPage(widget.app),
-            )),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: QuickCard(
-            icon: Icons.error_outline,
-            title: '错题记录',
-            subtitle: '$mistakeCount 道历史错题',
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => HistoryPage(widget.app, mistakes: true),
-            )),
-          )),
-        ]),
+        SectionTitle(context.ui('学习概览')),
+        StudyCardRow(
+          children: [
+            Expanded(
+              child: QuickCard(
+                icon: Icons.assignment_outlined,
+                title: context.ui('练习记录'),
+                subtitle: context.l10n.completedPracticeCount(
+                  completedPractices,
+                ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HistoryPage(widget.app)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: QuickCard(
+                icon: Icons.error_outline,
+                title: context.ui('错题记录'),
+                subtitle: context.l10n.mistakeCount(mistakeCount),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HistoryPage(widget.app, mistakes: true),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         StudyCardRow(
           children: [
             Expanded(
               child: StudyStat(
-                value:
-                    '$completedTotal',
-                label: '完成课程',
+                value: '$completedTotal',
+                label: context.ui('完成课程'),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: StudyStat(value: '${intOf(widget.app.stats, 'total')}', label: '累计答题'),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: StudyStat(
-                value: '${(intOf(widget.app.stats, 'total') == 0 ? 0 : (intOf(widget.app.stats, 'correct') * 100 / intOf(widget.app.stats, 'total')).round())}%',
-                label: '正确率',
+                value: '${intOf(widget.app.stats, 'total')}',
+                label: context.ui('累计答题'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: StudyStat(
+                value:
+                    '${(intOf(widget.app.stats, 'total') == 0 ? 0 : (intOf(widget.app.stats, 'correct') * 100 / intOf(widget.app.stats, 'total')).round())}%',
+                label: context.ui('正确率'),
               ),
             ),
           ],
         ),
-        const SectionTitle('学习建议'),
+        SectionTitle(context.ui('学习建议')),
         StudyCard(
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -728,8 +1064,10 @@ class _HomePanelState extends State<HomePanel> {
                 Expanded(
                   child: Text(
                     intOf(widget.app.stats, 'due') > 0
-                        ? '有 ${intOf(widget.app.stats, 'due')} 张卡片需要复习。先回忆再看答案，记忆会更牢。'
-                        : '今天没有到期卡片。完成一课，让新知识进入复习计划吧！',
+                        ? context.l10n.reviewAdvice(
+                            intOf(widget.app.stats, 'due'),
+                          )
+                        : context.ui('今天没有到期卡片。完成一课，让新知识进入复习计划吧！'),
                     style: const TextStyle(height: 1.55),
                   ),
                 ),
@@ -744,10 +1082,10 @@ class _HomePanelState extends State<HomePanel> {
   String _greeting() {
     final h = DateTime.now().hour;
     return h < 12
-        ? '早上好'
+        ? context.ui('早上好')
         : h < 18
-        ? '下午好'
-        : '晚上好';
+        ? context.ui('下午好')
+        : context.ui('晚上好');
   }
 }
 
@@ -757,6 +1095,7 @@ class LibraryPage extends StatefulWidget {
   @override
   State<LibraryPage> createState() => _LibraryPageState();
 }
+
 class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   List<RowData> books = [];
   Map<String, RowData> localBooks = {};
@@ -772,16 +1111,21 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
   bool? _serverReady;
   int _checkRevision = 0;
   bool _leaving = false, _wasResourceActive = false;
-  bool get _pageCurrent => mounted && !_leaving && ModalRoute.of(context)?.isCurrent == true;
+  bool get _pageCurrent =>
+      mounted && !_leaving && ModalRoute.of(context)?.isCurrent == true;
   bool get _operationBusy => selecting || widget.app.resourceOperations.busy;
   bool get _resourceBusy => fetching || _operationBusy;
-  bool _checkCurrent(int revision) => _pageCurrent && revision == _checkRevision && !_operationBusy;
+  bool _checkCurrent(int revision) =>
+      _pageCurrent && revision == _checkRevision && !_operationBusy;
   bool _canDownload(RowData book) {
     final id = textOf(book, 'id');
     final remote = widget.app.resources.publishedTextbook(id);
-    return _serverReady != false && remote != null &&
-        !widget.app.resources.hasInvalidPublishedTextbookHash(id) && textOf(remote, 'sfky') == '1';
+    return _serverReady != false &&
+        remote != null &&
+        !widget.app.resources.hasInvalidPublishedTextbookHash(id) &&
+        textOf(remote, 'sfky') == '1';
   }
+
   @override
   void initState() {
     super.initState();
@@ -791,23 +1135,34 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        if (_operationBusy) { unawaited(_local()); }
-        else { unawaited(_refresh()); }
+        if (_operationBusy) {
+          unawaited(_local());
+        } else {
+          unawaited(_refresh());
+        }
       }
     });
   }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && ModalRoute.of(context)?.isCurrent == true) {
-      if (_resourceBusy) { _refreshAgain = true; } else { unawaited(_refresh()); }
+    if (state == AppLifecycleState.resumed &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      if (_resourceBusy) {
+        _refreshAgain = true;
+      } else {
+        unawaited(_refresh());
+      }
     }
   }
+
   void _resourceChanged() {
     final active = widget.app.resources.activeBook != null;
     final finished = _wasResourceActive && !active;
     _wasResourceActive = active;
     if (finished && mounted) unawaited(_reloadFinishedResource());
   }
+
   Future<void> _reloadFinishedResource() async {
     try {
       await _local();
@@ -817,14 +1172,17 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       if (mounted) setState(() => error = '资源状态读取失败，请刷新重试。');
     }
   }
+
   @override
   void dispose() {
     widget.app.resources.removeListener(_resourceChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
+
   Future<bool> _checkConnection({int? checkRevision}) async {
-    bool current() => _pageCurrent && (checkRevision == null || _checkCurrent(checkRevision));
+    bool current() =>
+        _pageCurrent && (checkRevision == null || _checkCurrent(checkRevision));
     if (!current()) return false;
     final server = await widget.app.network.checkServer();
     if (!current()) return false;
@@ -841,6 +1199,7 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     // A cellular restriction must not block a working Wi-Fi server connection.
     return server.ready;
   }
+
   Future<void> _openNetworkSettings() async {
     final opened = await widget.app.network.openSettings();
     if (!opened && _pageCurrent) {
@@ -850,22 +1209,30 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       });
     }
   }
+
   void _finishFetching() {
     if (!mounted) return;
     setState(() => fetching = false);
     _resumeRefresh();
   }
+
   void _finishOperation() {
     if (!mounted) return;
-    setState(() { selecting = false; _operatingBookId = null; _operationLabel = '资源处理'; });
+    setState(() {
+      selecting = false;
+      _operatingBookId = null;
+      _operationLabel = '资源处理';
+    });
     _resumeRefresh();
   }
+
   void _resumeRefresh() {
     if (_refreshAgain && _pageCurrent && !_resourceBusy) {
       _refreshAgain = false;
       unawaited(_refresh());
     }
   }
+
   Future<void> _local({int? checkRevision}) async {
     final rows = await widget.app.store.textbooks();
     final localById = {for (final row in rows) textOf(row, 'id'): row};
@@ -877,18 +1244,28 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
         if (!publishedIds.contains(textOf(row, 'id'))) row,
     ];
     final installs = await widget.app.resources.installations();
-    final counts = await widget.app.store.db.rawQuery('SELECT textbook_id,COUNT(*) count FROM yzc_lessons GROUP BY textbook_id');
-    if (mounted && (checkRevision == null || _checkCurrent(checkRevision))) setState(() {
-      books = combined;
-      localBooks = localById;
-      installed = {for (final r in installs) textOf(r, 'textbook_id'): r};
-      lessonCounts = {for (final r in counts) textOf(r, 'textbook_id'): intOf(r, 'count')};
-    });
+    final counts = await widget.app.store.db.rawQuery(
+      'SELECT textbook_id,COUNT(*) count FROM yzc_lessons GROUP BY textbook_id',
+    );
+    if (mounted && (checkRevision == null || _checkCurrent(checkRevision)))
+      setState(() {
+        books = combined;
+        localBooks = localById;
+        installed = {for (final r in installs) textOf(r, 'textbook_id'): r};
+        lessonCounts = {
+          for (final r in counts) textOf(r, 'textbook_id'): intOf(r, 'count'),
+        };
+      });
   }
+
   Future<void> _refresh() async {
     if (_resourceBusy || !_pageCurrent) return;
     final revision = ++_checkRevision;
-    setState(() { fetching = true; error = widget.app.resources.lastError; permissionError = false; });
+    setState(() {
+      fetching = true;
+      error = widget.app.resources.lastError;
+      permissionError = false;
+    });
     try {
       widget.app.resources.clearPublishedTextbooks();
       await _local(checkRevision: revision);
@@ -908,25 +1285,40 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
       if (!_checkCurrent(revision)) return;
       widget.app.resources.clearPublishedTextbooks();
       await _local(checkRevision: revision);
-      if (_isNetworkError(e) && !(await _checkConnection(checkRevision: revision))) return;
+      if (_isNetworkError(e) &&
+          !(await _checkConnection(checkRevision: revision)))
+        return;
       if (_checkCurrent(revision)) _showOperationError('内容目录更新失败', e);
-    } finally { _finishFetching(); }
+    } finally {
+      _finishFetching();
+    }
   }
+
   String _errorDetail(Object error) => userError(error, fallback: '处理失败');
-  bool _isNetworkError(Object error) => error is SocketException || error is HttpException ||
-      error is HandshakeException || error is TimeoutException;
+  bool _isNetworkError(Object error) =>
+      error is SocketException ||
+      error is HttpException ||
+      error is HandshakeException ||
+      error is TimeoutException;
   void _showOperationError(String title, Object cause) {
     setState(() {
       error = cause is StateError && cause.message == '学习资源包更新失败'
-          ? '学习资源包更新失败' : '$title：${_errorDetail(cause)}';
+          ? '学习资源包更新失败'
+          : '$title：${_errorDetail(cause)}';
       _errorNeedsRecheck = _isNetworkError(cause);
       permissionError = false;
     });
   }
+
   void _closeError() {
     widget.app.resources.lastError = null;
-    setState(() { error = null; permissionError = false; _errorNeedsRecheck = false; });
+    setState(() {
+      error = null;
+      permissionError = false;
+      _errorNeedsRecheck = false;
+    });
   }
+
   void _back() {
     if (_operationBusy) {
       showResourceWait(
@@ -937,109 +1329,194 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     }
     Navigator.of(context).maybePop();
   }
+
   Future<void> _leaveAfterOperation() async {
     if (!_pageCurrent) return;
     setState(() => _leaving = true);
     await WidgetsBinding.instance.endOfFrame;
     if (mounted) Navigator.pop(context);
   }
+
   Future<void> _download(String id, {bool select = false}) async {
     if (_resourceBusy || !_pageCurrent) return;
     ++_checkRevision;
-    setState(() { selecting = true; _operatingBookId = id;
+    setState(() {
+      selecting = true;
+      _operatingBookId = id;
       _operationLabel = installed[id]?['status'] == 'ready' ? '资源更新' : '资源下载';
-      error = null; permissionError = false; });
+      error = null;
+      permissionError = false;
+    });
     try {
       try {
         await widget.app.resources.download(id);
         if (select && _pageCurrent) await widget.app.store.selectBook(id);
         await widget.app.reload();
-      } finally { await _local(); }
+      } finally {
+        await _local();
+      }
       if (_pageCurrent) {
         final summary = widget.app.resources.lastInstallSummary;
-        ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text(
-          summary == null ? '内容已安装，可离线学习' : '内容已安装：$summary')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(
+            content: Text(
+              summary == null
+                  ? context.ui('内容已安装，可离线学习')
+                  : context.tr(
+                      '内容已安装：${context.ui(summary)}',
+                      '內容已安裝：${context.ui(summary)}',
+                      'Content installed: ${context.ui(summary)}',
+                      '教材をインストールしました：${context.ui(summary)}',
+                    ),
+            ),
+          ),
+        );
       }
       if (_pageCurrent && select) await _leaveAfterOperation();
     } catch (e, stack) {
-      if (e is! ResourceCancelled) SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
+      if (e is! ResourceCancelled)
+        SystemErrors.record(e, stack, module: 'app', operation: '下载内容');
       if (!mounted) return;
-      if (_pageCurrent) setState(() {
-        error = widget.app.resources.lastError ?? '内容下载失败：${_errorDetail(e)}';
-        _errorNeedsRecheck = _isNetworkError(e) || e is ResourceHashMismatch;
-      });
-    } finally { _finishOperation(); }
+      if (_pageCurrent)
+        setState(() {
+          error = widget.app.resources.lastError ?? '内容下载失败：${_errorDetail(e)}';
+          _errorNeedsRecheck = _isNetworkError(e) || e is ResourceHashMismatch;
+        });
+    } finally {
+      _finishOperation();
+    }
   }
+
   Future<void> _select(String id) async {
     if (_operationBusy || !_pageCurrent) return;
-    if (installed[id]?['status'] != 'ready' || widget.app.resources.unavailable.contains(id)) {
+    if (installed[id]?['status'] != 'ready' ||
+        widget.app.resources.unavailable.contains(id)) {
       final book = books.firstWhere((book) => textOf(book, 'id') == id);
       if (!_canDownload(book)) return;
       await _download(id, select: true);
       return;
     }
+    final selected =
+        localBooks[id] ?? books.firstWhere((book) => textOf(book, 'id') == id);
+    if (ContentLanguage.tryFromTextbook(selected) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(
+          content: Text(
+            context.tr(
+              '内容包缺少有效语言信息，请更新资源或联系内容维护者。',
+              '內容包缺少有效語言資訊，請更新資源或聯絡內容維護者。',
+              'This content pack has no valid language metadata. Update it or contact the content maintainer.',
+              '教材パックの言語情報が無効です。更新するか、コンテンツ管理者にお問い合わせください。',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     ++_checkRevision;
-    setState(() { selecting = true; _operationLabel = '内容切换'; });
-    final lease = widget.app.resourceOperations.acquire(
-      ResourceOperationKind.textbookSelect, id, '学习内容切换');
-    try {
-    await perform(context, () async {
-      await widget.app.store.selectBook(id);
-      await widget.app.reload();
-      if (_pageCurrent) await _leaveAfterOperation();
+    setState(() {
+      selecting = true;
+      _operationLabel = '内容切换';
     });
+    final lease = widget.app.resourceOperations.acquire(
+      ResourceOperationKind.textbookSelect,
+      id,
+      '学习内容切换',
+    );
+    try {
+      await perform(context, () async {
+        await widget.app.store.selectBook(id);
+        await widget.app.reload();
+        if (_pageCurrent) await _leaveAfterOperation();
+      });
     } finally {
       widget.app.resourceOperations.release(lease);
       _finishOperation();
     }
   }
+
   Future<void> _remove(RowData book) async {
     if (_resourceBusy || !_pageCurrent) return;
     ++_checkRevision;
     final id = textOf(book, 'id');
     final lease = widget.app.resourceOperations.acquire(
-      ResourceOperationKind.textbookDelete, id, '学习资源删除');
-    setState(() { selecting = true; _operationLabel = '资源删除'; });
-    try {
-    final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
-      title: const Text('删除本地内容？'),
-      content: Text('将删除“${textOf(book, 'textbook')} · ${textOf(book, 'volume')}”的单元、课程、单词、课文、文法、练习和音频。练习、复习及学习记录会保留。删除后只能下载服务器仍提供的内容；服务器已移除的内容将无法再次下载。'),
-      actions: [
-        StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-        StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('删除')),
-      ],
-    ));
-    if (yes != true || !_pageCurrent || widget.app.resources.activeBook != null) return;
-    setState(() => _operatingBookId = id);
-    await perform(context, () async {
-      try {
-        await widget.app.resources.remove(id, operationLease: lease);
-        await widget.app.reload();
-      } finally {
-        await _local();
-      }
-      if (_pageCurrent) ScaffoldMessenger.of(context).showSnackBar(GlassSnackBar(content: Text('本地学习资源已删除，学习记录已保留')));
+      ResourceOperationKind.textbookDelete,
+      id,
+      '学习资源删除',
+    );
+    setState(() {
+      selecting = true;
+      _operationLabel = '资源删除';
     });
+    try {
+      final yes = await showGlassDialog<bool>(
+        context: context,
+        builder: (context) => GlassAlertDialog(
+          title: Text(context.ui('删除本地内容？')),
+          content: Text(
+            context.l10n.deleteContentBody(
+              '${textOf(book, 'textbook')} · ${textOf(book, 'volume')}',
+            ),
+          ),
+          actions: [
+            StudyButton.text(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.ui('取消')),
+            ),
+            StudyButton.filled(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(context.ui('删除')),
+            ),
+          ],
+        ),
+      );
+      if (yes != true ||
+          !_pageCurrent ||
+          widget.app.resources.activeBook != null)
+        return;
+      setState(() => _operatingBookId = id);
+      await perform(context, () async {
+        try {
+          await widget.app.resources.remove(id, operationLease: lease);
+          await widget.app.reload();
+        } finally {
+          await _local();
+        }
+        if (_pageCurrent)
+          ScaffoldMessenger.of(context).showSnackBar(
+            GlassSnackBar(content: Text(context.ui('本地学习资源已删除，学习记录已保留'))),
+          );
+      });
     } finally {
       widget.app.resourceOperations.release(lease);
       _finishOperation();
     }
   }
+
   Widget _bookCard(RowData book, Resources resource) {
     final id = textOf(book, 'id');
     final textbook = textOf(book, 'textbook').trim();
-    final displayTextbook = textbook.isEmpty ? '内容' : textbook;
-    final coverParts = displayTextbook.split(RegExp(r'\s*[-－—–]\s*')).where((part) => part.isNotEmpty).toList();
+    final displayTextbook = textbook.isEmpty ? context.ui('内容') : textbook;
+    final coverParts = displayTextbook
+        .split(RegExp(r'\s*[-－—–]\s*'))
+        .where((part) => part.isNotEmpty)
+        .toList();
     final coverTitleLines = coverParts.length <= 2
         ? coverParts
         : [coverParts.first, coverParts.skip(1).join('-')];
     final operating = (_operatingBookId ?? resource.activeBook) == id;
-    final ready = installed[id]?['status'] == 'ready' && !resource.unavailable.contains(id);
+    final ready =
+        installed[id]?['status'] == 'ready' &&
+        !resource.unavailable.contains(id);
     final remote = resource.publishedTextbook(id);
-    final localOnly = resource.hasPublishedCatalog && remote == null && localBooks.containsKey(id);
+    final localOnly =
+        resource.hasPublishedCatalog &&
+        remote == null &&
+        localBooks.containsKey(id);
     final invalidHash = resource.hasInvalidPublishedTextbookHash(id);
     final remoteHash = remote?['sha256'];
-    final update = ready && remoteHash is String && remoteHash != installed[id]?['sha256'];
+    final update =
+        ready && remoteHash is String && remoteHash != installed[id]?['sha256'];
     final missing = !ready;
     final disabled = _operationBusy;
     final canDownload = _canDownload(book);
@@ -1047,137 +1524,351 @@ class _LibraryPageState extends State<LibraryPage> with WidgetsBindingObserver {
     final String statusText;
     if (localOnly) {
       statusText = ready
-          ? '本地数据，服务器已删除，可离线使用'
-          : '本地资源异常，服务器已删除，可删除本地数据';
+          ? context.ui('本地数据，服务器已删除，可离线使用')
+          : context.ui('本地资源异常，服务器已删除，可删除本地数据');
     } else if (ready) {
-      statusText = '可离线使用';
+      statusText = context.ui('可离线使用');
     } else if (installed[id]?['status'] == 'broken') {
       statusText = resource.hasPublishedCatalog && remote != null
-          ? '音频缺失或资源需修复，请重新下载'
-          : '本地资源异常，可删除本地数据';
+          ? context.ui('音频缺失或资源需修复，请重新下载')
+          : context.ui('本地资源异常，可删除本地数据');
     } else {
-      statusText = '选择后下载';
+      statusText = context.ui('选择后下载');
     }
-    return Padding(padding: const EdgeInsets.only(bottom: 12), child: StudyCard(child: StudyInkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: disabled || (!ready && !(missing && canDownload && !fetching)) ? null : () => _select(id),
-      child: Stack(children: [
-        Padding(padding: const EdgeInsets.fromLTRB(18, 18, 58, 18), child: Row(children: [
-          Container(width: 62, height: 78, decoration: BoxDecoration(color: bookColor(book), borderRadius: BorderRadius.circular(10)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            for (var index = 0; index < coverTitleLines.length; index++) ...[
-              if (index > 0) const SizedBox(height: 2),
-              SizedBox(width: 54, height: 16, child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(coverTitleLines[index], maxLines: 1, softWrap: false,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-              )),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: StudyCard(
+        child: StudyInkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: disabled || (!ready && !(missing && canDownload && !fetching))
+              ? null
+              : () => _select(id),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 58, 18),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 62,
+                      height: 78,
+                      decoration: BoxDecoration(
+                        color: bookColor(book),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (
+                            var index = 0;
+                            index < coverTitleLines.length;
+                            index++
+                          ) ...[
+                            if (index > 0) const SizedBox(height: 2),
+                            SizedBox(
+                              width: 54,
+                              height: 16,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  coverTitleLines[index],
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 5),
+                          Text(
+                            textOf(book, 'volume'),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  displayTextbook,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                textOf(book, 'volume'),
+                                style: TextStyle(
+                                  color: bookColor(book),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            textOf(book, 'descr'),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          if (!invalidHash || ready) ...[
+                            const SizedBox(height: 7),
+                            Row(
+                              children: [
+                                const Icon(Icons.headphones, size: 16),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    resource.activeBook == id
+                                        ? resourceOperationText(
+                                            widget.app.resourceOperations.stage,
+                                            resource.progress,
+                                            subject: '学习资源',
+                                            context: context,
+                                          )
+                                        : '${lessonCounts.containsKey(id) ? '${context.l10n.lessonCount(lessonCounts[id]!)} · ' : ''}$statusText',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (resource.activeBook == id) ...[
+                            ResourceOperationPanel(
+                              progress: resource.progress,
+                              canCancel:
+                                  resource.stage != 'delete' &&
+                                  resource.canCancel,
+                              cancelling: resource.cancelling,
+                              onCancel: resource.cancelDownload,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (operating)
+                Positioned(
+                  top: 7,
+                  right: 7,
+                  child: Semantics(
+                    label: context.ui('正在处理内容'),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: IconTheme(
+                          data: IconThemeData(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          child: const ResourceActivityIcon(checking: true),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (!operating && invalidHash)
+                Positioned(
+                  top: 7,
+                  right: 7,
+                  child: Tooltip(
+                    message: context.ui('内容校验错误'),
+                    child: Semantics(
+                      label: context.ui('内容校验错误'),
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Center(
+                          child: Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (!operating &&
+                  !invalidHash &&
+                  !_resourceBusy &&
+                  canDownload &&
+                  (missing || update))
+                Positioned(
+                  top: 7,
+                  right: 7,
+                  child: StudyIconButton(
+                    tooltip: update ? context.ui('更新内容') : context.ui('下载内容'),
+                    icon: Icon(
+                      update
+                          ? Icons.system_update_alt
+                          : Icons.download_outlined,
+                    ),
+                    color: Theme.of(context).colorScheme.primary,
+                    onPressed: canDownload ? () => _download(id) : null,
+                  ),
+                ),
+              if (removable)
+                Positioned(
+                  bottom: 7,
+                  right: 7,
+                  child: StudyIconButton(
+                    tooltip: context.ui('删除本地内容'),
+                    icon: const Icon(Icons.delete_outline),
+                    color: Theme.of(context).colorScheme.error,
+                    onPressed: disabled || fetching
+                        ? null
+                        : () => _remove(book),
+                  ),
+                ),
             ],
-            const SizedBox(height: 5), Text(textOf(book, 'volume'), style: const TextStyle(color: Colors.white70, fontSize: 10)),
-          ])),
-          const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Flexible(child: Text(displayTextbook, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
-              const SizedBox(width: 8),
-              Text(textOf(book, 'volume'), style: TextStyle(color: bookColor(book), fontWeight: FontWeight.w700)),
-            ]),
-            const SizedBox(height: 5), Text(textOf(book, 'descr'), style: Theme.of(context).textTheme.bodySmall),
-            if (!invalidHash || ready) ...[
-              const SizedBox(height: 7),
-              Row(children: [const Icon(Icons.headphones, size: 16), const SizedBox(width: 5), Expanded(child: Text(
-                resource.activeBook == id
-                  ? resourceOperationText(widget.app.resourceOperations.stage,
-                      resource.progress, subject: '学习资源')
-                  : '${lessonCounts.containsKey(id) ? '${lessonCounts[id]} 课 · ' : ''}$statusText',
-                style: Theme.of(context).textTheme.labelMedium,
-              ))]),
-            ],
-            if (resource.activeBook == id) ...[
-              ResourceOperationPanel(progress: resource.progress,
-                canCancel: resource.stage != 'delete' && resource.canCancel,
-                cancelling: resource.cancelling, onCancel: resource.cancelDownload),
-            ],
-          ])),
-        ])),
-        if (operating) Positioned(top: 7, right: 7, child: Semantics(
-          label: '正在处理内容',
-          child: SizedBox(width: 48, height: 48, child: Center(child: IconTheme(
-            data: IconThemeData(color: Theme.of(context).colorScheme.primary),
-            child: const ResourceActivityIcon(checking: true),
-          ))),
-        )),
-        if (!operating && invalidHash) Positioned(top: 7, right: 7, child: Tooltip(
-          message: '内容校验错误',
-          child: Semantics(
-            label: '内容校验错误',
-            child: SizedBox(width: 48, height: 48, child: Center(child: Icon(
-              Icons.error_outline, color: Theme.of(context).colorScheme.error,
-            ))),
           ),
-        )),
-        if (!operating && !invalidHash && !_resourceBusy && canDownload && (missing || update)) Positioned(top: 7, right: 7, child: StudyIconButton(
-          tooltip: update ? '更新内容' : '下载内容',
-          icon: Icon(update ? Icons.system_update_alt : Icons.download_outlined),
-          color: Theme.of(context).colorScheme.primary,
-          onPressed: canDownload ? () => _download(id) : null,
-        )),
-        if (removable) Positioned(bottom: 7, right: 7, child: StudyIconButton(
-          tooltip: '删除本地内容',
-          icon: const Icon(Icons.delete_outline),
-          color: Theme.of(context).colorScheme.error,
-          onPressed: disabled || fetching ? null : () => _remove(book),
-        )),
-      ]),
-    )));
+        ),
+      ),
+    );
   }
+
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(animation: Listenable.merge([
-    widget.app.resources, widget.app.resourceOperations,
-  ]), builder: (_, __) {
-    final resource = widget.app.resources;
-    final displayError = error ?? resource.lastError;
-    return PopScope(
-      canPop: !_operationBusy || _leaving,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _operationBusy && !_leaving) {
-          showResourceWait(
-            context,
-            widget.app.resourceOperations.label ?? _operationLabel,
-          );
-        }
-      },
-      child: PlaybackScaffold(appBar: StudyAppBar(title: const Text('学习资源'),
-        leading: StudyIconButton(tooltip: '返回', onPressed: _back,
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20)),
-        actions: [StudyIconButton(tooltip: _operationBusy ? '正在$_operationLabel' : fetching ? '正在检查内容' : '刷新内容',
-          onPressed: _resourceBusy ? null : _refresh,
-          icon: ResourceActivityIcon(checking: _resourceBusy))]), body: ListView(padding: const EdgeInsets.all(20), children: [
-      Text('从哪里开始？', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 6),
-      Text('可随时切换内容，学习记录会分别保留。', style: Theme.of(context).textTheme.bodyLarge),
-      const SizedBox(height: 20),
-      if (displayError != null) StudyCard(child: Padding(padding: const EdgeInsets.all(12), child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(displayError),
-            if (installed.values.any((row) => row['status'] == 'ready'))
-              const Padding(padding: EdgeInsets.only(top: 8), child: Text('本地内容可继续离线学习。')),
-            if (resource.lastFailedBook != null) StudyButton.text(
-              onPressed: _resourceBusy ? null : () => _download(resource.lastFailedBook!),
-              child: const Text('重试下载')),
-            if (permissionError) StudyButton.text(onPressed: _operationBusy ? null : _openNetworkSettings, child: const Text('前往设置')),
-          ])),
-          const SizedBox(width: 12),
-          StudyButton.text(
-            onPressed: _resourceBusy ? null : (_errorNeedsRecheck ? _refresh : _closeError),
-            child: Text(_errorNeedsRecheck ? '重新检查' : '关闭'),
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: Listenable.merge([
+      widget.app.resources,
+      widget.app.resourceOperations,
+    ]),
+    builder: (_, __) {
+      final resource = widget.app.resources;
+      final displayError = error ?? resource.lastError;
+      return PopScope(
+        canPop: !_operationBusy || _leaving,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop && _operationBusy && !_leaving) {
+            showResourceWait(
+              context,
+              widget.app.resourceOperations.label ?? _operationLabel,
+            );
+          }
+        },
+        child: PlaybackScaffold(
+          appBar: StudyAppBar(
+            title: Text(context.ui('学习资源')),
+            leading: StudyIconButton(
+              tooltip: context.ui('返回'),
+              onPressed: _back,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            ),
+            actions: [
+              StudyIconButton(
+                tooltip: _operationBusy
+                    ? context.tr(
+                        '正在$_operationLabel',
+                        '正在${context.ui(_operationLabel)}',
+                        '${context.ui(_operationLabel)} in progress',
+                        '${context.ui(_operationLabel)}中',
+                      )
+                    : fetching
+                    ? context.ui('正在检查内容')
+                    : context.ui('刷新内容'),
+                onPressed: _resourceBusy ? null : _refresh,
+                icon: ResourceActivityIcon(checking: _resourceBusy),
+              ),
+            ],
           ),
-        ],
-      ))),
-      if (!fetching && books.isEmpty && error == null) const Padding(padding: EdgeInsets.all(24), child: Text('暂无内容目录，可刷新获取。')),
-      for (final book in books) _bookCard(book, resource),
-    ])));
-  });
+          body: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Text(
+                context.ui('从哪里开始？'),
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                context.ui('可随时切换内容，学习记录会分别保留。'),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 20),
+              if (displayError != null)
+                StudyCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.ui(displayError)),
+                              if (installed.values.any(
+                                (row) => row['status'] == 'ready',
+                              ))
+                                Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: Text(context.ui('本地内容可继续离线学习。')),
+                                ),
+                              if (resource.lastFailedBook != null)
+                                StudyButton.text(
+                                  onPressed: _resourceBusy
+                                      ? null
+                                      : () =>
+                                            _download(resource.lastFailedBook!),
+                                  child: Text(context.ui('重试下载')),
+                                ),
+                              if (permissionError)
+                                StudyButton.text(
+                                  onPressed: _operationBusy
+                                      ? null
+                                      : _openNetworkSettings,
+                                  child: Text(context.ui('前往设置')),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        StudyButton.text(
+                          onPressed: _resourceBusy
+                              ? null
+                              : (_errorNeedsRecheck ? _refresh : _closeError),
+                          child: Text(
+                            _errorNeedsRecheck
+                                ? context.ui('重新检查')
+                                : context.ui('关闭'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (!fetching && books.isEmpty && error == null)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(context.l10n.noCatalog),
+                ),
+              for (final book in books) _bookCard(book, resource),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class CoursePanel extends StatefulWidget {
@@ -1186,104 +1877,328 @@ class CoursePanel extends StatefulWidget {
   @override
   State<CoursePanel> createState() => _CoursePanelState();
 }
+
 class _CoursePanelState extends State<CoursePanel> {
   late Future<List<Object>> data;
   String bookId = '';
   @override
-  void initState() { super.initState(); widget.app.addListener(_changed); _load(); }
+  void initState() {
+    super.initState();
+    widget.app.addListener(_changed);
+    _load();
+  }
+
   void _load() {
     bookId = textOf(widget.app.position, 'textbook_id');
     data = Future.wait<Object>([
-      widget.app.store.db.query('yzc_textbook', where: 'id=?', whereArgs: [bookId]),
-      widget.app.store.lessons(bookId), widget.app.store.progress(bookId),
-      widget.app.store.db.query('yzc_unit', where: 'textbook_id=?', whereArgs: [bookId], orderBy: 'num IS NULL,num,id'),
+      widget.app.store.db.query(
+        'yzc_textbook',
+        where: 'id=?',
+        whereArgs: [bookId],
+      ),
+      widget.app.store.lessons(bookId),
+      widget.app.store.progress(bookId),
+      widget.app.store.db.query(
+        'yzc_unit',
+        where: 'textbook_id=?',
+        whereArgs: [bookId],
+        orderBy: 'num IS NULL,num,id',
+      ),
       widget.app.store.bookPosition(bookId),
     ]);
   }
-  void _changed() { if (mounted) setState(_load); }
+
+  void _changed() {
+    if (mounted) setState(_load);
+  }
+
   @override
-  void dispose() { widget.app.removeListener(_changed); super.dispose(); }
+  void dispose() {
+    widget.app.removeListener(_changed);
+    super.dispose();
+  }
+
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<Object>>(future: data, builder: (_, snapshot) {
-    if (snapshot.hasError) return const Center(child: Text('课程读取失败'));
-    if (!snapshot.hasData) return const Center(child: StudyCircularProgressIndicator());
-    final books = snapshot.data![0] as List<RowData>, lessons = snapshot.data![1] as List<RowData>, progress = snapshot.data![2] as List<RowData>, units = snapshot.data![3] as List<RowData>, positions = snapshot.data![4] as List<RowData>;
-    if (books.isEmpty || lessons.isEmpty) return PageBody(children: [
-      Text('我的课程', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 80),
-      Icon(Icons.menu_book_outlined, size: 74, color: Theme.of(context).colorScheme.outlineVariant),
-      const SizedBox(height: 22),
-      Text('还没有选择内容', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      Text('选择一本内容，从第一课开始建立自己的语言小径。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      const SizedBox(height: 26),
-      StudyButton.filledIcon(onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.add), label: const Text('选择内容')),
-    ]);
-    final book = books.single;
-    final currentLessonId = positions.isEmpty ? '' : textOf(positions.single, 'lessons_id');
-    final currentLesson = lessons.where((lesson) => textOf(lesson, 'id') == currentLessonId);
-    final currentUnitId = currentLesson.isEmpty ? null : currentLesson.single['unit_id'];
-    Widget lessonTile(RowData lesson) {
-      final done = lessonPercent(progress, textOf(lesson, 'id')) == 100;
-      return StudyInkWell(onTap: () => openPage(
-        context,
-        CourseLessonPage(widget.app, book, lesson,
-          openPractice: (context, id) => Navigator.of(context).push<void>(
-            MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)),
+  Widget build(BuildContext context) => FutureBuilder<List<Object>>(
+    future: data,
+    builder: (_, snapshot) {
+      if (snapshot.hasError)
+        return Center(
+          child: Text(
+            context.tr(
+              '课程读取失败',
+              '課程讀取失敗',
+              'Could not load lessons',
+              'レッスンを読み込めませんでした',
+            ),
+          ),
+        );
+      if (!snapshot.hasData)
+        return const Center(child: StudyCircularProgressIndicator());
+      final books = snapshot.data![0] as List<RowData>,
+          lessons = snapshot.data![1] as List<RowData>,
+          progress = snapshot.data![2] as List<RowData>,
+          units = snapshot.data![3] as List<RowData>,
+          positions = snapshot.data![4] as List<RowData>;
+      if (books.isEmpty || lessons.isEmpty)
+        return PageBody(
+          children: [
+            Text(
+              context.ui('我的课程'),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 80),
+            Icon(
+              Icons.menu_book_outlined,
+              size: 74,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            const SizedBox(height: 22),
+            Text(
+              context.ui('还没有选择内容'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.ui('选择一本内容，从第一课开始建立自己的语言小径。'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                height: 1.6,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 26),
+            StudyButton.filledIcon(
+              onPressed: () => openPage(context, LibraryPage(widget.app)),
+              icon: const Icon(Icons.add),
+              label: Text(context.ui('选择内容')),
+            ),
+          ],
+        );
+      final book = books.single;
+      final currentLessonId = positions.isEmpty
+          ? ''
+          : textOf(positions.single, 'lessons_id');
+      final currentLesson = lessons.where(
+        (lesson) => textOf(lesson, 'id') == currentLessonId,
+      );
+      final currentUnitId = currentLesson.isEmpty
+          ? null
+          : currentLesson.single['unit_id'];
+      Widget lessonTile(RowData lesson) {
+        final done = lessonPercent(progress, textOf(lesson, 'id')) == 100;
+        final locale = Localizations.localeOf(context);
+        final fullLessonLabel = lessonLabel(lesson, locale: locale);
+        final listLessonLabel = lessonLabel(
+          lesson,
+          locale: locale,
+          compactEnglish: true,
+        );
+        return StudyInkWell(
+          onTap: () => openPage(
+            context,
+            CourseLessonPage(
+              widget.app,
+              book,
+              lesson,
+              openPractice: (context, id) => Navigator.of(context).push<void>(
+                MaterialPageRoute(builder: (_) => PracticePage(widget.app, id)),
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 66,
+                  child: Semantics(
+                    label: fullLessonLabel,
+                    child: ExcludeSemantics(
+                      child: Text(
+                        listLessonLabel,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: done ? Colors.green : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        textOf(lesson, 'title'),
+                        style: _packageStyle(
+                          book,
+                        ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      if (textOf(lesson, 'sub_title').isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          textOf(lesson, 'sub_title'),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.merge(_packageStyle(book, explanation: true)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  done ? Icons.check_circle : Icons.chevron_right,
+                  size: 21,
+                  color: done
+                      ? Colors.green
+                      : Theme.of(context).colorScheme.outline,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      Widget unitCard(
+        RowData unit,
+        List<RowData> children,
+        bool expanded, {
+        bool useUnitTitle = true,
+      }) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: StudyCard(
+          clipBehavior: Clip.antiAlias,
+          child: StudyExpansionTile(
+            key: PageStorageKey('$bookId:${unit['id']}'),
+            initiallyExpanded: expanded,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 3,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+            title: Text(
+              intOf(unit, 'num') > 0
+                  ? context.l10n.unitNumber('${intOf(unit, 'num')}')
+                  : textOf(unit, 'title'),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: bookColor(book),
+              ),
+            ),
+            subtitle: useUnitTitle && textOf(unit, 'title').trim().isNotEmpty
+                ? Text(textOf(unit, 'title'))
+                : children.isEmpty
+                ? null
+                : Text(
+                    children.length == 1
+                        ? lessonLabel(
+                            children.first,
+                            locale: Localizations.localeOf(context),
+                          )
+                        : '${lessonLabel(children.first, locale: Localizations.localeOf(context))}—${lessonLabel(children.last, locale: Localizations.localeOf(context))}',
+                  ),
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const StudyDivider(height: 1),
+                lessonTile(children[i]),
+              ],
+            ],
           ),
         ),
-      ), child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 15), child: Row(children: [
-          SizedBox(width: 66, child: Text(lessonLabel(lesson), style: TextStyle(fontWeight: FontWeight.w600, color: done ? Colors.green : null))),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(textOf(lesson, 'title'), style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 16, fontWeight: FontWeight.w600)),
-            if (textOf(lesson, 'sub_title').isNotEmpty) ...[const SizedBox(height: 2), Text(textOf(lesson, 'sub_title'), style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP')))],
-          ])),
-          Icon(done ? Icons.check_circle : Icons.chevron_right, size: 21, color: done ? Colors.green : Theme.of(context).colorScheme.outline),
-        ]),
-      ));
-    }
-    Widget unitCard(RowData unit, List<RowData> children, bool expanded, {bool useUnitTitle = true}) => Padding(
-      padding: const EdgeInsets.only(bottom: 12), child: StudyCard(clipBehavior: Clip.antiAlias, child: StudyExpansionTile(
-        key: PageStorageKey('$bookId:${unit['id']}'), initiallyExpanded: expanded,
-        shape: const Border(), collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 3), childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-        title: Text(intOf(unit, 'num') > 0 ? '第${chineseNumber(intOf(unit, 'num'))}单元' : textOf(unit, 'title'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: bookColor(book))),
-        subtitle: useUnitTitle && textOf(unit, 'title').trim().isNotEmpty
-          ? Text(textOf(unit, 'title'))
-          : children.isEmpty ? null : Text(children.length == 1 ? lessonLabel(children.first) : '${lessonLabel(children.first)}—${lessonLabel(children.last)}'),
-        children: [for (var i = 0; i < children.length; i++) ...[if (i > 0) const StudyDivider(height: 1), lessonTile(children[i])]],
-      )),
-    );
-    final unitIds = units.map((unit) => unit['id']).toSet();
-    final currentLessonIsUngrouped = currentLesson.isNotEmpty && !unitIds.contains(currentUnitId);
-    final lessonsByUnit = <Object?, List<RowData>>{};
-    final ungrouped = <RowData>[];
-    for (final lesson in lessons) {
-      if (unitIds.contains(lesson['unit_id'])) {
-        lessonsByUnit.putIfAbsent(lesson['unit_id'], () => []).add(lesson);
-      } else {
-        ungrouped.add(lesson);
+      );
+      final unitIds = units.map((unit) => unit['id']).toSet();
+      final currentLessonIsUngrouped =
+          currentLesson.isNotEmpty && !unitIds.contains(currentUnitId);
+      final lessonsByUnit = <Object?, List<RowData>>{};
+      final ungrouped = <RowData>[];
+      for (final lesson in lessons) {
+        if (unitIds.contains(lesson['unit_id'])) {
+          lessonsByUnit.putIfAbsent(lesson['unit_id'], () => []).add(lesson);
+        } else {
+          ungrouped.add(lesson);
+        }
       }
-    }
-    return SafeArea(child: Column(children: [
-      Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-        child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${textOf(book, 'textbook')} · ${textOf(book, 'volume')}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4), Text('${lessons.length} 课 · ${widget.app.resources.unavailable.contains(bookId) ? '学习资源需要重新下载' : '课文与单词录音已就绪'}'),
-      ])), StudyIconButton.filledTonal(tooltip: '切换内容', onPressed: () => openPage(context, LibraryPage(widget.app)), icon: const Icon(Icons.swap_horiz))])),
-      Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
-        for (var i = 0; i < units.length; i++) unitCard(units[i], lessonsByUnit[units[i]['id']] ?? [],
-          currentLesson.isEmpty ? i == 0 : !currentLessonIsUngrouped && units[i]['id'] == currentUnitId),
-        if (ungrouped.isNotEmpty) unitCard({'id': 'ungrouped', 'title': '课程目录'}, ungrouped,
-          currentLessonIsUngrouped || currentLesson.isEmpty && units.isEmpty, useUnitTitle: false),
-      ])),
-    ]));
-  });
+      return SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${textOf(book, 'textbook')} · ${textOf(book, 'volume')}',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${context.l10n.lessonCount(lessons.length)} · ${context.ui(widget.app.resources.unavailable.contains(bookId) ? '学习资源需要重新下载' : '课文与单词录音已就绪')}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  StudyIconButton.filledTonal(
+                    tooltip: context.ui('切换内容'),
+                    onPressed: () => openPage(context, LibraryPage(widget.app)),
+                    icon: const Icon(Icons.swap_horiz),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                children: [
+                  for (var i = 0; i < units.length; i++)
+                    unitCard(
+                      units[i],
+                      lessonsByUnit[units[i]['id']] ?? [],
+                      currentLesson.isEmpty
+                          ? i == 0
+                          : !currentLessonIsUngrouped &&
+                                units[i]['id'] == currentUnitId,
+                    ),
+                  if (ungrouped.isNotEmpty)
+                    unitCard(
+                      {'id': 'ungrouped', 'title': context.ui('课程目录')},
+                      ungrouped,
+                      currentLessonIsUngrouped ||
+                          currentLesson.isEmpty && units.isEmpty,
+                      useUnitTitle: false,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class RubyText extends StatelessWidget {
-  const RubyText(this.text, {required this.ruby, this.source = true, this.centered = false, this.active = false, this.fontSize = 19, this.color, super.key});
+  const RubyText(
+    this.text, {
+    required this.ruby,
+    this.source = true,
+    this.centered = false,
+    this.active = false,
+    this.fontSize = 19,
+    this.color,
+    super.key,
+  });
   final String text;
   final bool ruby, source, centered, active;
   final double fontSize;
@@ -1294,21 +2209,62 @@ class RubyText extends StatelessWidget {
     final tokens = <Widget>[];
     void add(String surface, String reading) {
       final highlighted = active && surface.trim().isNotEmpty;
-      tokens.add(Column(mainAxisSize: MainAxisSize.min, children: [
-        keepSpace(ruby, Text(reading.isEmpty ? ' ' : reading, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 12, height: 1.3,
-          color: Color(0xFF32AA43)))),
-        keepSpace(source, Text(surface, style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: fontSize, height: 1.5, fontWeight: FontWeight.normal,
-          color: highlighted ? (dark ? const Color(0xFFFFB366) : const Color(0xFFB85C00)) : color))),
-      ]));
+      tokens.add(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            keepSpace(
+              ruby,
+              Text(
+                reading.isEmpty ? ' ' : reading,
+                style: const TextStyle(
+                  fontFamily: 'Hiragino Sans',
+                  locale: Locale('ja', 'JP'),
+                  fontSize: 12,
+                  height: 1.3,
+                  color: Color(0xFF32AA43),
+                ),
+              ),
+            ),
+            keepSpace(
+              source,
+              Text(
+                surface,
+                style: TextStyle(
+                  fontFamily: 'Hiragino Sans',
+                  locale: Locale('ja', 'JP'),
+                  fontSize: fontSize,
+                  height: 1.5,
+                  fontWeight: FontWeight.normal,
+                  color: highlighted
+                      ? (dark
+                            ? const Color(0xFFFFB366)
+                            : const Color(0xFFB85C00))
+                      : color,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
+
     var offset = 0;
     for (final match in RegExp(r'!([^!\s()]+)\(([^)]*)\)').allMatches(text)) {
-      for (final rune in text.substring(offset, match.start).runes) { add(String.fromCharCode(rune), ''); }
+      for (final rune in text.substring(offset, match.start).runes) {
+        add(String.fromCharCode(rune), '');
+      }
       add(match.group(1)!, match.group(2)!);
       offset = match.end;
     }
-    for (final rune in text.substring(offset).runes) { add(String.fromCharCode(rune), ''); }
-    return Wrap(alignment: centered ? WrapAlignment.center : WrapAlignment.start, crossAxisAlignment: WrapCrossAlignment.end, children: tokens);
+    for (final rune in text.substring(offset).runes) {
+      add(String.fromCharCode(rune), '');
+    }
+    return Wrap(
+      alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: tokens,
+    );
   }
 }
 
@@ -1319,7 +2275,9 @@ class ReviewPanel extends StatefulWidget {
   @override
   State<ReviewPanel> createState() => _ReviewPanelState();
 }
-class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, RouteAware {
+
+class _ReviewPanelState extends State<ReviewPanel>
+    with WidgetsBindingObserver, RouteAware {
   bool busy = false;
   Timer? _dueTimer;
   ModalRoute<dynamic>? _route;
@@ -1330,7 +2288,8 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
   @override
   void initState() {
     super.initState();
-    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     widget.app.addListener(_scheduleDueRefresh);
@@ -1405,7 +2364,16 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
       _dueTimer?.cancel();
       if (_visible) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: Text('复习统计刷新失败，请重新进入复习页重试')),
+          GlassSnackBar(
+            content: Text(
+              context.tr(
+                '复习统计刷新失败，请重新进入复习页重试',
+                '複習統計重新整理失敗，請重新進入複習頁再試',
+                'Could not refresh review statistics. Reopen the review page.',
+                '復習統計を更新できませんでした。復習ページを開き直してください。',
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -1419,7 +2387,10 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
     final next = intOf(widget.app.stats, 'next_review_time');
     if (next == 0) return;
     final delay = next - nowMs();
-    _dueTimer = Timer(Duration(milliseconds: delay > 0 ? delay : 1), _requestDueRefresh);
+    _dueTimer = Timer(
+      Duration(milliseconds: delay > 0 ? delay : 1),
+      _requestDueRefresh,
+    );
   }
 
   @override
@@ -1441,25 +2412,99 @@ class _ReviewPanelState extends State<ReviewPanel> with WidgetsBindingObserver, 
     });
     if (mounted) setState(() => busy = false);
   }
+
   @override
-  Widget build(BuildContext context) => PageBody(children: [
-    Text('记忆复习', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-    const SizedBox(height: 5), Text('在快要忘记时再见一次。', style: Theme.of(context).textTheme.bodyLarge),
-    const SizedBox(height: 28),
-    Center(child: Stack(alignment: Alignment.center, children: [
-      SizedBox(width: 170, height: 170, child: StudyCircularProgressIndicator(
-        value: (intOf(widget.app.stats, 'due') / (intOf(widget.app.stats, 'cards') == 0 ? 1 : intOf(widget.app.stats, 'cards'))).clamp(0.0, 1.0).toDouble(),
-        strokeWidth: 12, backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, color: vermilion,
-      )),
-      Column(children: [Text('${intOf(widget.app.stats, 'due')}', style: Theme.of(context).textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w700)), const Text('今日到期')]),
-    ])),
-    const SizedBox(height: 28),
-    SizedBox(width: double.infinity, child: StudyButton.filledIcon(onPressed: busy || intOf(widget.app.stats, 'due') == 0 ? null : () => _start(false), icon: const Icon(Icons.refresh), label: Text(busy ? '准备中' : '开始复习'))),
-    const SectionTitle('记忆统计'),
-    StudyCardRow(children: [Expanded(child: StudyStat(value: '${intOf(widget.app.stats, 'cards')}', label: '学习卡片')), const SizedBox(width: 10), Expanded(child: StudyStat(value: '${intOf(widget.app.stats, 'mistakes')}', label: '历史错题'))]),
-    const SectionTitle('复习规则'),
-    const StudyCard(child: Padding(padding: EdgeInsets.all(18), child: Text('答对后，卡片会依次在 2、4、7、14、30 天后出现；答错会回到本轮末尾，直到答对。点选答案后会立即判断并保存。', style: TextStyle(height: 1.65)))),
-  ]);
+  Widget build(BuildContext context) => PageBody(
+    children: [
+      Text(
+        context.ui('记忆复习'),
+        style: Theme.of(context).textTheme.headlineMedium
+            ?.copyWith(fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        context.ui('在快要忘记时再见一次。'),
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
+      const SizedBox(height: 28),
+      Center(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 170,
+              height: 170,
+              child: StudyCircularProgressIndicator(
+                value:
+                    (intOf(widget.app.stats, 'due') /
+                            (intOf(widget.app.stats, 'cards') == 0
+                                ? 1
+                                : intOf(widget.app.stats, 'cards')))
+                        .clamp(0.0, 1.0)
+                        .toDouble(),
+                strokeWidth: 12,
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest,
+                color: vermilion,
+              ),
+            ),
+            Column(
+              children: [
+                Text(
+                  '${intOf(widget.app.stats, 'due')}',
+                  style: Theme.of(context).textTheme.displayMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(context.ui('今日到期')),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 28),
+      SizedBox(
+        width: double.infinity,
+        child: StudyButton.filledIcon(
+          onPressed: busy || intOf(widget.app.stats, 'due') == 0
+              ? null
+              : () => _start(false),
+          icon: const Icon(Icons.refresh),
+          label: Text(busy ? context.ui('准备中') : context.ui('开始复习')),
+        ),
+      ),
+      SectionTitle(context.ui('记忆统计')),
+      StudyCardRow(
+        children: [
+          Expanded(
+            child: StudyStat(
+              value: '${intOf(widget.app.stats, 'cards')}',
+              label: context.ui('学习卡片'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: StudyStat(
+              value: '${intOf(widget.app.stats, 'mistakes')}',
+              label: context.ui('历史错题'),
+            ),
+          ),
+        ],
+      ),
+      SectionTitle(context.ui('复习规则')),
+      StudyCard(
+        child: Padding(
+          padding: EdgeInsets.all(18),
+          child: Text(
+            context.ui(
+              '答对后，卡片会依次在 2、4、7、14、30 天后出现；答错会回到本轮末尾，直到答对。点选答案后会立即判断并保存。',
+            ),
+            style: TextStyle(height: 1.65),
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class PracticePage extends StatefulWidget {
@@ -1473,6 +2518,7 @@ class PracticePage extends StatefulWidget {
 class _PracticePageState extends State<PracticePage> {
   List<RowData> items = [], options = [];
   RowData session = {};
+  final Map<String, ContentLanguage?> _contentLanguages = {};
   int index = 0;
   bool busy = true, showResult = false;
   String? error, selected, previousRating;
@@ -1481,41 +2527,78 @@ class _PracticePageState extends State<PracticePage> {
   final _mediaPlayback = IosLessonPlayback.instance;
   final _mediaVideo = CourseVideoController();
   @override
-  void initState() { super.initState(); unawaited(_load(initial: true)); }
+  void initState() {
+    super.initState();
+    unawaited(_load(initial: true));
+  }
+
   @override
   void dispose() {
     clock.stop();
     _resultScrollController.dispose();
-    if (_mediaPlayback.lesson == 'practice:${widget.id}') unawaited(_mediaPlayback.stop());
+    if (_mediaPlayback.lesson == 'practice:${widget.id}')
+      unawaited(_mediaPlayback.stop());
     _mediaVideo.dispose();
     super.dispose();
   }
 
-  Future<void> _playQuestionAudio(RowData item, {String? filename, String? title}) async {
+  Future<void> _playQuestionAudio(
+    RowData item, {
+    String? filename,
+    String? title,
+  }) async {
     await perform(context, () async {
       await _mediaVideo.stop();
       if (_mediaPlayback.active) await _mediaPlayback.stop();
       final book = textOf(item, 'textbook_id');
       final path = filename == null
-        ? await widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'audio')
-        : await widget.app.resources.audioPath(book, filename);
+          ? await widget.app.resources.mediaPath(
+              book,
+              textOf(item, 'media_src'),
+              'audio',
+            )
+          : await widget.app.resources.audioPath(book, filename);
       await _mediaPlayback.start({
-        'lesson': 'practice:${widget.id}', 'title': title ?? '练习听力', 'words': false,
-        'batch': false, 'speed': widget.app.speed, 'repeat': 1, 'intervalSteps': 0,
+        'lesson': 'practice:${widget.id}',
+        'title': title ?? context.ui('练习听力'),
+        'words': false,
+        'batch': false,
+        'speed': widget.app.speed,
+        'repeat': 1,
+        'intervalSteps': 0,
         'startIndex': 0,
-        'clips': [{'id': 'practice-media:${item['id']}:${filename ?? item['media_src']}', 'path': path}],
+        'clips': [
+          {
+            'id':
+                'practice-media:${item['id']}:${filename ?? item['media_src']}',
+            'path': path,
+          },
+        ],
       });
     });
   }
 
   Future<void> _playQuestionHotspot(RowData item, CourseImageHotspot hotspot) =>
-    _playQuestionAudio(item, filename: hotspot.audioSource, title: hotspot.label);
+      _playQuestionAudio(
+        item,
+        filename: hotspot.audioSource,
+        title: hotspot.label,
+      );
 
   Future<void> _playQuestionVideo(RowData item) async {
     final book = textOf(item, 'textbook_id');
-    await _mediaVideo.play(id: textOf(item, 'id'), book: book,
-      resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'video'),
-      beforePlay: () async { if (_mediaPlayback.active) await _mediaPlayback.stop(); });
+    await _mediaVideo.play(
+      id: textOf(item, 'id'),
+      book: book,
+      resolvePath: () => widget.app.resources.mediaPath(
+        book,
+        textOf(item, 'media_src'),
+        'video',
+      ),
+      beforePlay: () async {
+        if (_mediaPlayback.active) await _mediaPlayback.stop();
+      },
+    );
   }
 
   Widget _questionMedia(RowData item) {
@@ -1523,32 +2606,75 @@ class _PracticePageState extends State<PracticePage> {
     final book = textOf(item, 'textbook_id');
     if (type.isEmpty || type == 'text') return const SizedBox.shrink();
     if (type == 'audio') {
-      return Padding(padding: const EdgeInsets.only(bottom: 18), child: StudyButton.outlined(
-        onPressed: busy ? null : () => _playQuestionAudio(item),
-        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.volume_up_outlined), SizedBox(width: 8), Text('播放听力材料'),
-        ])));
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: StudyButton.outlined(
+          onPressed: busy ? null : () => _playQuestionAudio(item),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.volume_up_outlined),
+              SizedBox(width: 8),
+              Text(context.ui('播放听力材料')),
+            ],
+          ),
+        ),
+      );
     }
     if (type == 'image') {
-      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseImageCard(
-        source: textOf(item, 'media_src'), label: '练习题插图',
-        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'image')));
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: CourseImageCard(
+          source: textOf(item, 'media_src'),
+          label: context.ui('练习题插图'),
+          resolvePath: () => widget.app.resources.mediaPath(
+            book,
+            textOf(item, 'media_src'),
+            'image',
+          ),
+        ),
+      );
     }
     if (type == 'interactive_image') {
-      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseInteractiveImageCard(
-        source: textOf(item, 'media_src'), label: '互动练习题插图',
-        mediaConfig: textOf(item, 'media_config'),
-        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'interactive_image'),
-        hotspotAvailable: (hotspot) => widget.app.resources.hasAudio(book, hotspot.audioSource),
-        onActivate: (hotspot) => _playQuestionHotspot(item, hotspot), interactionEnabled: !busy));
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: CourseInteractiveImageCard(
+          source: textOf(item, 'media_src'),
+          label: context.ui('互动练习题插图'),
+          mediaConfig: textOf(item, 'media_config'),
+          resolvePath: () => widget.app.resources.mediaPath(
+            book,
+            textOf(item, 'media_src'),
+            'interactive_image',
+          ),
+          hotspotAvailable: (hotspot) =>
+              widget.app.resources.hasAudio(book, hotspot.audioSource),
+          onActivate: (hotspot) => _playQuestionHotspot(item, hotspot),
+          interactionEnabled: !busy,
+        ),
+      );
     }
     if (type == 'video') {
-      return Padding(padding: const EdgeInsets.only(bottom: 18), child: CourseVideoCard(
-        controller: _mediaVideo, id: textOf(item, 'id'), source: textOf(item, 'media_src'),
-        resolvePath: () => widget.app.resources.mediaPath(book, textOf(item, 'media_src'), 'video'),
-        onPlay: () => _playQuestionVideo(item), enabled: !busy));
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: CourseVideoCard(
+          controller: _mediaVideo,
+          id: textOf(item, 'id'),
+          source: textOf(item, 'media_src'),
+          resolvePath: () => widget.app.resources.mediaPath(
+            book,
+            textOf(item, 'media_src'),
+            'video',
+          ),
+          onPlay: () => _playQuestionVideo(item),
+          enabled: !busy,
+        ),
+      );
     }
-    return const Padding(padding: EdgeInsets.only(bottom: 18), child: Text('此练习媒体类型暂不支持'));
+    return Padding(
+      padding: EdgeInsets.only(bottom: 18),
+      child: Text(context.ui('此练习媒体类型暂不支持')),
+    );
   }
 
   Future<void> _load({bool initial = false}) async {
@@ -1556,40 +2682,85 @@ class _PracticePageState extends State<PracticePage> {
       final store = widget.app.store;
       final result = await store.practiceItems(widget.id);
       if (result.isEmpty) throw StateError('练习记录为空');
+      // Pin each actual package language in the session, independent of UI/target/current book.
+      for (final bookId
+          in result.map((row) => textOf(row, 'textbook_id')).toSet()) {
+        if (_contentLanguages.containsKey(bookId)) continue;
+        final books = await store.db.query(
+          'yzc_textbook',
+          where: 'id=?',
+          whereArgs: [bookId],
+        );
+        final metadata = books.isEmpty
+            ? <String, Object?>{'id': bookId}
+            : books.single;
+        _contentLanguages[bookId] = ContentLanguage.tryFromTextbook(metadata);
+      }
       if (initial) {
         final next = result.indexWhere((r) => r['answer_time'] == null);
         index = next < 0 ? 0 : next;
-        final sessions = await store.db.query('yzc_user_practice', where: 'id=? AND user_id=?', whereArgs: [widget.id, store.userId]);
+        final sessions = await store.db.query(
+          'yzc_user_practice',
+          where: 'id=? AND user_id=?',
+          whereArgs: [widget.id, store.userId],
+        );
         if (!mounted) return;
         session = sessions.single;
         showResult = next < 0;
       }
       final current = result[index];
       final choices = await store.options(textOf(current, 'question_id'));
-      final priorRating = current['answer_time'] != null && intOf(current, 'correct') == 0
+      final priorRating =
+          current['answer_time'] != null && intOf(current, 'correct') == 0
           ? await store.previousMistakeRating(current)
           : null;
       if (!mounted) return;
       setState(() {
-        items = result; options = choices; previousRating = priorRating; busy = false; error = null;
-        if (items[index]['answer_time'] != null) selected = textOf(items[index], 'answer');
+        items = result;
+        options = choices;
+        previousRating = priorRating;
+        busy = false;
+        error = null;
+        if (items[index]['answer_time'] != null)
+          selected = textOf(items[index], 'answer');
       });
-      clock..reset()..start();
+      clock
+        ..reset()
+        ..start();
     } catch (e, stack) {
-      SystemErrors.record(e, stack, module: 'app', operation: '读取练习', hint: userError(e, fallback: '练习读取失败'));
-      if (mounted) setState(() { busy = false; error = userError(e, fallback: '练习读取失败'); });
+      SystemErrors.record(
+        e,
+        stack,
+        module: 'app',
+        operation: '读取练习',
+        hint: userError(e, fallback: '练习读取失败'),
+      );
+      if (mounted)
+        setState(() {
+          busy = false;
+          error = userError(e, fallback: '练习读取失败');
+        });
     }
   }
 
   Future<void> _answer(String answer) async {
     if (busy || items[index]['answer_time'] != null) return;
-    setState(() { selected = answer; busy = true; });
+    setState(() {
+      selected = answer;
+      busy = true;
+    });
     await perform(context, () async {
-      await widget.app.store.answer(items[index], answer, clock.elapsedMilliseconds);
+      await widget.app.store.answer(
+        items[index],
+        answer,
+        clock.elapsedMilliseconds,
+      );
       await widget.app.reload();
       await _load();
     });
-    if (mounted && items[index]['answer_time'] != null && intOf(items[index], 'correct') == 1) {
+    if (mounted &&
+        items[index]['answer_time'] != null &&
+        intOf(items[index], 'correct') == 1) {
       setState(() => busy = true);
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       if (mounted) await _advance();
@@ -1598,7 +2769,10 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   Future<void> _rate(String? rating) async {
-    if (busy || items[index]['answer_time'] == null || intOf(items[index], 'correct') != 0) return;
+    if (busy ||
+        items[index]['answer_time'] == null ||
+        intOf(items[index], 'correct') != 0)
+      return;
     setState(() => busy = true);
     await perform(context, () async {
       await widget.app.store.rateMistake(items[index], rating);
@@ -1608,184 +2782,565 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   Future<void> _advance() async {
-    if (index == items.length - 1) { setState(() => showResult = true); }
-    else {
-      setState(() { index++; selected = null; previousRating = null; busy = true; });
+    if (index == items.length - 1) {
+      setState(() => showResult = true);
+    } else {
+      setState(() {
+        index++;
+        selected = null;
+        previousRating = null;
+        busy = true;
+      });
       await _load();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty || error != null || (busy && selected == null)) return PlaybackScaffold(appBar: StudyAppBar(title: const Text('练习')), body: Center(child: error == null
-      ? const StudyCircularProgressIndicator() : StudyButton.text(onPressed: () => _load(initial: items.isEmpty), child: const Text('练习读取失败，点击重试'))));
-    if (showResult) return PlaybackScaffold(appBar: StudyAppBar(title: const Text('练习结果')), body: ListView(
-      key: const ValueKey('practice-result'),
-      controller: _resultScrollController,
-      padding: const EdgeInsets.all(20), children: [
-      Text('共作答 ${items.length} 次 · 答对 ${items.where((r) => intOf(r, 'correct') == 1).length} 次', style: Theme.of(context).textTheme.titleMedium?.copyWith(height: 1.5)),
-      for (final relation in questionRelations)
-        if (items.any((r) => r['relation'] == relation)) Text('${questionRelationLabel(relation)}：${items.where((r) => r['relation'] == relation && intOf(r, 'correct') == 1).length} / ${items.where((r) => r['relation'] == relation).length} 题正确'),
-      const SizedBox(height: 12), const Text('练习记录已保存。错题可在首页“错题记录”中再次练习。'),
-      const SizedBox(height: 20), StudyButton.filled(onPressed: () => Navigator.pop(context), child: const Text('返回')),
-      for (var i = 0; i < items.length; i++) AnswerTile(widget.app.store, items[i], number: i + 1),
-    ]));
+    if (items.isEmpty || error != null || (busy && selected == null))
+      return PlaybackScaffold(
+        appBar: StudyAppBar(title: Text(context.l10n.practice)),
+        body: Center(
+          child: error == null
+              ? const StudyCircularProgressIndicator()
+              : StudyButton.text(
+                  onPressed: () => _load(initial: items.isEmpty),
+                  child: Text(context.ui('练习读取失败，点击重试')),
+                ),
+        ),
+      );
+    if (showResult)
+      return PlaybackScaffold(
+        appBar: StudyAppBar(title: Text(context.ui('练习结果'))),
+        body: ListView(
+          key: const ValueKey('practice-result'),
+          controller: _resultScrollController,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              context.l10n.practiceSummary(
+                items.length,
+                items.where((r) => intOf(r, 'correct') == 1).length,
+              ),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(height: 1.5),
+            ),
+            for (final relation in questionRelations)
+              if (items.any((r) => r['relation'] == relation))
+                Text(
+                  '${_localizedRelation(context, relation)}: ${items.where((r) => r['relation'] == relation && intOf(r, 'correct') == 1).length} / ${items.where((r) => r['relation'] == relation).length} ${context.l10n.correct}',
+                ),
+            const SizedBox(height: 12),
+            Text(context.ui('练习记录已保存。错题可在首页“错题记录”中再次练习。')),
+            const SizedBox(height: 20),
+            StudyButton.filled(
+              onPressed: () => Navigator.pop(context),
+              child: Text(context.ui('返回')),
+            ),
+            for (var i = 0; i < items.length; i++)
+              AnswerTile(widget.app.store, items[i], number: i + 1),
+          ],
+        ),
+      );
     final item = items[index], checked = item['answer_time'] != null;
+    final contentLanguage = _contentLanguages[textOf(item, 'textbook_id')];
+    TextSpan practiceSpan(String text, {bool explanation = false}) =>
+        contentLanguage == null
+        ? TextSpan(text: text)
+        : contentTextSpan(
+            text,
+            language: explanation
+                ? contentLanguage.explanationLanguage
+                : contentLanguage.sourceLanguage,
+          );
     final polishPractice = session['type'] != 'review';
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF252525) : Colors.white;
-    final correctColor = dark ? const Color(0xFF81C995) : const Color(0xFF247A46);
-    final incorrectColor = dark ? const Color(0xFFFFB4AB) : const Color(0xFFB53D35);
+    final correctColor = dark
+        ? const Color(0xFF81C995)
+        : const Color(0xFF247A46);
+    final incorrectColor = dark
+        ? const Color(0xFFFFB4AB)
+        : const Color(0xFFB53D35);
     Widget practiceOption(RowData option) {
       final isCorrect = checked && option['code'] == item['correct_answer'];
       final isIncorrect = checked && !isCorrect && option['code'] == selected;
       final isSelected = option['code'] == selected;
-      final accent = isCorrect ? correctColor : isIncorrect ? incorrectColor : isSelected ? colors.primary : colors.onSurfaceVariant;
+      final accent = isCorrect
+          ? correctColor
+          : isIncorrect
+          ? incorrectColor
+          : isSelected
+          ? colors.primary
+          : colors.onSurfaceVariant;
       final emphasized = isCorrect || isIncorrect || isSelected;
-      final background = emphasized ? Color.alphaBlend(accent.withValues(alpha: .10), cardColor) : cardColor;
-      return Padding(padding: const EdgeInsets.only(bottom: 10), child: StudyButton.outlined(
-        style: OutlinedButton.styleFrom(
-          alignment: Alignment.centerLeft,
-          minimumSize: const Size(double.infinity, 56),
-          padding: const EdgeInsets.all(16),
-          backgroundColor: background,
-          disabledBackgroundColor: background,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          side: BorderSide(color: emphasized ? accent : colors.outlineVariant, width: emphasized ? 1.5 : 1),
-        ),
-        onPressed: checked || busy ? null : () => _answer(textOf(option, 'code')),
-        child: Row(children: [
-          Container(
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(9)),
-            child: Text(textOf(option, 'code'), textAlign: TextAlign.center, style: TextStyle(color: accent, fontWeight: FontWeight.w700)),
+      final background = emphasized
+          ? Color.alphaBlend(accent.withValues(alpha: .10), cardColor)
+          : cardColor;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: StudyButton.outlined(
+          style: OutlinedButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            minimumSize: const Size(double.infinity, 56),
+            padding: const EdgeInsets.all(16),
+            backgroundColor: background,
+            disabledBackgroundColor: background,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            side: BorderSide(
+              color: emphasized ? accent : colors.outlineVariant,
+              width: emphasized ? 1.5 : 1,
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Text.rich(contentTextSpan(questionDisplayText(textOf(option, 'content')), japanese: true), style: TextStyle(color: colors.onSurface, height: 1.5))),
-          if (isCorrect || isIncorrect) ...[
-            const SizedBox(width: 8),
-            Icon(isCorrect ? Icons.check_circle_outline : Icons.cancel_outlined, color: accent, size: 22,
-              semanticLabel: isCorrect ? '正确答案' : '所选答案错误'),
-          ],
-        ]),
-      ));
-    }
-    return PlaybackScaffold(appBar: StudyAppBar(title: Text(session['type'] == 'review' ? '复习' : '练习')), body: ListView(padding: const EdgeInsets.all(20), children: [
-      StudyLinearProgressIndicator(value: items.where((r) => r['answer_time'] != null).length / items.length),
-      const SizedBox(height: 12), Text('${index + 1} / ${items.length} · ${questionRelationLabel(item['relation'])}'),
-      const SizedBox(height: 18),
-      _questionMedia(item),
-      if (polishPractice) Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(18), border: Border.all(color: colors.outlineVariant)),
-        child: PracticeQuestionBody(textOf(item, 'content'), key: ValueKey('practice-body-$index'),
-          headingFontSize: 17, bodyFontSize: 18, footerFontSize: 17, secondaryFontSize: 15, highlightBodySection: true),
-      ) else PracticeQuestionBody(textOf(item, 'content'), key: ValueKey('practice-body-$index')),
-      const SizedBox(height: 20),
-      for (final option in options) if (polishPractice) practiceOption(option) else Padding(padding: const EdgeInsets.only(bottom: 10), child: StudyButton.outlined(
-        style: OutlinedButton.styleFrom(alignment: Alignment.centerLeft, padding: const EdgeInsets.all(16), side: BorderSide(
-          color: checked && option['code'] == item['correct_answer'] ? Colors.green : checked && option['code'] == selected ? Colors.red : option['code'] == selected ? Theme.of(context).colorScheme.primary : Colors.grey)),
-        onPressed: checked || busy ? null : () => _answer(textOf(option, 'code')),
-        child: Text.rich(contentTextSpan('${option['code']}. ${questionDisplayText(textOf(option, 'content'))}', japanese: true), style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-      )),
-      if (checked) ...[
-        if (polishPractice) Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend((item['correct'] == 1 ? correctColor : incorrectColor).withValues(alpha: .08), cardColor),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: (item['correct'] == 1 ? correctColor : incorrectColor).withValues(alpha: .30)),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(item['correct'] == 1 ? Icons.check_circle_outline : Icons.cancel_outlined,
-                color: item['correct'] == 1 ? correctColor : incorrectColor, size: 22),
-              const SizedBox(width: 8),
-              Expanded(child: Text(item['correct'] == 1 ? '回答正确' : '回答错误 · 正确答案：${item['correct_answer']}',
-                style: TextStyle(color: item['correct'] == 1 ? correctColor : incorrectColor, fontWeight: FontWeight.w700, height: 1.5))),
-            ]),
-            if (textOf(item, 'definition').trim().isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Text('解析', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              Text.rich(contentTextSpan(textOf(item, 'definition')), style: TextStyle(color: colors.onSurface, height: 1.6)),
+          onPressed: checked || busy
+              ? null
+              : () => _answer(textOf(option, 'code')),
+          child: Row(
+            children: [
+              Container(
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  textOf(option, 'code'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text.rich(
+                  practiceSpan(questionDisplayText(textOf(option, 'content'))),
+                  style: TextStyle(color: colors.onSurface, height: 1.5),
+                ),
+              ),
+              if (isCorrect || isIncorrect) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  isCorrect
+                      ? Icons.check_circle_outline
+                      : Icons.cancel_outlined,
+                  color: accent,
+                  size: 22,
+                  semanticLabel: isCorrect
+                      ? context.ui('正确答案')
+                      : context.ui('所选答案错误'),
+                ),
+              ],
             ],
-          ]),
-        ) else ...[
-          Text(item['correct'] == 1 ? '回答正确' : '回答错误 · 正确答案：${item['correct_answer']}', style: TextStyle(color: item['correct'] == 1 ? Colors.green : Colors.red)),
-          const SizedBox(height: 8), Text.rich(contentTextSpan(textOf(item, 'definition')), style: const TextStyle(height: 1.6)),
-        ],
-        const SizedBox(height: 20),
-      ],
-      if (checked && intOf(item, 'correct') != 1) ...[
-        if (previousRating != null) ...[
-          Text('上次评价：${selfRatingLabel(previousRating)}', style: TextStyle(color: selfRatingColor(context, previousRating), fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-        ],
-        const Text('你觉得这道题怎么样？（可选）'),
-        const SizedBox(height: 8),
-        LayoutBuilder(builder: (context, constraints) {
-          final minWidth = MediaQuery.textScalerOf(context).scale(12) * 4 + 24;
-          final columns = constraints.maxWidth >= minWidth * 4 + 18 ? 4 : constraints.maxWidth >= minWidth * 2 + 6 ? 2 : 1;
-          final width = (constraints.maxWidth - (columns - 1) * 6) / columns;
-          return Wrap(spacing: 6, runSpacing: 8, children: [
-          for (final rating in const ['again', 'hard', 'good', 'easy'])
-            SizedBox(width: width,
-              child: StudyChoiceChip(
-                label: SizedBox(width: double.infinity, child: Center(
-                  heightFactor: 1, child: Text(selfRatingLabel(rating), textAlign: TextAlign.center),
-                )),
-                labelStyle: TextStyle(fontSize: 12, color: selfRatingColor(context, rating)),
-                labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                showCheckmark: false,
-                backgroundColor: selfRatingColor(context, rating).withValues(alpha: .06),
-                selectedColor: selfRatingColor(context, rating).withValues(alpha: .20),
-                side: BorderSide(color: selfRatingColor(context, rating).withValues(alpha: .65)),
-                selected: item['self_rating'] == rating,
-                onSelected: busy ? null : (selected) => _rate(selected ? rating : null),
+          ),
+        ),
+      );
+    }
+
+    return PlaybackScaffold(
+      appBar: StudyAppBar(
+        title: Text(
+          session['type'] == 'review' ? context.ui('复习') : context.ui('练习'),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          StudyLinearProgressIndicator(
+            value:
+                items.where((r) => r['answer_time'] != null).length /
+                items.length,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${index + 1} / ${items.length} · ${_localizedRelation(context, item['relation'])}',
+          ),
+          const SizedBox(height: 18),
+          _questionMedia(item),
+          if (contentLanguage == null) ...[
+            Text(
+              context.tr(
+                '原内容包的语言信息不可用，以下保留历史文本。',
+                '原內容包的語言資訊無法使用，以下保留歷史文字。',
+                'The original package language cannot be verified. Historical text is preserved below.',
+                '元の教材の言語情報を確認できません。以下に保存済みのテキストを表示します。',
               ),
             ),
-        ]);
-        }),
-        const SizedBox(height: 24),
-      ],
-      if (checked && intOf(item, 'correct') != 1) StudyButton.filled(
-        onPressed: busy || error != null ? null : _advance,
-        child: Text(index == items.length - 1 ? '查看结果' : '下一题'),
+            const SizedBox(height: 12),
+            Text(
+              textOf(item, 'content'),
+              key: ValueKey('practice-neutral-body-$index'),
+            ),
+          ] else if (polishPractice)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: PracticeQuestionBody(
+                textOf(item, 'content'),
+                sourceLanguage: contentLanguage.sourceLanguage,
+                explanationLanguage: contentLanguage.explanationLanguage,
+                key: ValueKey('practice-body-$index'),
+                headingFontSize: 17,
+                bodyFontSize: 18,
+                footerFontSize: 17,
+                secondaryFontSize: 15,
+                highlightBodySection: true,
+              ),
+            )
+          else
+            PracticeQuestionBody(
+              textOf(item, 'content'),
+              sourceLanguage: contentLanguage.sourceLanguage,
+              explanationLanguage: contentLanguage.explanationLanguage,
+              key: ValueKey('practice-body-$index'),
+            ),
+          const SizedBox(height: 20),
+          for (final option in options)
+            if (polishPractice)
+              practiceOption(option)
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: StudyButton.outlined(
+                  style: OutlinedButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.all(16),
+                    side: BorderSide(
+                      color: checked && option['code'] == item['correct_answer']
+                          ? Colors.green
+                          : checked && option['code'] == selected
+                          ? Colors.red
+                          : option['code'] == selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey,
+                    ),
+                  ),
+                  onPressed: checked || busy
+                      ? null
+                      : () => _answer(textOf(option, 'code')),
+                  child: Text.rich(
+                    practiceSpan(
+                      '${option['code']}. ${questionDisplayText(textOf(option, 'content'))}',
+                    ),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+          if (checked) ...[
+            if (polishPractice)
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    (item['correct'] == 1 ? correctColor : incorrectColor)
+                        .withValues(alpha: .08),
+                    cardColor,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color:
+                        (item['correct'] == 1 ? correctColor : incorrectColor)
+                            .withValues(alpha: .30),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          item['correct'] == 1
+                              ? Icons.check_circle_outline
+                              : Icons.cancel_outlined,
+                          color: item['correct'] == 1
+                              ? correctColor
+                              : incorrectColor,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item['correct'] == 1
+                                ? context.ui('回答正确')
+                                : context.l10n.wrongAnswer(
+                                    '${item['correct_answer']}',
+                                  ),
+                            style: TextStyle(
+                              color: item['correct'] == 1
+                                  ? correctColor
+                                  : incorrectColor,
+                              fontWeight: FontWeight.w700,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (textOf(item, 'definition').trim().isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        context.ui('解析'),
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text.rich(
+                        practiceSpan(
+                          textOf(item, 'definition'),
+                          explanation: true,
+                        ),
+                        style: TextStyle(color: colors.onSurface, height: 1.6),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            else ...[
+              Text(
+                item['correct'] == 1
+                    ? context.ui('回答正确')
+                    : context.l10n.wrongAnswer('${item['correct_answer']}'),
+                style: TextStyle(
+                  color: item['correct'] == 1 ? Colors.green : Colors.red,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text.rich(
+                practiceSpan(textOf(item, 'definition'), explanation: true),
+                style: const TextStyle(height: 1.6),
+              ),
+            ],
+            const SizedBox(height: 20),
+          ],
+          if (checked && intOf(item, 'correct') != 1) ...[
+            if (previousRating != null) ...[
+              Text(
+                context.tr(
+                  '上次评价：${context.ui(selfRatingLabel(previousRating))}',
+                  '上次評價：${context.ui(selfRatingLabel(previousRating))}',
+                  'Previous rating: ${context.ui(selfRatingLabel(previousRating))}',
+                  '前回の評価：${context.ui(selfRatingLabel(previousRating))}',
+                ),
+                style: TextStyle(
+                  color: selfRatingColor(context, previousRating),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(context.ui('你觉得这道题怎么样？（可选）')),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final minWidth =
+                    MediaQuery.textScalerOf(context).scale(12) * 4 + 24;
+                final columns = constraints.maxWidth >= minWidth * 4 + 18
+                    ? 4
+                    : constraints.maxWidth >= minWidth * 2 + 6
+                    ? 2
+                    : 1;
+                final width =
+                    (constraints.maxWidth - (columns - 1) * 6) / columns;
+                return Wrap(
+                  spacing: 6,
+                  runSpacing: 8,
+                  children: [
+                    for (final rating in const [
+                      'again',
+                      'hard',
+                      'good',
+                      'easy',
+                    ])
+                      SizedBox(
+                        width: width,
+                        child: StudyChoiceChip(
+                          label: SizedBox(
+                            width: double.infinity,
+                            child: Center(
+                              heightFactor: 1,
+                              child: Text(
+                                context.ui(selfRatingLabel(rating)),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: selfRatingColor(context, rating),
+                          ),
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 0,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          showCheckmark: false,
+                          backgroundColor: selfRatingColor(
+                            context,
+                            rating,
+                          ).withValues(alpha: .06),
+                          selectedColor: selfRatingColor(
+                            context,
+                            rating,
+                          ).withValues(alpha: .20),
+                          side: BorderSide(
+                            color: selfRatingColor(
+                              context,
+                              rating,
+                            ).withValues(alpha: .65),
+                          ),
+                          selected: item['self_rating'] == rating,
+                          onSelected: busy
+                              ? null
+                              : (selected) => _rate(selected ? rating : null),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+          ],
+          if (checked && intOf(item, 'correct') != 1)
+            StudyButton.filled(
+              onPressed: busy || error != null ? null : _advance,
+              child: Text(
+                index == items.length - 1
+                    ? context.ui('查看结果')
+                    : context.ui('下一题'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Text(
+            context.ui('点选答案后立即判断并保存；退出后可从练习记录继续。'),
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
       ),
-      const SizedBox(height: 12), const Text('点选答案后立即判断并保存；退出后可从练习记录继续。', style: TextStyle(color: Colors.grey)),
-    ]));
+    );
   }
 }
+
+String _localizedRelation(BuildContext context, Object? relation) =>
+    switch (relation) {
+      'word' => context.tr('单词', '單字', 'Words', '単語'),
+      'grammar' => context.tr('文法', '文法', 'Grammar', '文法'),
+      'content' => context.tr('课文', '課文', 'Texts', '本文'),
+      _ => context.l10n.practice,
+    };
 
 String displayDate(int value) {
   final date = DateTime.fromMillisecondsSinceEpoch(value);
   return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 }
 
-String selfRatingLabel(Object? value) => const {
-  'again': '完全忘记',
-  'hard': '很难',
-  'good': '一般',
-  'easy': '其实会',
-}[value] ?? '';
+String selfRatingLabel(Object? value) =>
+    const {'again': '完全忘记', 'hard': '很难', 'good': '一般', 'easy': '其实会'}[value] ??
+    '';
 
-Color selfRatingColor(BuildContext context, Object? value) => const {
-  'again': Color(0xFFC94F3D),
-  'hard': Color(0xFFD9822B),
-  'good': Color(0xFF397CC6),
-  'easy': Color(0xFF32A05A),
-}[value] ?? Theme.of(context).colorScheme.onSurfaceVariant;
+Color selfRatingColor(BuildContext context, Object? value) =>
+    const {
+      'again': Color(0xFFC94F3D),
+      'hard': Color(0xFFD9822B),
+      'good': Color(0xFF397CC6),
+      'easy': Color(0xFF32A05A),
+    }[value] ??
+    Theme.of(context).colorScheme.onSurfaceVariant;
 
-String sessionTitle(RowData session) {
+String sessionTitle(RowData session, {BuildContext? context}) {
   final title = textOf(session, 'textbook');
   final lesson = textOf(session, 'title');
-  return '${session['type'] == 'review' ? '复习' : '练习'} · ${title.isEmpty ? '跨课复习' : '$title${lesson.isEmpty ? '' : ' · $lesson'}'}';
+  final mode = session['type'] == 'review' ? '复习' : '练习';
+  final cross =
+      context?.tr('跨课复习', '跨課複習', 'Cross-lesson review', '複数レッスンの復習') ?? '跨课复习';
+  return '${context?.ui(mode) ?? mode} · ${title.isEmpty ? cross : '$title${lesson.isEmpty ? '' : ' · $lesson'}'}';
+}
+
+TextStyle _packageStyle(RowData book, {bool explanation = false}) {
+  final language = ContentLanguage.tryFromTextbook(book);
+  return language == null
+      ? const TextStyle()
+      : contentTextStyle(
+          explanation ? language.explanationLanguage : language.sourceLanguage,
+        );
+}
+
+/// Historical text survives resource deletion. Never style it using the current
+/// book or target; unknown deleted package metadata is disclosed, not guessed.
+mixin _HistoricalLanguage<T extends StatefulWidget> on State<T> {
+  ContentLanguage? historicalLanguage;
+  bool historicalLanguageUnavailable = false;
+  int _languageRequest = 0;
+  Future<void> loadHistoricalLanguage(AppStore store, RowData row) async {
+    final request = ++_languageRequest;
+    try {
+      final id = textOf(row, 'textbook_id');
+      final books = await store.db.query(
+        'yzc_textbook',
+        where: 'id=?',
+        whereArgs: [id],
+      );
+      final language = ContentLanguage.tryFromTextbook(
+        books.isEmpty ? {'id': id} : books.single,
+      );
+      if (mounted && request == _languageRequest)
+        setState(() {
+          historicalLanguage = language;
+          historicalLanguageUnavailable = language == null;
+        });
+    } catch (error, stack) {
+      SystemErrors.record(
+        error,
+        stack,
+        module: 'history',
+        operation: 'read content language',
+      );
+      if (mounted && request == _languageRequest)
+        setState(() => historicalLanguageUnavailable = true);
+    }
+  }
+
+  TextSpan historicalSpan(String text, {bool explanation = false}) {
+    final language = historicalLanguage;
+    return language == null
+        ? TextSpan(text: text)
+        : contentTextSpan(
+            text,
+            language: explanation
+                ? language.explanationLanguage
+                : language.sourceLanguage,
+          );
+  }
+
+  Widget historicalLanguageNotice(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(12),
+    child: Text(
+      context.tr(
+        '原内容包的语言信息不可用，以下保留历史文本。',
+        '原內容包的語言資訊無法使用，以下保留歷史文字。',
+        'The original package language cannot be verified. Historical text is preserved below.',
+        '元の教材の言語情報を確認できません。以下に保存済みのテキストを表示します。',
+      ),
+    ),
+  );
 }
 
 class AnswerTile extends StatefulWidget {
@@ -1796,29 +3351,86 @@ class AnswerTile extends StatefulWidget {
   @override
   State<AnswerTile> createState() => _AnswerTileState();
 }
-class _AnswerTileState extends State<AnswerTile> {
+
+class _AnswerTileState extends State<AnswerTile>
+    with _HistoricalLanguage<AnswerTile> {
   late Future<List<RowData>> options;
   @override
-  void initState() { super.initState(); options = widget.store.options(textOf(widget.item, 'question_id')); }
+  void initState() {
+    super.initState();
+    options = widget.store.options(textOf(widget.item, 'question_id'));
+    unawaited(loadHistoricalLanguage(widget.store, widget.item));
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     return StudyExpansionTile(
-      title: Text.rich(contentTextSpan('${widget.number == null ? '' : '${widget.number}. '}${questionDisplayText(textOf(item, 'content'))}')),
-      subtitle: Text(item['answer_time'] == null ? '未作答' : item['correct'] == 1 ? '正确' : '错误'),
-      children: [if (item['answer_time'] != null) FutureBuilder<List<RowData>>(future: options, builder: (_, snapshot) {
-        if (snapshot.hasError) return StudyButton.text(onPressed: () => setState(() => options = widget.store.options(textOf(item, 'question_id'))), child: const Text('答案读取失败，点击重试'));
-        if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(16), child: StudyCircularProgressIndicator());
-        return Padding(padding: const EdgeInsets.all(16), child: Align(alignment: Alignment.centerLeft, child: Text.rich(
-          TextSpan(children: [
-            contentTextSpan('你的答案：${item['answer']}\n正确答案：${item['correct_answer']}'
-              '${textOf(item, 'self_rating').isEmpty ? '' : '\n主观评分：${selfRatingLabel(item['self_rating'])}'}\n'),
-            contentTextSpan(snapshot.data!.map((o) => '${o['code']}. ${questionDisplayText(textOf(o, 'content'))}').join('\n'), japanese: true),
-            contentTextSpan('\n\n${textOf(item, 'definition')}'),
-          ]),
-          style: const TextStyle(height: 1.6),
-        )));
-      })],
+      title: Text.rich(
+        historicalSpan(
+          '${widget.number == null ? '' : '${widget.number}. '}${questionDisplayText(textOf(item, 'content'))}',
+        ),
+      ),
+      subtitle: Text(
+        item['answer_time'] == null
+            ? context.ui('未作答')
+            : item['correct'] == 1
+            ? context.ui('正确')
+            : context.ui('错误'),
+      ),
+      children: [
+        if (historicalLanguageUnavailable) historicalLanguageNotice(context),
+        if (item['answer_time'] != null)
+          FutureBuilder<List<RowData>>(
+            future: options,
+            builder: (_, snapshot) {
+              if (snapshot.hasError)
+                return StudyButton.text(
+                  onPressed: () => setState(
+                    () => options = widget.store.options(
+                      textOf(item, 'question_id'),
+                    ),
+                  ),
+                  child: Text(context.ui('答案读取失败，点击重试')),
+                );
+              if (!snapshot.hasData)
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: StudyCircularProgressIndicator(),
+                );
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text:
+                              '${context.tr('你的答案', '你的答案', 'Your answer', 'あなたの解答')}: ${item['answer']}\n${context.l10n.correctAnswer}: ${item['correct_answer']}'
+                              '${textOf(item, 'self_rating').isEmpty ? '' : '\n${context.ui(selfRatingLabel(item['self_rating']))}'}\n',
+                        ),
+                        historicalSpan(
+                          snapshot.data!
+                              .map(
+                                (o) =>
+                                    '${o['code']}. ${questionDisplayText(textOf(o, 'content'))}',
+                              )
+                              .join('\n'),
+                        ),
+                        historicalSpan(
+                          '\n\n${textOf(item, 'definition')}',
+                          explanation: true,
+                        ),
+                      ],
+                    ),
+                    style: const TextStyle(height: 1.6),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
     );
   }
 }
@@ -1830,18 +3442,29 @@ class HistoryPage extends StatefulWidget {
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
+
 class _HistoryPageState extends State<HistoryPage> {
   late Future<List<RowData>> future;
   bool busy = false;
   @override
-  void initState() { super.initState(); future = _load(); }
+  void initState() {
+    super.initState();
+    future = _load();
+  }
+
   Future<List<RowData>> _load() async {
     final store = widget.app.store;
     if (widget.mistakes) {
-      return store.db.rawQuery('SELECT q.*,r.mistake FROM yzc_user_review r JOIN yzc_user_question q ON q.id=r.snapshot_id AND q.user_id=r.user_id WHERE r.user_id=? AND r.mistake>0 ORDER BY r.review_time', [store.userId]);
+      return store.db.rawQuery(
+        'SELECT q.*,r.mistake FROM yzc_user_review r JOIN yzc_user_question q ON q.id=r.snapshot_id AND q.user_id=r.user_id WHERE r.user_id=? AND r.mistake>0 ORDER BY r.review_time',
+        [store.userId],
+      );
     }
     final history = await store.history();
-    final titles = await store.db.rawQuery("SELECT i.practice_id,q.textbook,q.title,COUNT(DISTINCT q.textbook_id || ':' || COALESCE(q.lessons_id,'')) scopes FROM yzc_user_practice_item i JOIN yzc_user_question q ON q.id=i.question_id AND q.user_id=i.user_id WHERE i.user_id=? GROUP BY i.practice_id", [store.userId]);
+    final titles = await store.db.rawQuery(
+      "SELECT i.practice_id,q.textbook,q.title,COUNT(DISTINCT q.textbook_id || ':' || COALESCE(q.lessons_id,'')) scopes FROM yzc_user_practice_item i JOIN yzc_user_question q ON q.id=i.question_id AND q.user_id=i.user_id WHERE i.user_id=? GROUP BY i.practice_id",
+      [store.userId],
+    );
     final map = {for (final row in titles) textOf(row, 'practice_id'): row};
     final result = <RowData>[];
     for (final row in history) {
@@ -1855,38 +3478,96 @@ class _HistoryPageState extends State<HistoryPage> {
     }
     return result;
   }
+
   Future<void> _startMistakes() async {
     setState(() => busy = true);
     await perform(context, () async {
       final pool = await widget.app.store.reviewPool(mistakes: true);
-      if (pool.isEmpty) throw StateError('暂无错题');
+      if (pool.isEmpty) throw StateError(context.ui('暂无错题'));
       final id = await widget.app.store.startPractice(pool, review: true);
-      if (mounted) await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PracticePage(widget.app, id)));
+      if (mounted)
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => PracticePage(widget.app, id)),
+        );
     });
-    if (mounted) setState(() { busy = false; future = _load(); });
+    if (mounted)
+      setState(() {
+        busy = false;
+        future = _load();
+      });
   }
+
   @override
-  Widget build(BuildContext context) => PlaybackScaffold(appBar: StudyAppBar(title: Text(widget.mistakes ? '错题记录' : '练习记录')), body: FutureBuilder<List<RowData>>(future: future, builder: (_, snapshot) {
-    if (snapshot.hasError) return Center(child: StudyButton.text(onPressed: () => setState(() => future = _load()), child: const Text('记录读取失败，点击重试')));
-    if (!snapshot.hasData) return const Center(child: StudyCircularProgressIndicator());
-    final rows = snapshot.data!;
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      if (widget.mistakes) ...[
-        Text('历史错题 ${rows.length} 道 · 答对后仍保留历史记录'), const SizedBox(height: 12),
-        StudyButton.filled(onPressed: busy || rows.isEmpty ? null : _startMistakes, child: Text(busy ? '准备中' : '复习错题（${rows.length < 10 ? rows.length : 10} 题）')),
-        for (final row in rows) MistakeTile(widget.app.store, row),
-      ] else ...[
-        if (rows.isEmpty) const Text('暂无练习记录。'),
-        for (final row in rows) StudyCard(child: StudyListTile(
-          title: Text(sessionTitle(row)), subtitle: Text('${displayDate(intOf(row, 'start_time'))}\n${row['status'] == 'complete' ? '已完成' : '未完成'} · 已答 ${row['answered']}/${row['count']} · 正确 ${row['correct']}'),
-          trailing: const Icon(Icons.chevron_right), onTap: () async {
-            await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PracticeDetailsPage(widget.app, row)));
-            if (mounted) setState(() => future = _load());
-          },
-        )),
-      ],
-    ]);
-  }));
+  Widget build(BuildContext context) => PlaybackScaffold(
+    appBar: StudyAppBar(
+      title: Text(widget.mistakes ? context.ui('错题记录') : context.ui('练习记录')),
+    ),
+    body: FutureBuilder<List<RowData>>(
+      future: future,
+      builder: (_, snapshot) {
+        if (snapshot.hasError)
+          return Center(
+            child: StudyButton.text(
+              onPressed: () => setState(() => future = _load()),
+              child: Text(context.ui('记录读取失败，点击重试')),
+            ),
+          );
+        if (!snapshot.hasData)
+          return const Center(child: StudyCircularProgressIndicator());
+        final rows = snapshot.data!;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (widget.mistakes) ...[
+              Text(
+                context.tr(
+                  '历史错题 ${rows.length} 道 · 答对后仍保留历史记录',
+                  '歷史錯題 ${rows.length} 道 · 答對後仍保留歷史紀錄',
+                  '${rows.length} past mistakes · History is kept after correct answers',
+                  '過去の間違い：${rows.length}問 · 正解後も履歴を保持',
+                ),
+              ),
+              const SizedBox(height: 12),
+              StudyButton.filled(
+                onPressed: busy || rows.isEmpty ? null : _startMistakes,
+                child: Text(
+                  busy
+                      ? context.ui('准备中')
+                      : context.tr(
+                          '复习错题（${rows.length < 10 ? rows.length : 10} 题）',
+                          '複習錯題（${rows.length < 10 ? rows.length : 10} 題）',
+                          'Review mistakes (${rows.length < 10 ? rows.length : 10})',
+                          '間違いを復習（${rows.length < 10 ? rows.length : 10}問）',
+                        ),
+                ),
+              ),
+              for (final row in rows) MistakeTile(widget.app.store, row),
+            ] else ...[
+              if (rows.isEmpty) Text(context.ui('暂无练习记录。')),
+              for (final row in rows)
+                StudyCard(
+                  child: StudyListTile(
+                    title: Text(sessionTitle(row, context: context)),
+                    subtitle: Text(
+                      '${displayDate(intOf(row, 'start_time'))}\n${row['status'] == 'complete' ? context.l10n.completed : context.l10n.incomplete} · ${row['answered']}/${row['count']} · ${context.l10n.correct} ${row['correct']}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PracticeDetailsPage(widget.app, row),
+                        ),
+                      );
+                      if (mounted) setState(() => future = _load());
+                    },
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
+    ),
+  );
 }
 
 class MistakeTile extends StatefulWidget {
@@ -1896,32 +3577,90 @@ class MistakeTile extends StatefulWidget {
   @override
   State<MistakeTile> createState() => _MistakeTileState();
 }
-class _MistakeTileState extends State<MistakeTile> {
+
+class _MistakeTileState extends State<MistakeTile>
+    with _HistoricalLanguage<MistakeTile> {
   late Future<List<RowData>> options;
   @override
-  void initState() { super.initState(); options = widget.store.options(textOf(widget.row, 'id')); }
+  void initState() {
+    super.initState();
+    options = widget.store.options(textOf(widget.row, 'id'));
+    unawaited(loadHistoricalLanguage(widget.store, widget.row));
+  }
+
   @override
   void didUpdateWidget(covariant MistakeTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.row['id'] != widget.row['id']) options = widget.store.options(textOf(widget.row, 'id'));
+    if (oldWidget.row['id'] != widget.row['id']) {
+      options = widget.store.options(textOf(widget.row, 'id'));
+      historicalLanguage = null;
+      historicalLanguageUnavailable = false;
+      unawaited(loadHistoricalLanguage(widget.store, widget.row));
+    }
   }
+
   @override
   Widget build(BuildContext context) => StudyExpansionTile(
-    title: Text.rich(contentTextSpan(questionDisplayText(textOf(widget.row, 'content')))),
-    subtitle: Text.rich(TextSpan(children: [
-      contentTextSpan(textOf(widget.row, 'title'), japanese: true),
-      contentTextSpan(' · 累计答错 ${widget.row['mistake']} 次'),
-    ])),
-    children: [FutureBuilder<List<RowData>>(future: options, builder: (_, snapshot) {
-      if (snapshot.hasError) return StudyButton.text(onPressed: () => setState(() => options = widget.store.options(textOf(widget.row, 'id'))), child: const Text('答案读取失败，点击重试'));
-      if (!snapshot.hasData) return const StudyCircularProgressIndicator();
-      final correct = snapshot.data!.where((r) => r['code'] == widget.row['answer']);
-      return Padding(padding: const EdgeInsets.all(16), child: Text.rich(TextSpan(children: [
-        contentTextSpan('正确答案：${widget.row['answer']}. '),
-        contentTextSpan(correct.isEmpty ? '' : questionDisplayText(textOf(correct.first, 'content')), japanese: true),
-        contentTextSpan('\n${textOf(widget.row, 'definition')}'),
-      ]), style: const TextStyle(height: 1.6)));
-    })],
+    title: Text.rich(
+      historicalSpan(questionDisplayText(textOf(widget.row, 'content'))),
+    ),
+    subtitle: Text.rich(
+      TextSpan(
+        children: [
+          historicalSpan(textOf(widget.row, 'title')),
+          TextSpan(
+            text: context.tr(
+              ' · 累计答错 ${widget.row['mistake']} 次',
+              ' · 累計答錯 ${widget.row['mistake']} 次',
+              ' · ${widget.row['mistake']} incorrect attempts',
+              ' · 不正解：${widget.row['mistake']}回',
+            ),
+          ),
+        ],
+      ),
+    ),
+    children: [
+      if (historicalLanguageUnavailable) historicalLanguageNotice(context),
+      FutureBuilder<List<RowData>>(
+        future: options,
+        builder: (_, snapshot) {
+          if (snapshot.hasError)
+            return StudyButton.text(
+              onPressed: () => setState(
+                () => options = widget.store.options(textOf(widget.row, 'id')),
+              ),
+              child: Text(context.ui('答案读取失败，点击重试')),
+            );
+          if (!snapshot.hasData) return const StudyCircularProgressIndicator();
+          final correct = snapshot.data!.where(
+            (r) => r['code'] == widget.row['answer'],
+          );
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text:
+                        '${context.l10n.correctAnswer}: ${widget.row['answer']}. ',
+                  ),
+                  historicalSpan(
+                    correct.isEmpty
+                        ? ''
+                        : questionDisplayText(textOf(correct.first, 'content')),
+                  ),
+                  historicalSpan(
+                    '\n${textOf(widget.row, 'definition')}',
+                    explanation: true,
+                  ),
+                ],
+              ),
+              style: const TextStyle(height: 1.6),
+            ),
+          );
+        },
+      ),
+    ],
   );
 }
 
@@ -1932,26 +3671,84 @@ class PracticeDetailsPage extends StatefulWidget {
   @override
   State<PracticeDetailsPage> createState() => _PracticeDetailsPageState();
 }
+
 class _PracticeDetailsPageState extends State<PracticeDetailsPage> {
   late Future<List<RowData>> future;
   @override
-  void initState() { super.initState(); future = widget.app.store.practiceItems(textOf(widget.session, 'id')); }
+  void initState() {
+    super.initState();
+    future = widget.app.store.practiceItems(textOf(widget.session, 'id'));
+  }
+
   @override
-  Widget build(BuildContext context) => PlaybackScaffold(appBar: StudyAppBar(title: const Text('练习详情')), body: FutureBuilder<List<RowData>>(future: future, builder: (_, snapshot) {
-    if (snapshot.hasError) return Center(child: StudyButton.text(onPressed: () => setState(() => future = widget.app.store.practiceItems(textOf(widget.session, 'id'))), child: const Text('详情读取失败，点击重试')));
-    if (!snapshot.hasData) return const Center(child: StudyCircularProgressIndicator());
-    final items = snapshot.data!, session = widget.session;
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      Text(sessionTitle(session)), Text('开始：${displayDate(intOf(session, 'start_time'))}'),
-      if (session['end_time'] != null) Text('完成：${displayDate(intOf(session, 'end_time'))}'),
-      Text('作答用时：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} 秒'),
-      if (items.any((r) => r['answer_time'] == null)) StudyButton.filled(onPressed: () async {
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PracticePage(widget.app, textOf(session, 'id'))));
-        if (mounted) Navigator.pop(context);
-      }, child: const Text('继续练习')),
-      for (var i = 0; i < items.length; i++) AnswerTile(widget.app.store, items[i], number: i + 1),
-    ]);
-  }));
+  Widget build(BuildContext context) => PlaybackScaffold(
+    appBar: StudyAppBar(title: Text(context.ui('练习详情'))),
+    body: FutureBuilder<List<RowData>>(
+      future: future,
+      builder: (_, snapshot) {
+        if (snapshot.hasError)
+          return Center(
+            child: StudyButton.text(
+              onPressed: () => setState(
+                () => future = widget.app.store.practiceItems(
+                  textOf(widget.session, 'id'),
+                ),
+              ),
+              child: Text(context.ui('详情读取失败，点击重试')),
+            ),
+          );
+        if (!snapshot.hasData)
+          return const Center(child: StudyCircularProgressIndicator());
+        final items = snapshot.data!, session = widget.session;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(sessionTitle(session, context: context)),
+            Text(
+              context.tr(
+                '开始：${displayDate(intOf(session, 'start_time'))}',
+                '開始：${displayDate(intOf(session, 'start_time'))}',
+                'Started: ${displayDate(intOf(session, 'start_time'))}',
+                '開始：${displayDate(intOf(session, 'start_time'))}',
+              ),
+            ),
+            if (session['end_time'] != null)
+              Text(
+                context.tr(
+                  '完成：${displayDate(intOf(session, 'end_time'))}',
+                  '完成：${displayDate(intOf(session, 'end_time'))}',
+                  'Completed: ${displayDate(intOf(session, 'end_time'))}',
+                  '完了：${displayDate(intOf(session, 'end_time'))}',
+                ),
+              ),
+            Text(
+              context.tr(
+                '作答用时：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} 秒',
+                '作答時間：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} 秒',
+                'Answering time: ${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} seconds',
+                '解答時間：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000}秒',
+              ),
+            ),
+            if (items.any((r) => r['answer_time'] == null))
+              StudyButton.filled(
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          PracticePage(widget.app, textOf(session, 'id')),
+                    ),
+                  );
+                  if (mounted) Navigator.pop(context);
+                },
+                child: Text(context.ui('继续练习')),
+              ),
+            for (var i = 0; i < items.length; i++)
+              AnswerTile(widget.app.store, items[i], number: i + 1),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 class FontSettingsPage extends StatefulWidget {
@@ -1975,13 +3772,16 @@ class _FontSettingsPageState extends State<FontSettingsPage> {
 
   Future<void> _save() async {
     if (saving) return;
-    setState(() { saving = true; saveHint = null; });
+    setState(() {
+      saving = true;
+      saveHint = null;
+    });
     try {
       await widget.app.setting('font_scale', followSystem ? 0 : percent);
       if (mounted) Navigator.pop(context);
     } catch (e, stack) {
       SystemErrors.record(e, stack, module: 'app', operation: '保存字体设置');
-      if (mounted) setState(() => saveHint = '设置暂未保存，请重试。');
+      if (mounted) setState(() => saveHint = context.ui('设置暂未保存，请重试。'));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -1989,50 +3789,183 @@ class _FontSettingsPageState extends State<FontSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final previewScaler = followSystem ? MediaQueryData.fromView(View.of(context)).textScaler : TextScaler.linear(percent / 100);
+    final previewScaler = followSystem
+        ? MediaQueryData.fromView(View.of(context)).textScaler
+        : TextScaler.linear(percent / 100);
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return PlaybackScaffold(appBar: StudyAppBar(title: const Text('字体大小')), body: SafeArea(top: false, child: ListView(
-      padding: const EdgeInsets.all(20), children: [
-        StudySwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('跟随系统'),
-          subtitle: const Text('使用系统设置的文字大小'), value: followSystem,
-          onChanged: saving ? null : (value) => setState(() => followSystem = value)),
-        if (!followSystem) ...[
-          Text('文字大小：$percent%'),
-          StudySlider(value: percent.toDouble(), min: 90, max: 150, divisions: 6, label: '$percent%',
-            onChanged: saving ? null : (value) => setState(() => percent = (value / 10).round() * 10)),
-          const Text('90% 较小 · 100% 标准 · 150% 最大'),
-        ],
-        const SizedBox(height: 16),
-        const Text('预览'),
-        const SizedBox(height: 8),
-        MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: previewScaler), child: StudyCard(
-          child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const RubyText('!日本語(にほんご)', ruby: true),
-            const Text('日语 · 名词', style: TextStyle(fontSize: 16, height: 1.6)),
+    return PlaybackScaffold(
+      appBar: StudyAppBar(title: Text(context.ui('字体大小'))),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            StudySwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(context.ui('跟随系统')),
+              subtitle: Text(context.ui('使用系统设置的文字大小')),
+              value: followSystem,
+              onChanged: saving
+                  ? null
+                  : (value) => setState(() => followSystem = value),
+            ),
+            if (!followSystem) ...[
+              Text(
+                context.tr(
+                  '文字大小：$percent%',
+                  '文字大小：$percent%',
+                  'Text size: $percent%',
+                  '文字サイズ：$percent%',
+                ),
+              ),
+              StudySlider(
+                value: percent.toDouble(),
+                min: 90,
+                max: 150,
+                divisions: 6,
+                label: '$percent%',
+                onChanged: saving
+                    ? null
+                    : (value) =>
+                          setState(() => percent = (value / 10).round() * 10),
+              ),
+              Text(context.ui('90% 较小 · 100% 标准 · 150% 最大')),
+            ],
             const SizedBox(height: 16),
-            Text.rich(TextSpan(children: [const TextSpan(text: '文法：'), contentTextSpan('名は名です', japanese: true)]), style: TextStyle(fontSize: 18, height: 1.4, fontWeight: FontWeight.w600,
-              color: dark ? const Color(0xFFFFB366) : const Color(0xFFB85C00))),
-            const Text('用于说明某人或某事物是什么。', style: TextStyle(fontSize: 16, height: 1.6)),
-            const Padding(padding: EdgeInsets.only(left: 16, top: 8), child: Text.rich(TextSpan(children: [TextSpan(text: '李さんは学生です。', style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'))), TextSpan(text: '\n小李是学生。')]), style: TextStyle(fontSize: 14, height: 1.6))),
+            Text(context.ui('预览')),
+            const SizedBox(height: 8),
+            MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: previewScaler),
+              child: StudyCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const RubyText('!日本語(にほんご)', ruby: true),
+                      Text(
+                        context.tr(
+                          '日语 · 名词',
+                          '日語 · 名詞',
+                          'Japanese · Noun',
+                          '日本語 · 名詞',
+                        ),
+                        style: TextStyle(fontSize: 16, height: 1.6),
+                      ),
+                      const SizedBox(height: 16),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text:
+                                  '${context.tr('文法', '文法', 'Grammar', '文法')}: ',
+                            ),
+                            contentTextSpan('名は名です', japanese: true),
+                          ],
+                        ),
+                        style: TextStyle(
+                          fontSize: 18,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                          color: dark
+                              ? const Color(0xFFFFB366)
+                              : const Color(0xFFB85C00),
+                        ),
+                      ),
+                      Text(
+                        context.tr(
+                          '用于说明某人或某事物是什么。',
+                          '用於說明某人或某事物是什麼。',
+                          'Used to state what someone or something is.',
+                          '人や物が何であるかを説明します。',
+                        ),
+                        style: TextStyle(fontSize: 16, height: 1.6),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(left: 16, top: 8),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '李さんは学生です。',
+                                style: TextStyle(
+                                  fontFamily: 'Hiragino Sans',
+                                  locale: Locale('ja', 'JP'),
+                                ),
+                              ),
+                              TextSpan(
+                                text: context.tr(
+                                  '\n小李是学生。',
+                                  '\n小李是學生。',
+                                  '\nLi is a student.',
+                                  '\n李さんが学生であることを表します。',
+                                ),
+                              ),
+                            ],
+                          ),
+                          style: TextStyle(fontSize: 14, height: 1.6),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        context.tr(
+                          '请选择正确的读音。',
+                          '請選擇正確的讀音。',
+                          'Choose the correct reading.',
+                          '正しい読み方を選んでください。',
+                        ),
+                        style: TextStyle(fontSize: 22, height: 1.5),
+                      ),
+                      const Text(
+                        'A. にほんご',
+                        style: TextStyle(
+                          fontFamily: 'Hiragino Sans',
+                          locale: Locale('ja', 'JP'),
+                          fontSize: 16,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
-            const Text('请选择正确的读音。', style: TextStyle(fontSize: 22, height: 1.5)),
-            const Text('A. にほんご', style: TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 16, height: 1.6)),
-          ])),
-        )),
-        const SizedBox(height: 16),
-        const Text('保存后应用于全 App 的文字。自定义大小不叠加系统缩放，关闭并重新打开 App 后仍保留。'),
-        if (saveHint != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(saveHint!)),
-        const SizedBox(height: 20),
-        StudyButton.filled(onPressed: saving ? null : _save, child: Text(saving ? '保存中' : '保存')),
-        const SizedBox(height: 8),
-        StudyButton.text(onPressed: saving ? null : () => setState(() { followSystem = true; percent = 100; }), child: const Text('恢复默认（跟随系统）')),
-      ],
-    )));
+            Text(context.ui('保存后应用于全 App 的文字。自定义大小不叠加系统缩放，关闭并重新打开 App 后仍保留。')),
+            if (saveHint != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(context.ui(saveHint!)),
+              ),
+            const SizedBox(height: 20),
+            StudyButton.filled(
+              onPressed: saving ? null : _save,
+              child: Text(saving ? context.ui('保存中') : context.ui('保存')),
+            ),
+            const SizedBox(height: 8),
+            StudyButton.text(
+              onPressed: saving
+                  ? null
+                  : () => setState(() {
+                      followSystem = true;
+                      percent = 100;
+                    }),
+              child: Text(context.ui('恢复默认（跟随系统）')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 class ProfilePanel extends StatefulWidget {
-  const ProfilePanel(this.app, {super.key, this.scrollController, this.purchaseSectionKey});
+  const ProfilePanel(
+    this.app, {
+    super.key,
+    this.scrollController,
+    this.purchaseSectionKey,
+  });
   final AppController app;
   final ScrollController? scrollController;
   final GlobalKey? purchaseSectionKey;
@@ -2040,7 +3973,8 @@ class ProfilePanel extends StatefulWidget {
   State<ProfilePanel> createState() => _ProfilePanelState();
 }
 
-class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver {
+class _ProfilePanelState extends State<ProfilePanel>
+    with WidgetsBindingObserver {
   AppController get app => widget.app;
   ScrollController? get scrollController => widget.scrollController;
   GlobalKey? get purchaseSectionKey => widget.purchaseSectionKey;
@@ -2049,7 +3983,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
   DateTime? _systemInfoVisibleUntil;
   Timer? _systemInfoHideTimer;
 
-  bool get _systemInfoVisible => _systemInfoVisibleUntil?.isAfter(DateTime.now()) ?? false;
+  bool get _systemInfoVisible =>
+      _systemInfoVisibleUntil?.isAfter(DateTime.now()) ?? false;
 
   @override
   void initState() {
@@ -2060,14 +3995,22 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
   void _onVersionTap() {
     if (_systemInfoVisible) return;
     final now = DateTime.now();
-    final elapsed = _lastVersionTap == null ? null : now.difference(_lastVersionTap!);
-    _versionTapCount = elapsed != null && !elapsed.isNegative && elapsed <= const Duration(seconds: 1)
-        ? _versionTapCount + 1 : 1;
+    final elapsed = _lastVersionTap == null
+        ? null
+        : now.difference(_lastVersionTap!);
+    _versionTapCount =
+        elapsed != null &&
+            !elapsed.isNegative &&
+            elapsed <= const Duration(seconds: 1)
+        ? _versionTapCount + 1
+        : 1;
     _lastVersionTap = now;
     if (_versionTapCount < 10) return;
     _versionTapCount = 0;
     _lastVersionTap = null;
-    setState(() => _systemInfoVisibleUntil = now.add(const Duration(minutes: 5)));
+    setState(
+      () => _systemInfoVisibleUntil = now.add(const Duration(minutes: 5)),
+    );
     _systemInfoHideTimer?.cancel();
     _systemInfoHideTimer = Timer(const Duration(minutes: 5), () {
       if (mounted) setState(() => _systemInfoVisibleUntil = null);
@@ -2076,25 +4019,27 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
 
   Future<void> _requestAppReview() async {
     try {
-      final requested = await const MethodChannel('yuzhichu/device')
-          .invokeMethod<bool>('openAppReviewPage') ?? false;
+      final requested =
+          await const MethodChannel('yuzhichu/device')
+              .invokeMethod<bool>('openAppReviewPage') ??
+          false;
       if (!requested && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('暂时无法打开评价页面，请稍后重试')),
+          GlassSnackBar(content: Text(context.ui('暂时无法打开评价页面，请稍后重试'))),
         );
       }
     } on PlatformException catch (e, stack) {
       SystemErrors.record(e, stack, module: 'profile', operation: '请求 App 评价');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('暂时无法打开评价页面，请稍后重试')),
+          GlassSnackBar(content: Text(context.ui('暂时无法打开评价页面，请稍后重试'))),
         );
       }
     } on MissingPluginException catch (e, stack) {
       SystemErrors.record(e, stack, module: 'profile', operation: '请求 App 评价');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('暂时无法打开评价页面，请稍后重试')),
+          GlassSnackBar(content: Text(context.ui('暂时无法打开评价页面，请稍后重试'))),
         );
       }
     }
@@ -2123,7 +4068,7 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
     controller: scrollController,
     children: [
       Text(
-        '我的',
+        context.ui('我的'),
         style: Theme.of(context).textTheme.headlineMedium
             ?.copyWith(fontWeight: FontWeight.w700),
       ),
@@ -2163,7 +4108,7 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text('连续学习 ${intOf(app.stats, 'streak')} 天'),
+                    Text(context.l10n.streakDays(intOf(app.stats, 'streak'))),
                   ],
                 ),
               ),
@@ -2171,25 +4116,56 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
           ),
         ),
       ),
-      const SectionTitle('基础知识'),
-      for (var i = 0; i < basicKnowledgeCategories.length; i++) ...[
+      const SizedBox(height: 10),
+      _settingCard(
+        context,
+        icon: Icons.school_outlined,
+        title: context.l10n.learningTarget,
+        subtitle: app.learningTarget == 'en'
+            ? context.l10n.english
+            : context.l10n.japanese,
+        onTap: () => _languagePreference(context, target: true),
+      ),
+      const SizedBox(height: 10),
+      _settingCard(
+        context,
+        icon: Icons.language,
+        title: context.l10n.interfaceLanguage,
+        subtitle: _uiLanguageLabel(context, textOf(app.settings, 'ui_locale')),
+        onTap: () => _languagePreference(context, target: false),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(context.l10n.independentLanguages),
+      ),
+      SectionTitle(context.ui('基础知识')),
+      for (
+        var i = 0;
+        i < basicKnowledgeCategoriesFor(app.learningTarget).length;
+        i++
+      ) ...[
         if (i > 0) const SizedBox(height: 10),
         _settingCard(
           context,
-          icon: basicKnowledgeCategories[i].icon,
+          icon: basicKnowledgeCategoriesFor(app.learningTarget)[i].icon,
           iconSize: 28,
-          title: basicKnowledgeCategories[i].title,
-          subtitle: basicKnowledgeCategories[i].subtitle,
+          title: basicKnowledgeCategoriesFor(
+            app.learningTarget,
+          )[i].localizedTitle(context),
+          subtitle: basicKnowledgeCategoriesFor(
+            app.learningTarget,
+          )[i].localizedSubtitle(context),
           onTap: () => openPage(
             context,
             BasicKnowledgeCategoryPage(
-              category: basicKnowledgeCategories[i],
+              category: basicKnowledgeCategoriesFor(app.learningTarget)[i],
+              learningTarget: app.learningTarget,
               onOpenKana: () => openPage(context, KanaPage(app)),
             ),
           ),
         ),
       ],
-      const SectionTitle('系统'),
+      SectionTitle(context.ui('系统')),
       AnimatedBuilder(
         key: purchaseSectionKey,
         animation: app.studyRoomPurchase,
@@ -2198,9 +4174,22 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
           return _settingCard(
             context,
             icon: Icons.shopping_bag_outlined,
-            title: purchase.unlocked ? '自习室 已解锁': purchase.initialized ? '自习室 未购买' : '自习室 正在确认购买状态…',
-            subtitle: purchase.unlocked ? '自习室功能已可使用' : '查看自习室购买内容',
-            onTap: () => openPage(context, StudyRoomPurchasePage(purchase)),
+            title: purchase.unlocked
+                ? context.ui('自习室 已解锁')
+                : purchase.initialized
+                ? context.ui('自习室 未购买')
+                : context.ui('自习室 正在确认购买状态…'),
+            subtitle: purchase.unlocked
+                ? context.ui('自习室功能已可使用')
+                : context.ui('查看自习室购买内容'),
+            onTap: () => openPage(
+              context,
+              StudyRoomPurchasePage(
+                purchase,
+                learningTarget: () => app.learningTarget,
+                changes: app,
+              ),
+            ),
           );
         },
       ),
@@ -2208,35 +4197,35 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
       _settingCard(
         context,
         icon: Icons.star_outline,
-        title: '给个好评',
-        subtitle: '前往 App Store 评价语之初',
+        title: context.ui('给个好评'),
+        subtitle: context.ui('前往 App Store 评价语之初'),
         onTap: _requestAppReview,
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.volunteer_activism_outlined,
-        title: '打赏开发者',
-        subtitle: '通过 App Store 支持开发者',
+        title: context.ui('打赏开发者'),
+        subtitle: context.ui('通过 App Store 支持开发者'),
         onTap: () => openPage(context, DeveloperTipPage(app.developerTip)),
       ),
       const SizedBox(height: 10),
       _settingCard(
-              context,
-              icon: Icons.notifications_outlined,
-              title: '通知公告',
-              subtitle: '查看最新通知与历史公告',
-              onTap: () => openPage(context, NoticeHistoryPage(app.notices)),
+        context,
+        icon: Icons.notifications_outlined,
+        title: context.ui('通知公告'),
+        subtitle: context.ui('查看最新通知与历史公告'),
+        onTap: () => openPage(context, NoticeHistoryPage(app.notices)),
       ),
-      const SectionTitle('设置'),
+      SectionTitle(context.ui('设置')),
       _settingCard(
         context,
         icon: Icons.palette_outlined,
-        title: '外观',
+        title: context.ui('外观'),
         subtitle: switch (textOf(app.settings, 'theme')) {
-          'light' => '浅色',
-          'dark' => '深色',
-          _ => '跟随系统',
+          'light' => context.ui('浅色'),
+          'dark' => context.ui('深色'),
+          _ => context.ui('跟随系统'),
         },
         onTap: () => _appearance(context),
       ),
@@ -2245,79 +4234,81 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         context,
         icon: Icons.text_fields,
         iconSize: 28,
-        title: '字体大小',
-        subtitle: app.fontScale == 0 ? '跟随系统' : '${app.fontScale}%',
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FontSettingsPage(app))),
+        title: context.ui('字体大小'),
+        subtitle: app.fontScale == 0 ? context.ui('跟随系统') : '${app.fontScale}%',
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => FontSettingsPage(app))),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.timer_outlined,
-        title: '每日目标',
+        title: context.ui('每日目标'),
         subtitle: switch (intOf(app.settings, 'daily_goal', 10)) {
-          5 => '轻松 · 5 分钟',
-          20 => '进阶 · 20 分钟',
-          _ => '标准 · 10 分钟',
+          5 => context.ui('轻松 · 5 分钟'),
+          20 => context.ui('进阶 · 20 分钟'),
+          _ => context.ui('标准 · 10 分钟'),
         },
         onTap: () => _dailyGoal(context),
       ),
-      const SectionTitle('信息'),
+      SectionTitle(context.ui('信息')),
       _settingCard(
         context,
         icon: Icons.privacy_tip_outlined,
-        title: '隐私政策',
-        subtitle: '了解信息处理与隐私保护',
+        title: context.ui('隐私政策'),
+        subtitle: context.ui('了解信息处理与隐私保护'),
         onTap: () => openPage(context, const PrivacyPolicyPage()),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.copyright_outlined,
-        title: '内容与版权',
-        subtitle: '查看内容、语音、图片与版权说明',
+        title: context.ui('内容与版权'),
+        subtitle: context.ui('查看内容、语音、图片与版权说明'),
         onTap: () => openPage(context, const ContentCopyrightPage()),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.mail_outline,
-        title: '关于',
-        subtitle: 'QQ交流群：1103815459',
+        title: context.ui('关于'),
+        subtitle: context.ui('QQ交流群：1103815459'),
         onTap: () => openPage(context, AppInformationPage(app)),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.info_outline,
-        title: '语之初 ${app.appVersionLabel}',
-        subtitle: '语言学习初始的地方',
+        title: '语之初 ${context.ui(app.appVersionLabel)}',
+        subtitle: context.ui('语言学习初始的地方'),
         showChevron: false,
         onTap: _onVersionTap,
       ),
-      const SectionTitle('资源包'),
+      SectionTitle(context.ui('资源包')),
       _settingCard(
         context,
         icon: Icons.menu_book_outlined,
-        title: '学习资源',
-        subtitle: '下载与更新学习资源',
+        title: context.ui('学习资源'),
+        subtitle: context.ui('下载与更新学习资源'),
         onTap: () => openPage(context, LibraryPage(app)),
       ),
       const SizedBox(height: 10),
       _settingCard(
         context,
         icon: Icons.download_outlined,
-        title: '自习资源',
-        subtitle: '下载与更新自习资源',
+        title: context.ui('自习资源'),
+        subtitle: context.ui('下载与更新自习资源'),
         onTap: () => openPage(context, StudyResourcePage(app.studyRoomHost)),
       ),
-      const SectionTitle('数据'),
+      SectionTitle(context.ui('数据')),
       _settingCard(
         context,
         icon: Icons.delete_outline,
         iconSize: 32,
         iconColor: Colors.red,
-        title: '清空 内容学习记录',
-        subtitle: '删除本机内容学习记录，并重置外观和每日目标。',
+        title: context.ui('清空 内容学习记录'),
+        subtitle: context.ui('删除本机内容学习记录，并重置外观和每日目标。'),
         showChevron: false,
         onTap: () => _confirmReset(context),
       ),
@@ -2327,8 +4318,8 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         icon: Icons.delete_outline,
         iconSize: 32,
         iconColor: Colors.red,
-        title: '清空 自习学习记录',
-        subtitle: '删除本机自习学习记录。',
+        title: context.ui('清空 自习学习记录'),
+        subtitle: context.ui('删除本机自习学习记录。'),
         showChevron: false,
         onTap: () => _confirmResetJlpt(context),
       ),
@@ -2337,14 +4328,15 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
         _settingCard(
           context,
           icon: Icons.bug_report_outlined,
-          title: '系统信息记录',
-          subtitle: '查看信息详情',
+          title: context.ui('系统信息记录'),
+          subtitle: context.ui('查看信息详情'),
           onTap: () => openPage(context, SystemErrorPage(app.store)),
         ),
       ],
     ],
   );
-  Widget _settingCard(BuildContext context, {
+  Widget _settingCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
@@ -2361,76 +4353,253 @@ class _ProfilePanelState extends State<ProfilePanel> with WidgetsBindingObserver
       leading: SizedBox(
         width: 32,
         height: 32,
-        child: Center(child: Icon(icon, color: iconColor, size: iconSize)),
+        child: Center(
+          child: Icon(icon, color: iconColor, size: iconSize),
+        ),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
       subtitle: Text(subtitle),
-      trailing: showChevron && onTap != null ? const Icon(Icons.chevron_right_rounded, size: 24) : null,
+      trailing: showChevron && onTap != null
+          ? const Icon(Icons.chevron_right_rounded, size: 24)
+          : null,
       onTap: onTap,
     ),
   );
+  String _uiLanguageLabel(BuildContext context, String value) =>
+      switch (value) {
+        'zh-Hans' => '简体中文',
+        'zh-Hant' => '繁體中文',
+        'en' => 'English',
+        'ja' => '日本語',
+        _ => context.l10n.followSystem,
+      };
+
+  Future<void> _languagePreference(
+    BuildContext context, {
+    required bool target,
+  }) async {
+    await showGlassBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: app,
+        builder: (sheetContext, _) {
+          final current = target
+              ? app.learningTarget
+              : textOf(app.settings, 'ui_locale');
+          final values = target
+              ? const ['ja', 'en']
+              : const ['system', 'zh-Hans', 'zh-Hant', 'en', 'ja'];
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  StudyListTile(
+                    title: Text(
+                      target
+                          ? sheetContext.l10n.learningTarget
+                          : sheetContext.l10n.interfaceLanguage,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  for (final value in values)
+                    StudyListTile(
+                      title: Text(
+                        target
+                            ? (value == 'ja'
+                                  ? sheetContext.l10n.japanese
+                                  : sheetContext.l10n.english)
+                            : _uiLanguageLabel(sheetContext, value),
+                      ),
+                      trailing: Icon(
+                        current == value
+                            ? Icons.check_circle
+                            : Icons.circle_outlined,
+                        color: current == value
+                            ? Theme.of(sheetContext).colorScheme.primary
+                            : Theme.of(
+                                sheetContext,
+                              ).colorScheme.onSurfaceVariant,
+                      ),
+                      onTap: () => perform(
+                        sheetContext,
+                        () async {
+                          await app.setting(
+                            target ? 'learning_target' : 'ui_locale',
+                            value,
+                          );
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                        },
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(sheetContext.l10n.independentLanguages),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _dailyGoal(BuildContext context) async {
     final current = intOf(app.settings, 'daily_goal', 10);
-    await showGlassBottomSheet<void>(context: context, showDragHandle: true, isScrollControlled: true, builder: (sheetContext) => SafeArea(child: SingleChildScrollView(child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const StudyListTile(title: Text('每日目标', style: TextStyle(fontWeight: FontWeight.w600))),
-        for (final option in const [(5, '轻松 · 5 分钟'), (10, '标准 · 10 分钟'), (20, '进阶 · 20 分钟')])
-          StudyListTile(
-            title: Text(option.$2),
-            trailing: Icon(current == option.$1 ? Icons.check_circle : Icons.circle_outlined, color: current == option.$1 ? vermilion : null),
-            onTap: () async {
-              await perform(sheetContext, () => app.setting('daily_goal', option.$1));
-              if (sheetContext.mounted) Navigator.pop(sheetContext);
-            },
+    await showGlassBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StudyListTile(
+                title: Text(
+                  context.ui('每日目标'),
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final option in [
+                (5, context.ui('轻松 · 5 分钟')),
+                (10, context.ui('标准 · 10 分钟')),
+                (20, context.ui('进阶 · 20 分钟')),
+              ])
+                StudyListTile(
+                  title: Text(option.$2),
+                  trailing: Icon(
+                    current == option.$1
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    color: current == option.$1 ? vermilion : null,
+                  ),
+                  onTap: () async {
+                    await perform(
+                      sheetContext,
+                      () => app.setting('daily_goal', option.$1),
+                    );
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
           ),
-        const SizedBox(height: 8),
-      ],
-    ))));
+        ),
+      ),
+    );
   }
+
   Future<void> _appearance(BuildContext context) async {
     final current = textOf(app.settings, 'theme');
-    await showGlassBottomSheet<void>(context: context, showDragHandle: true, isScrollControlled: true, builder: (sheetContext) => SafeArea(child: SingleChildScrollView(child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const StudyListTile(title: Text('外观', style: TextStyle(fontWeight: FontWeight.w600))),
-        for (final option in const [('system', '跟随系统'), ('light', '浅色'), ('dark', '深色')])
-          StudyListTile(
-            title: Text(option.$2),
-            trailing: Icon(current == option.$1 ? Icons.check_circle : Icons.circle_outlined, color: current == option.$1 ? vermilion : null),
-            onTap: () async {
-              await perform(sheetContext, () => app.setting('theme', option.$1));
-              if (sheetContext.mounted) Navigator.pop(sheetContext);
-            },
+    await showGlassBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StudyListTile(
+                title: Text(
+                  context.ui('外观'),
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              for (final option in [
+                ('system', context.ui('跟随系统')),
+                ('light', context.ui('浅色')),
+                ('dark', context.ui('深色')),
+              ])
+                StudyListTile(
+                  title: Text(option.$2),
+                  trailing: Icon(
+                    current == option.$1
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    color: current == option.$1 ? vermilion : null,
+                  ),
+                  onTap: () async {
+                    await perform(
+                      sheetContext,
+                      () => app.setting('theme', option.$1),
+                    );
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
           ),
-        const SizedBox(height: 8),
-      ],
-    ))));
+        ),
+      ),
+    );
   }
+
   Future<void> _confirmResetJlpt(BuildContext context) async {
-    final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
-      title: const Text('清空 自习学习记录？'),
-      content: const Text('当前用户的 J练习、J测试全部数据（含历史记录、未完成进度、答题明细、错题、复习记录、等级设置及旧版记录）将被删除，无法撤销。已下载题库、用户身份和其他自习室功能的数据保留。'),
-      actions: [
-        StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-        StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('确认清空')),
-      ],
-    ));
-    if (yes == true && context.mounted) await perform(context, () async {
-      await app.store.resetJlpt();
-      await app.reload();
-    });
+    final yes = await showGlassDialog<bool>(
+      context: context,
+      builder: (context) => GlassAlertDialog(
+        title: Text(context.ui('清空 自习学习记录？')),
+        content: Text(
+          context.ui(
+            '当前用户的 J练习、J测试全部数据（含历史记录、未完成进度、答题明细、错题、复习记录、等级设置及旧版记录）将被删除，无法撤销。已下载题库、用户身份和其他自习室功能的数据保留。',
+          ),
+        ),
+        actions: [
+          StudyButton.text(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.ui('取消')),
+          ),
+          StudyButton.filled(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.ui('确认清空')),
+          ),
+        ],
+      ),
+    );
+    if (yes == true && context.mounted)
+      await perform(context, () async {
+        await app.store.resetJlpt();
+        await app.reload();
+      });
   }
+
   Future<void> _confirmReset(BuildContext context) async {
-    final yes = await showGlassDialog<bool>(context: context, builder: (context) => GlassAlertDialog(
-      title: const Text('清空 内容学习记录？'),
-      content: const Text('当前用户的内容课程进度、学习时长、答题记录、复习卡片和上次学习位置将被删除，无法撤销。外观恢复为跟随系统，每日目标恢复为 10 分钟。已下载内容、用户身份、字体大小和自习室记录保留。'),
-      actions: [
-        StudyButton.text(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-        StudyButton.filled(onPressed: () => Navigator.pop(context, true), child: const Text('确认清空')),
-      ],
-    ));
-    if (yes == true && context.mounted) await perform(context, () async { await app.store.reset(); await app.reload(); });
+    final yes = await showGlassDialog<bool>(
+      context: context,
+      builder: (context) => GlassAlertDialog(
+        title: Text(context.ui('清空 内容学习记录？')),
+        content: Text(
+          context.ui(
+            '当前用户的内容课程进度、学习时长、答题记录、复习卡片和上次学习位置将被删除，无法撤销。外观恢复为跟随系统，每日目标恢复为 10 分钟。已下载内容、用户身份、字体大小和自习室记录保留。',
+          ),
+        ),
+        actions: [
+          StudyButton.text(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.ui('取消')),
+          ),
+          StudyButton.filled(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.ui('确认清空')),
+          ),
+        ],
+      ),
+    );
+    if (yes == true && context.mounted)
+      await perform(context, () async {
+        await app.store.reset();
+        await app.reload();
+      });
   }
 }
 
@@ -2442,12 +4611,16 @@ class AppInformationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    Widget informationCard(Widget child) => StudyCard(margin: EdgeInsets.zero,
-      child: Padding(padding: const EdgeInsets.all(24), child: child));
+    Widget informationCard(Widget child) => StudyCard(
+      margin: EdgeInsets.zero,
+      child: Padding(padding: const EdgeInsets.all(24), child: child),
+    );
 
     return PlaybackScaffold(
-      backgroundColor: dark ? theme.scaffoldBackgroundColor : const Color(0xFFF5F8FA),
-      appBar: StudyAppBar(title: const Text('关于')),
+      backgroundColor: dark
+          ? theme.scaffoldBackgroundColor
+          : const Color(0xFFF5F8FA),
+      appBar: StudyAppBar(title: Text(context.ui('关于'))),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -2458,32 +4631,64 @@ class AppInformationPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  informationCard(SizedBox(width: double.infinity, child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 16),
-                      const StudyGlassLogo(),
-                      const SizedBox(height: 28),
-                      Text('版本号：${app.appVersionLabel}',
-                        textAlign: TextAlign.center, style: theme.textTheme.titleLarge),
-                      const SizedBox(height: 12),
-                      Text('Copyright © 语之初', textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 16),
-                    ],
-                  ))),
+                  informationCard(
+                    SizedBox(
+                      width: double.infinity,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 16),
+                          const StudyGlassLogo(),
+                          const SizedBox(height: 28),
+                          Text(
+                            context.tr(
+                              '版本号：${context.ui(app.appVersionLabel)}',
+                              '版本號：${context.ui(app.appVersionLabel)}',
+                              'Version: ${context.ui(app.appVersionLabel)}',
+                              'バージョン：${context.ui(app.appVersionLabel)}',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Copyright © 语之初',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
-                  informationCard(Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('联系我们', style: theme.textTheme.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 20),
-                      SelectableText('QQ交流群：1103815459', style: theme.textTheme.bodyLarge?.copyWith(
-                        color: dark ? const Color(0xFF70B5FF) : const Color(0xFF007AFF))),
-                    ],
-                  )),
+                  informationCard(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.ui('联系我们'),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SelectableText(
+                          context.ui('QQ交流群：1103815459'),
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: dark
+                                ? const Color(0xFF70B5FF)
+                                : const Color(0xFF007AFF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2494,29 +4699,81 @@ class AppInformationPage extends StatelessWidget {
   }
 }
 
-RowData kana(String hiragana, String katakana, String romaji, [String? audio]) =>
-    {'id': 'kana:${hiragana}', 'hiragana': hiragana, 'katakana': katakana, 'romaji': romaji, 'audio': '${audio ?? romaji}.mp3'};
+RowData kana(
+  String hiragana,
+  String katakana,
+  String romaji, [
+  String? audio,
+]) => {
+  'id': 'kana:${hiragana}',
+  'hiragana': hiragana,
+  'katakana': katakana,
+  'romaji': romaji,
+  'audio': '${audio ?? romaji}.mp3',
+};
 
 final voicedKana = <RowData>[
-  kana('が', 'ガ', 'ga'), kana('ぎ', 'ギ', 'gi'), kana('ぐ', 'グ', 'gu'), kana('げ', 'ゲ', 'ge'), kana('ご', 'ゴ', 'go'),
-  kana('ざ', 'ザ', 'za'), kana('じ', 'ジ', 'ji', 'zi'), kana('ず', 'ズ', 'zu'), kana('ぜ', 'ゼ', 'ze'), kana('ぞ', 'ゾ', 'zo'),
-  kana('だ', 'ダ', 'da'), kana('ぢ', 'ヂ', 'ji', 'di'), kana('づ', 'ヅ', 'zu', 'du'), kana('で', 'デ', 'de'), kana('ど', 'ド', 'do'),
-  kana('ば', 'バ', 'ba'), kana('び', 'ビ', 'bi'), kana('ぶ', 'ブ', 'bu'), kana('べ', 'ベ', 'be'), kana('ぼ', 'ボ', 'bo'),
-  kana('ぱ', 'パ', 'pa'), kana('ぴ', 'ピ', 'pi'), kana('ぷ', 'プ', 'pu'), kana('ぺ', 'ペ', 'pe'), kana('ぽ', 'ポ', 'po'),
+  kana('が', 'ガ', 'ga'),
+  kana('ぎ', 'ギ', 'gi'),
+  kana('ぐ', 'グ', 'gu'),
+  kana('げ', 'ゲ', 'ge'),
+  kana('ご', 'ゴ', 'go'),
+  kana('ざ', 'ザ', 'za'),
+  kana('じ', 'ジ', 'ji', 'zi'),
+  kana('ず', 'ズ', 'zu'),
+  kana('ぜ', 'ゼ', 'ze'),
+  kana('ぞ', 'ゾ', 'zo'),
+  kana('だ', 'ダ', 'da'),
+  kana('ぢ', 'ヂ', 'ji', 'di'),
+  kana('づ', 'ヅ', 'zu', 'du'),
+  kana('で', 'デ', 'de'),
+  kana('ど', 'ド', 'do'),
+  kana('ば', 'バ', 'ba'),
+  kana('び', 'ビ', 'bi'),
+  kana('ぶ', 'ブ', 'bu'),
+  kana('べ', 'ベ', 'be'),
+  kana('ぼ', 'ボ', 'bo'),
+  kana('ぱ', 'パ', 'pa'),
+  kana('ぴ', 'ピ', 'pi'),
+  kana('ぷ', 'プ', 'pu'),
+  kana('ぺ', 'ペ', 'pe'),
+  kana('ぽ', 'ポ', 'po'),
 ];
 
 final contractedKana = <RowData>[
-  kana('きゃ', 'キャ', 'kya'), kana('きゅ', 'キュ', 'kyu'), kana('きょ', 'キョ', 'kyo'),
-  kana('ぎゃ', 'ギャ', 'gya'), kana('ぎゅ', 'ギュ', 'gyu'), kana('ぎょ', 'ギョ', 'gyo'),
-  kana('しゃ', 'シャ', 'sha', 'sya'), kana('しゅ', 'シュ', 'shu', 'syu'), kana('しょ', 'ショ', 'sho', 'syo'),
-  kana('じゃ', 'ジャ', 'ja', 'zya'), kana('じゅ', 'ジュ', 'ju', 'zyu'), kana('じょ', 'ジョ', 'jo', 'zyo'),
-  kana('ちゃ', 'チャ', 'cha', 'cya'), kana('ちゅ', 'チュ', 'chu', 'cyu'), kana('ちょ', 'チョ', 'cho', 'cyo'),
-  kana('にゃ', 'ニャ', 'nya'), kana('にゅ', 'ニュ', 'nyu'), kana('にょ', 'ニョ', 'nyo'),
-  kana('ひゃ', 'ヒャ', 'hya'), kana('ひゅ', 'ヒュ', 'hyu'), kana('ひょ', 'ヒョ', 'hyo'),
-  kana('びゃ', 'ビャ', 'bya'), kana('びゅ', 'ビュ', 'byu'), kana('びょ', 'ビョ', 'byo'),
-  kana('ぴゃ', 'ピャ', 'pya'), kana('ぴゅ', 'ピュ', 'pyu'), kana('ぴょ', 'ピョ', 'pyo'),
-  kana('みゃ', 'ミャ', 'mya'), kana('みゅ', 'ミュ', 'myu'), kana('みょ', 'ミョ', 'myo'),
-  kana('りゃ', 'リャ', 'rya'), kana('りゅ', 'リュ', 'ryu'), kana('りょ', 'リョ', 'ryo'),
+  kana('きゃ', 'キャ', 'kya'),
+  kana('きゅ', 'キュ', 'kyu'),
+  kana('きょ', 'キョ', 'kyo'),
+  kana('ぎゃ', 'ギャ', 'gya'),
+  kana('ぎゅ', 'ギュ', 'gyu'),
+  kana('ぎょ', 'ギョ', 'gyo'),
+  kana('しゃ', 'シャ', 'sha', 'sya'),
+  kana('しゅ', 'シュ', 'shu', 'syu'),
+  kana('しょ', 'ショ', 'sho', 'syo'),
+  kana('じゃ', 'ジャ', 'ja', 'zya'),
+  kana('じゅ', 'ジュ', 'ju', 'zyu'),
+  kana('じょ', 'ジョ', 'jo', 'zyo'),
+  kana('ちゃ', 'チャ', 'cha', 'cya'),
+  kana('ちゅ', 'チュ', 'chu', 'cyu'),
+  kana('ちょ', 'チョ', 'cho', 'cyo'),
+  kana('にゃ', 'ニャ', 'nya'),
+  kana('にゅ', 'ニュ', 'nyu'),
+  kana('にょ', 'ニョ', 'nyo'),
+  kana('ひゃ', 'ヒャ', 'hya'),
+  kana('ひゅ', 'ヒュ', 'hyu'),
+  kana('ひょ', 'ヒョ', 'hyo'),
+  kana('びゃ', 'ビャ', 'bya'),
+  kana('びゅ', 'ビュ', 'byu'),
+  kana('びょ', 'ビョ', 'byo'),
+  kana('ぴゃ', 'ピャ', 'pya'),
+  kana('ぴゅ', 'ピュ', 'pyu'),
+  kana('ぴょ', 'ピョ', 'pyo'),
+  kana('みゃ', 'ミャ', 'mya'),
+  kana('みゅ', 'ミュ', 'myu'),
+  kana('みょ', 'ミョ', 'myo'),
+  kana('りゃ', 'リャ', 'rya'),
+  kana('りゅ', 'リュ', 'ryu'),
+  kana('りょ', 'リョ', 'ryo'),
 ];
 
 class KanaPage extends StatefulWidget {
@@ -2541,16 +4798,26 @@ class _KanaPageState extends State<KanaPage> {
     data = widget.app.store.db.query('yzc_kana', orderBy: 'row_num,column_num');
     unawaited(perform(context, playback.refresh));
   }
-  void _changed() { if (mounted) setState(() {}); }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
   @override
-  void dispose() { playback.removeListener(_changed); super.dispose(); }
+  void dispose() {
+    playback.removeListener(_changed);
+    super.dispose();
+  }
 
   String _audioName(RowData row) {
     if (row['audio'] != null) return textOf(row, 'audio');
     final hira = textOf(row, 'hiragana');
     if (hira == 'を') return 'o.mp3';
     final name = switch (textOf(row, 'romaji')) {
-      'shi' => 'si', 'chi' => 'ci', 'tsu' => 'cu', 'fu' => 'hu',
+      'shi' => 'si',
+      'chi' => 'ci',
+      'tsu' => 'cu',
+      'fu' => 'hu',
       final value => value,
     };
     return '$name.mp3';
@@ -2563,30 +4830,51 @@ class _KanaPageState extends State<KanaPage> {
     if (!await output.exists()) {
       final bytes = await rootBundle.load('assets/kana/$name');
       await directory.create(recursive: true);
-      await output.writeAsBytes(bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes), flush: true);
+      await output.writeAsBytes(
+        bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+        flush: true,
+      );
     }
     return output.path;
   }
 
   Future<void> _playFrom(int start, bool batch) async {
     if (busy || start < 0 || start >= all.length) return;
-    if (!batch && owns && playback.active && playback.playingId == textOf(all[start], 'id')) {
+    if (!batch &&
+        owns &&
+        playback.active &&
+        playback.playingId == textOf(all[start], 'id')) {
       await perform(context, playback.paused ? playback.resume : playback.stop);
       return;
     }
-    setState(() { selectedIndex = start; busy = true; });
+    setState(() {
+      selectedIndex = start;
+      busy = true;
+    });
     await perform(context, () async {
       if (playback.active) await playback.stop();
       final stopRevision = playback.stopRevision;
       final end = batch ? all.length : start + 1;
       final clips = <RowData>[];
       for (var i = start; i < end; i++) {
-        clips.add({'id': textOf(all[i], 'id'), 'path': await _audioPath(all[i])});
+        clips.add({
+          'id': textOf(all[i], 'id'),
+          'path': await _audioPath(all[i]),
+        });
       }
-      if (!mounted || playback.stopRevision != stopRevision || playback.stopping) return;
+      if (!mounted ||
+          playback.stopRevision != stopRevision ||
+          playback.stopping)
+        return;
       await playback.start({
-        'lesson': 'kana', 'title': '五十音', 'words': true, 'batch': batch,
-        'speed': widget.app.speed, 'repeat': 1, 'intervalSteps': 0, 'clips': clips,
+        'lesson': 'kana',
+        'title': context.ui('五十音'),
+        'words': true,
+        'batch': batch,
+        'speed': widget.app.speed,
+        'repeat': 1,
+        'intervalSteps': 0,
+        'clips': clips,
       });
     });
     if (mounted) setState(() => busy = false);
@@ -2597,7 +4885,9 @@ class _KanaPageState extends State<KanaPage> {
       await perform(context, playback.stop);
       return;
     }
-    final current = owns ? all.indexWhere((row) => textOf(row, 'id') == playback.playingId) : -1;
+    final current = owns
+        ? all.indexWhere((row) => textOf(row, 'id') == playback.playingId)
+        : -1;
     await _playFrom(current >= 0 ? current : selectedIndex ?? 0, true);
   }
 
@@ -2610,11 +4900,32 @@ class _KanaPageState extends State<KanaPage> {
       showDragHandle: true,
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(28, 8, 28, 38),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${textOf(row, 'hiragana')}  ${textOf(row, 'katakana')}', style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 52, fontWeight: FontWeight.w700)),
-          Text(textOf(row, 'romaji'), style: Theme.of(context).textTheme.titleLarge?.copyWith(color: vermilion)),
-          if (textOf(row, 'content').isNotEmpty) ...[const SizedBox(height: 12), Text(textOf(row, 'content'), style: const TextStyle(fontSize: 18))],
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${textOf(row, 'hiragana')}  ${textOf(row, 'katakana')}',
+              style: const TextStyle(
+                fontFamily: 'Hiragino Sans',
+                locale: Locale('ja', 'JP'),
+                fontSize: 52,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              textOf(row, 'romaji'),
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(color: vermilion),
+            ),
+            if (textOf(row, 'content').isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                textOf(row, 'content'),
+                style: const TextStyle(fontSize: 18),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -2624,26 +4935,55 @@ class _KanaPageState extends State<KanaPage> {
     physics: const NeverScrollableScrollPhysics(),
     itemCount: cells.length,
     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: columns, crossAxisSpacing: 7, mainAxisSpacing: 7,
-      childAspectRatio: .8 / math.pow(math.max(1.0, MediaQuery.textScalerOf(context).scale(26) / 26), 2),
+      crossAxisCount: columns,
+      crossAxisSpacing: 7,
+      mainAxisSpacing: 7,
+      childAspectRatio:
+          .8 /
+          math.pow(
+            math.max(1.0, MediaQuery.textScalerOf(context).scale(26) / 26),
+            2,
+          ),
     ),
     itemBuilder: (context, i) {
       final row = cells[i];
       if (intOf(row, 'placeholder') == 1) return const SizedBox.shrink();
-      final active = owns && playback.active && playback.playingId == textOf(row, 'id');
+      final active =
+          owns && playback.active && playback.playingId == textOf(row, 'id');
       return StudyInkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: busy ? null : () => _tap(row),
         child: Container(
           decoration: BoxDecoration(
-            color: active ? vermilion.withValues(alpha: .13) : Colors.transparent,
+            color: active
+                ? vermilion.withValues(alpha: .13)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: active ? vermilion : Theme.of(context).colorScheme.outlineVariant, width: active ? 2 : 1),
+            border: Border.all(
+              color: active
+                  ? vermilion
+                  : Theme.of(context).colorScheme.outlineVariant,
+              width: active ? 2 : 1,
+            ),
           ),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(katakana ? textOf(row, 'katakana') : textOf(row, 'hiragana'), style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'), fontSize: 26, fontWeight: FontWeight.w700)),
-            Text(textOf(row, 'romaji'), style: Theme.of(context).textTheme.labelSmall),
-          ]),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                katakana ? textOf(row, 'katakana') : textOf(row, 'hiragana'),
+                style: const TextStyle(
+                  fontFamily: 'Hiragino Sans',
+                  locale: Locale('ja', 'JP'),
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                textOf(row, 'romaji'),
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
         ),
       );
     },
@@ -2651,41 +4991,74 @@ class _KanaPageState extends State<KanaPage> {
 
   @override
   Widget build(BuildContext context) => PlaybackScaffold(
-    appBar: StudyAppBar(title: const Text('五十音'), actions: [
-      StudyIconButton(
-        tooltip: owns && playback.active && playback.batch ? '停止播放' : '连续播放',
-        onPressed: busy ? null : _continuous,
-        icon: Icon(owns && playback.active && playback.batch ? Icons.stop_rounded : Icons.play_arrow_rounded),
-      ),
-    ]),
-    body: FutureBuilder<List<RowData>>(future: data, builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: StudyButton.text(onPressed: () => setState(() => data = widget.app.store.db.query('yzc_kana', orderBy: 'row_num,column_num')), child: const Text('五十音读取失败，点击重试')));
-      if (!snapshot.hasData) return const Center(child: StudyCircularProgressIndicator());
-      final cells = snapshot.data!;
-      all = [...cells.where((row) => intOf(row, 'placeholder') != 1), ...voicedKana, ...contractedKana];
-      return Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          child: SizedBox(
-            width: double.infinity,
-            child: StudySegments<bool>(values: const {false: '平假名', true: '片假名'},
-              selected: katakana, onChanged: (value) => setState(() => katakana = value)),
+    appBar: StudyAppBar(
+      title: Text(context.ui('五十音')),
+      actions: [
+        StudyIconButton(
+          tooltip: owns && playback.active && playback.batch
+              ? context.ui('停止播放')
+              : context.ui('连续播放'),
+          onPressed: busy ? null : _continuous,
+          icon: Icon(
+            owns && playback.active && playback.batch
+                ? Icons.stop_rounded
+                : Icons.play_arrow_rounded,
           ),
         ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            children: [
-              const SectionTitle('清音'),
-              _grid(cells, 5),
-              const SectionTitle('浊音与半浊音'),
-              _grid(voicedKana, 5),
-              const SectionTitle('拗音'),
-              _grid(contractedKana, 3),
-            ],
-          ),
-        ),
-      ]);
-    }),
+      ],
+    ),
+    body: FutureBuilder<List<RowData>>(
+      future: data,
+      builder: (context, snapshot) {
+        if (snapshot.hasError)
+          return Center(
+            child: StudyButton.text(
+              onPressed: () => setState(
+                () => data = widget.app.store.db.query(
+                  'yzc_kana',
+                  orderBy: 'row_num,column_num',
+                ),
+              ),
+              child: Text(context.ui('五十音读取失败，点击重试')),
+            ),
+          );
+        if (!snapshot.hasData)
+          return const Center(child: StudyCircularProgressIndicator());
+        final cells = snapshot.data!;
+        all = [
+          ...cells.where((row) => intOf(row, 'placeholder') != 1),
+          ...voicedKana,
+          ...contractedKana,
+        ];
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: StudySegments<bool>(
+                  values: {false: context.ui('平假名'), true: context.ui('片假名')},
+                  selected: katakana,
+                  onChanged: (value) => setState(() => katakana = value),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                children: [
+                  SectionTitle(context.ui('清音')),
+                  _grid(cells, 5),
+                  SectionTitle(context.ui('浊音与半浊音')),
+                  _grid(voicedKana, 5),
+                  SectionTitle(context.ui('拗音')),
+                  _grid(contractedKana, 3),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    ),
   );
 }

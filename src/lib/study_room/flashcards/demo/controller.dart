@@ -12,7 +12,9 @@ typedef FlashDemoRow = Map<String, Object?>;
 enum FlashDemoStage { setup, review, result }
 
 class FlashDemoController extends ChangeNotifier {
-  FlashDemoController();
+  FlashDemoController({String Function()? playbackLabel})
+    : _playbackLabel = playbackLabel ?? (() => '闪卡复习');
+  final String Function() _playbackLabel;
   final store = FlashDemoMemoryStore();
   FlashDemoData? _demoData;
   bool busy = false, flipped = false, _opened = false, _disposed = false;
@@ -50,7 +52,8 @@ class FlashDemoController extends ChangeNotifier {
   }
 
   final _audio = NativeAudioTransport.instance;
-  final _audioIdentity = 'flashcards-demo:${DateTime.now().microsecondsSinceEpoch}';
+  final _audioIdentity =
+      'flashcards-demo:${DateTime.now().microsecondsSinceEpoch}';
   int _audioRequest = 0;
   bool _audioStarting = false;
 
@@ -101,8 +104,8 @@ class FlashDemoController extends ChangeNotifier {
         return;
       await _audio.start({
         'lesson': _audioIdentity,
-        'title': '${word.japanese} · 闪卡复习',
-        'albumTitle': '闪卡复习',
+        'title': '${word.japanese} · ${_playbackLabel()}',
+        'albumTitle': _playbackLabel(),
         'words': true,
         'batch': false,
         'speed': 1.0,
@@ -149,9 +152,7 @@ class FlashDemoController extends ChangeNotifier {
       try {
         await action();
       } catch (e) {
-        error = e is StateError
-            ? e.message.toString()
-            : '演示数据处理失败，请重新播放。';
+        error = e is StateError ? e.message.toString() : '演示数据处理失败，请重新播放。';
       } finally {
         busy = false;
         if (!_disposed) notifyListeners();
@@ -272,9 +273,13 @@ class FlashDemoController extends ChangeNotifier {
 
   Future<void> _validateSession() async {
     final data = _demoData;
-    if (data == null || session == null || session!.words.any((word) =>
-        word.bookId != data.book['id'].toString() ||
-        word.lessonId != data.lesson['id'].toString())) {
+    if (data == null ||
+        session == null ||
+        session!.words.any(
+          (word) =>
+              word.bookId != data.book['id'].toString() ||
+              word.lessonId != data.lesson['id'].toString(),
+        )) {
       throw StateError('演示样例已不可用，请重新播放。');
     }
   }
@@ -287,7 +292,10 @@ class FlashDemoController extends ChangeNotifier {
     stage = FlashDemoStage.review;
   });
   Future<void> mark(bool known) => _run(() async {
-    if (stage != FlashDemoStage.review || awaitingNext || advancing || !hasDraft)
+    if (stage != FlashDemoStage.review ||
+        awaitingNext ||
+        advancing ||
+        !hasDraft)
       return;
     _stopPronunciation();
     final stayOnAnswer = !known && !flipped;
@@ -355,10 +363,7 @@ class FlashDemoController extends ChangeNotifier {
     await _loadLessons();
   });
   void flip() {
-    if (busy ||
-        advancing ||
-        awaitingNext ||
-        stage != FlashDemoStage.review)
+    if (busy || advancing || awaitingNext || stage != FlashDemoStage.review)
       return;
     flipped = !flipped;
     notifyListeners();

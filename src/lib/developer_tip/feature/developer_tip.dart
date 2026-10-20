@@ -1,3 +1,5 @@
+import '../../l10n/l10n.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -10,7 +12,11 @@ import '../../system_errors.dart';
 import '../../ui.dart';
 
 class DeveloperTipProduct {
-  const DeveloperTipProduct({required this.id, required this.name, required this.price});
+  const DeveloperTipProduct({
+    required this.id,
+    required this.name,
+    required this.price,
+  });
   final String id, name, price;
 
   static DeveloperTipProduct? fromNative(Object? value) {
@@ -18,27 +24,36 @@ class DeveloperTipProduct {
     final id = value['id'] as String?;
     final name = value['name'] as String?;
     final price = value['price'] as String?;
-    return id == null || name == null || price == null ? null
+    return id == null || name == null || price == null
+        ? null
         : DeveloperTipProduct(id: id, name: name, price: price);
   }
 }
 
 class DeveloperTipCelebration {
-  const DeveloperTipCelebration({required this.productId, required this.transactionId});
+  const DeveloperTipCelebration({
+    required this.productId,
+    required this.transactionId,
+  });
   final String productId, transactionId;
 
   static DeveloperTipCelebration? fromNative(Object? value) {
     if (value is! Map) return null;
     final productId = value['productId'] as String?;
     final transactionId = value['transactionId'] as String?;
-    return productId == null || transactionId == null ? null
-        : DeveloperTipCelebration(productId: productId, transactionId: transactionId);
+    return productId == null || transactionId == null
+        ? null
+        : DeveloperTipCelebration(
+            productId: productId,
+            transactionId: transactionId,
+          );
   }
 }
 
 /// Dedicated consumable-tip flow. It intentionally shares no entitlement or
 /// restore behavior with the study-room non-consumable purchase.
-class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver {
+class DeveloperTipController extends ChangeNotifier
+    with WidgetsBindingObserver {
   DeveloperTipController() {
     _channel.setMethodCallHandler(_onNativeCall);
     WidgetsBinding.instance.addObserver(this);
@@ -54,7 +69,11 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
     'vip.ichiki.javalee.yzc.tip.premium',
   ];
   final List<DeveloperTipProduct> _products = [];
-  bool _initialized = false, _loading = false, _busy = false, _canPay = false, _disposed = false;
+  bool _initialized = false,
+      _loading = false,
+      _busy = false,
+      _canPay = false,
+      _disposed = false;
   int _revision = -1;
   String? _message, _thanks, _processingProductId;
   DeveloperTipCelebration? _celebration;
@@ -70,7 +89,9 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
   String? get processingProductId => _processingProductId;
   DeveloperTipCelebration? get celebration => _celebration;
 
-  void _notify() { if (!_disposed) notifyListeners(); }
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
 
   void _apply(Object? value) {
     if (_disposed || value is! Map) return;
@@ -83,9 +104,16 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
     _celebration = DeveloperTipCelebration.fromNative(value['celebration']);
     final rawProducts = value['products'];
     if (rawProducts is List) {
-      final next = rawProducts.map(DeveloperTipProduct.fromNative)
-        .whereType<DeveloperTipProduct>().toList()
-        ..sort((left, right) => _displayOrder.indexOf(left.id).compareTo(_displayOrder.indexOf(right.id)));
+      final next =
+          rawProducts
+              .map(DeveloperTipProduct.fromNative)
+              .whereType<DeveloperTipProduct>()
+              .toList()
+            ..sort(
+              (left, right) => _displayOrder
+                  .indexOf(left.id)
+                  .compareTo(_displayOrder.indexOf(right.id)),
+            );
       _products
         ..clear()
         ..addAll(next);
@@ -99,8 +127,15 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   void _record(Object error, StackTrace stack, String operation) {
-    SystemErrors.record(error, stack, module: 'developer_tip', operation: operation);
-    _message = error is PlatformException ? error.message ?? '打赏服务暂不可用，请稍后重试' : '打赏服务暂不可用，请稍后重试';
+    SystemErrors.record(
+      error,
+      stack,
+      module: 'developer_tip',
+      operation: operation,
+    );
+    _message = error is PlatformException
+        ? error.message ?? '打赏服务暂不可用，请稍后重试'
+        : '打赏服务暂不可用，请稍后重试';
     _notify();
   }
 
@@ -140,7 +175,12 @@ class DeveloperTipController extends ChangeNotifier with WidgetsBindingObserver 
   }
 
   Future<void> purchase(DeveloperTipProduct product) async {
-    if (_disposed || !supported || _busy || !_canPay || !_products.any((item) => item.id == product.id)) return;
+    if (_disposed ||
+        !supported ||
+        _busy ||
+        !_canPay ||
+        !_products.any((item) => item.id == product.id))
+      return;
     _busy = true;
     _processingProductId = product.id;
     _message = null;
@@ -179,7 +219,8 @@ class DeveloperTipPage extends StatefulWidget {
   State<DeveloperTipPage> createState() => _DeveloperTipPageState();
 }
 
-class _DeveloperTipPageState extends State<DeveloperTipPage> with SingleTickerProviderStateMixin {
+class _DeveloperTipPageState extends State<DeveloperTipPage>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _fireworkController;
   Timer? _thanksTimer;
   String? _handledTransactionId;
@@ -198,12 +239,17 @@ class _DeveloperTipPageState extends State<DeveloperTipPage> with SingleTickerPr
 
   void _onTipChanged() {
     final event = tip.celebration;
-    if (!mounted || event == null || event.transactionId == _handledTransactionId) return;
+    if (!mounted ||
+        event == null ||
+        event.transactionId == _handledTransactionId)
+      return;
     final level = _TipCelebrationLevel.forProduct(event.productId);
     if (level == null) return;
     _handledTransactionId = event.transactionId;
     _level = level;
-    _staticThanks = MediaQuery.disableAnimationsOf(context) || MediaQuery.accessibleNavigationOf(context);
+    _staticThanks =
+        MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context);
     _thanksTimer?.cancel();
     _thanksTimer = Timer(const Duration(seconds: 5), _dismissCelebration);
     if (_staticThanks) {
@@ -219,7 +265,10 @@ class _DeveloperTipPageState extends State<DeveloperTipPage> with SingleTickerPr
     _thanksTimer?.cancel();
     _thanksTimer = null;
     _fireworkController.stop();
-    setState(() { _level = null; _staticThanks = false; });
+    setState(() {
+      _level = null;
+      _staticThanks = false;
+    });
   }
 
   @override
@@ -232,14 +281,21 @@ class _DeveloperTipPageState extends State<DeveloperTipPage> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) => PlaybackScaffold(
-    appBar: StudyAppBar(title: const Text('打赏开发者')),
-    body: Stack(children: [
-      PageBody(children: [_DeveloperTipContent(tip)]),
-      if (_level != null) Positioned.fill(child: _FireworksOverlay(
-        level: _level!, controller: _fireworkController, staticThanks: _staticThanks,
-        onDismiss: _dismissCelebration,
-      )),
-    ]),
+    appBar: StudyAppBar(title: Text(context.ui('打赏开发者'))),
+    body: Stack(
+      children: [
+        PageBody(children: [_DeveloperTipContent(tip)]),
+        if (_level != null)
+          Positioned.fill(
+            child: _FireworksOverlay(
+              level: _level!,
+              controller: _fireworkController,
+              staticThanks: _staticThanks,
+              onDismiss: _dismissCelebration,
+            ),
+          ),
+      ],
+    ),
   );
 }
 
@@ -250,51 +306,93 @@ class _DeveloperTipContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: tip,
-    builder: (context, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(padding: const EdgeInsets.only(top: 22, bottom: 10), child: Text('感谢你的支持',
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w600))),
-      StudyCard(child: Padding(padding: const EdgeInsets.all(16), child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('你的每一份鼓励，都是语之初不断完善的动力。'),
-          const SizedBox(height: 8),
-          Text('打赏为一次性、可重复购买的 App Store 消耗型项目；不解锁额外功能，不可恢复。',
-            style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ))),
-      const SizedBox(height: 14),
-      if (!tip.initialized || tip.loading) const Center(child: Padding(
-        padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
-      else if (tip.products.isEmpty) StudyCard(child: Padding(padding: const EdgeInsets.all(16), child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(tip.message ?? '商品暂不可用，请稍后重试'),
-          const SizedBox(height: 8),
-          StudyButton.outlined(onPressed: tip.busy ? null : tip.loadProducts, child: const Text('重新加载')),
-        ],
-      )))
-      else GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: tip.products.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.24,
+    builder: (context, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 22, bottom: 10),
+          child: Text(
+            context.ui('感谢你的支持'),
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
         ),
-        itemBuilder: (context, index) => _TipCard(
-          product: tip.products[index],
-          enabled: !tip.busy && tip.canPay,
-          processing: tip.processingProductId == tip.products[index].id,
-          onTap: () => tip.purchase(tip.products[index]),
+        StudyCard(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(context.ui('你的每一份鼓励，都是语之初不断完善的动力。')),
+                const SizedBox(height: 8),
+                Text(
+                  context.ui('打赏为一次性、可重复购买的 App Store 消耗型项目；不解锁额外功能，不可恢复。'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
-    ]),
+        const SizedBox(height: 14),
+        if (tip.products.isNotEmpty && tip.message != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(context.ui(tip.message!)),
+          ),
+        if (!tip.initialized || tip.loading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (tip.products.isEmpty)
+          StudyCard(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(context.ui(tip.message ?? '商品暂不可用，请稍后重试')),
+                  const SizedBox(height: 8),
+                  StudyButton.outlined(
+                    onPressed: tip.busy ? null : tip.loadProducts,
+                    child: Text(context.ui('重新加载')),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: tip.products.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              mainAxisExtent: MediaQuery.textScalerOf(context).scale(150),
+            ),
+            itemBuilder: (context, index) => _TipCard(
+              product: tip.products[index],
+              enabled: !tip.busy && tip.canPay,
+              processing: tip.processingProductId == tip.products[index].id,
+              onTap: () => tip.purchase(tip.products[index]),
+            ),
+          ),
+      ],
+    ),
   );
 }
 
 class _TipCard extends StatelessWidget {
-  const _TipCard({required this.product, required this.enabled, required this.processing, required this.onTap});
+  const _TipCard({
+    required this.product,
+    required this.enabled,
+    required this.processing,
+    required this.onTap,
+  });
   final DeveloperTipProduct product;
   final bool enabled, processing;
   final VoidCallback onTap;
@@ -304,43 +402,120 @@ class _TipCard extends StatelessWidget {
     button: true,
     enabled: enabled,
     label: '${product.name}，${product.price}',
-    child: StudyCard(child: InkWell(
+    child: StudyCard(
+      child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: enabled ? onTap : null,
-        child: SizedBox.expand(child: Center(child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Text(product.name, textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
-            if (processing) ...[
-              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5)),
-              const SizedBox(width: 8),
-            ],
-            Text(product.price, textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w700)),
-          ]),
-        ]),
-      ))))),
+        child: SizedBox.expand(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    product.name,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (processing) ...[
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        product.price,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
 class _TipCelebrationLevel {
-  const _TipCelebrationLevel(this.productId, this.label, this.style, this.bursts, this.particles, this.duration);
+  const _TipCelebrationLevel(
+    this.productId,
+    this.label,
+    this.style,
+    this.bursts,
+    this.particles,
+    this.duration,
+  );
   final String productId, label;
   final _FireworkStyle style;
   final int bursts, particles;
   final Duration duration;
 
   static const all = [
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.small', '一份鼓励', _FireworkStyle.comet, 1, 40, Duration(milliseconds: 1400)),
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.medium', '暖心支持', _FireworkStyle.heart, 2, 70, Duration(milliseconds: 1800)),
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.large', '特别支持', _FireworkStyle.chrysanthemum, 3, 110, Duration(milliseconds: 2200)),
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.xlarge', '大力支持', _FireworkStyle.waterfall, 5, 170, Duration(milliseconds: 2800)),
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.premium', '顶级鼓励', _FireworkStyle.ring, 7, 240, Duration(milliseconds: 3400)),
-    _TipCelebrationLevel('vip.ichiki.javalee.yzc.tip.strong', '夯', _FireworkStyle.grandFinale, 10, 360, Duration(milliseconds: 4500)),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.small',
+      '一份鼓励',
+      _FireworkStyle.comet,
+      1,
+      40,
+      Duration(milliseconds: 1400),
+    ),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.medium',
+      '暖心支持',
+      _FireworkStyle.heart,
+      2,
+      70,
+      Duration(milliseconds: 1800),
+    ),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.large',
+      '特别支持',
+      _FireworkStyle.chrysanthemum,
+      3,
+      110,
+      Duration(milliseconds: 2200),
+    ),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.xlarge',
+      '大力支持',
+      _FireworkStyle.waterfall,
+      5,
+      170,
+      Duration(milliseconds: 2800),
+    ),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.premium',
+      '顶级鼓励',
+      _FireworkStyle.ring,
+      7,
+      240,
+      Duration(milliseconds: 3400),
+    ),
+    _TipCelebrationLevel(
+      'vip.ichiki.javalee.yzc.tip.strong',
+      '夯',
+      _FireworkStyle.grandFinale,
+      10,
+      360,
+      Duration(milliseconds: 4500),
+    ),
   ];
 
   static _TipCelebrationLevel? forProduct(String id) {
@@ -351,10 +526,22 @@ class _TipCelebrationLevel {
   }
 }
 
-enum _FireworkStyle { comet, heart, chrysanthemum, waterfall, ring, grandFinale }
+enum _FireworkStyle {
+  comet,
+  heart,
+  chrysanthemum,
+  waterfall,
+  ring,
+  grandFinale,
+}
 
 class _FireworksOverlay extends StatefulWidget {
-  const _FireworksOverlay({required this.level, required this.controller, required this.staticThanks, required this.onDismiss});
+  const _FireworksOverlay({
+    required this.level,
+    required this.controller,
+    required this.staticThanks,
+    required this.onDismiss,
+  });
   final _TipCelebrationLevel level;
   final AnimationController controller;
   final bool staticThanks;
@@ -364,54 +551,117 @@ class _FireworksOverlay extends StatefulWidget {
 }
 
 class _FireworksOverlayState extends State<_FireworksOverlay> {
-  late final List<_FireworkParticle> _particles = _FireworkParticle.create(widget.level);
+  late final List<_FireworkParticle> _particles = _FireworkParticle.create(
+    widget.level,
+  );
 
   @override
   Widget build(BuildContext context) => ColoredBox(
     color: Colors.black.withValues(alpha: .58),
-    child: Stack(children: [
-      if (!widget.staticThanks) Positioned.fill(child: IgnorePointer(child: CustomPaint(
-        painter: _FireworkPainter(widget.controller, widget.level.style, _particles),
-      ))),
-      Center(child: GlassSurface(radius: 28, child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.favorite_rounded, size: 38),
-          const SizedBox(height: 12),
-          Text('感谢你的「${widget.level.label}」！', textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(widget.staticThanks ? '感谢你的支持。' : '愿每一份热爱都有回响。', textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          StudyButton.text(onPressed: widget.onDismiss, child: Text(widget.staticThanks ? '关闭' : '跳过')),
-        ]),
-      ))),
-    ]),
+    child: Stack(
+      children: [
+        if (!widget.staticThanks)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _FireworkPainter(
+                  widget.controller,
+                  widget.level.style,
+                  _particles,
+                ),
+              ),
+            ),
+          ),
+        Center(
+          child: GlassSurface(
+            radius: 28,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.favorite_rounded, size: 38),
+                  const SizedBox(height: 12),
+                  Text(
+                    context.tr(
+                      '感谢你的「${context.ui(widget.level.label)}」！',
+                      '感謝你的「${context.ui(widget.level.label)}」！',
+                      'Thank you for your ${context.ui(widget.level.label)}!',
+                      '「${context.ui(widget.level.label)}」ありがとうございます！',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.staticThanks
+                        ? context.ui('感谢你的支持。')
+                        : context.ui('愿每一份热爱都有回响。'),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  StudyButton.text(
+                    onPressed: widget.onDismiss,
+                    child: Text(
+                      widget.staticThanks ? context.ui('关闭') : context.ui('跳过'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
 class _FireworkParticle {
-  const _FireworkParticle(this.x, this.y, this.angle, this.distance, this.delay, this.color);
+  const _FireworkParticle(
+    this.x,
+    this.y,
+    this.angle,
+    this.distance,
+    this.delay,
+    this.color,
+  );
   final double x, y, angle, distance, delay;
   final Color color;
 
   static List<_FireworkParticle> create(_TipCelebrationLevel level) {
     final random = math.Random(level.productId.hashCode);
-    const colors = [Color(0xFFFFD166), Color(0xFFFF7B7B), Color(0xFF8DE0D5), Color(0xFFB8A1FF), Color(0xFFFFFFFF)];
+    const colors = [
+      Color(0xFFFFD166),
+      Color(0xFFFF7B7B),
+      Color(0xFF8DE0D5),
+      Color(0xFFB8A1FF),
+      Color(0xFFFFFFFF),
+    ];
     return List.generate(level.particles, (index) {
       final burst = index % level.bursts;
-      final x = level.bursts == 1 ? .5 : .15 + .7 * (burst / (level.bursts - 1));
+      final x = level.bursts == 1
+          ? .5
+          : .15 + .7 * (burst / (level.bursts - 1));
       // Keep the main bursts above the thank-you card, in the upper content area.
-      final y = level.style == _FireworkStyle.comet ? .18 : .10 + random.nextDouble() * .16;
-      return _FireworkParticle(x, y, random.nextDouble() * math.pi * 2,
-        .06 + random.nextDouble() * .17, (burst / level.bursts) * .44 + random.nextDouble() * .08,
-        colors[random.nextInt(colors.length)]);
+      final y = level.style == _FireworkStyle.comet
+          ? .18
+          : .10 + random.nextDouble() * .16;
+      return _FireworkParticle(
+        x,
+        y,
+        random.nextDouble() * math.pi * 2,
+        .06 + random.nextDouble() * .17,
+        (burst / level.bursts) * .44 + random.nextDouble() * .08,
+        colors[random.nextInt(colors.length)],
+      );
     });
   }
 }
 
 class _FireworkPainter extends CustomPainter {
-  const _FireworkPainter(this.progress, this.style, this.particles) : super(repaint: progress);
+  const _FireworkPainter(this.progress, this.style, this.particles)
+    : super(repaint: progress);
   final Animation<double> progress;
   final _FireworkStyle style;
   final List<_FireworkParticle> particles;
@@ -420,7 +670,9 @@ class _FireworkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (style == _FireworkStyle.comet) _paintComet(canvas, size);
     for (final particle in particles) {
-      final time = ((progress.value - particle.delay) / (1 - particle.delay)).clamp(0.0, 1.0).toDouble();
+      final time = ((progress.value - particle.delay) / (1 - particle.delay))
+          .clamp(0.0, 1.0)
+          .toDouble();
       if (time <= 0 || time >= 1) continue;
       final point = switch (style) {
         _FireworkStyle.heart => _heartPoint(particle, time, size),
@@ -430,9 +682,13 @@ class _FireworkPainter extends CustomPainter {
         _ => _burstPoint(particle, time, size),
       };
       final color = style == _FireworkStyle.heart
-        ? (particle.x < .5 ? const Color(0xFFFF7B7B) : const Color(0xFFFFA1B5))
-        : style == _FireworkStyle.waterfall || style == _FireworkStyle.grandFinale
-          ? const Color(0xFFFFD166) : particle.color;
+          ? (particle.x < .5
+                ? const Color(0xFFFF7B7B)
+                : const Color(0xFFFFA1B5))
+          : style == _FireworkStyle.waterfall ||
+                style == _FireworkStyle.grandFinale
+          ? const Color(0xFFFFD166)
+          : particle.color;
       final paint = Paint()..color = color.withValues(alpha: (1 - time) * .95);
       canvas.drawCircle(point, 1.6 + (1 - time) * 2.2, paint);
     }
@@ -440,7 +696,9 @@ class _FireworkPainter extends CustomPainter {
 
   Offset _burstPoint(_FireworkParticle particle, double time, Size size) {
     final dx = math.cos(particle.angle) * particle.distance * size.width * time;
-    final dy = math.sin(particle.angle) * particle.distance * size.width * time + size.height * .11 * time * time;
+    final dy =
+        math.sin(particle.angle) * particle.distance * size.width * time +
+        size.height * .11 * time * time;
     return Offset(particle.x * size.width + dx, particle.y * size.height + dy);
   }
 
@@ -448,28 +706,43 @@ class _FireworkPainter extends CustomPainter {
     final angle = particle.angle;
     final scale = .0085 * size.width * time;
     final x = (16 * math.pow(math.sin(angle), 3) * scale).toDouble();
-    final y = (-(13 * math.cos(angle) - 5 * math.cos(2 * angle) - 2 * math.cos(3 * angle) - math.cos(4 * angle)) * scale).toDouble();
+    final y =
+        (-(13 * math.cos(angle) -
+                    5 * math.cos(2 * angle) -
+                    2 * math.cos(3 * angle) -
+                    math.cos(4 * angle)) *
+                scale)
+            .toDouble();
     final centerX = particle.x < .5 ? size.width * .32 : size.width * .68;
-    return Offset(centerX + x, size.height * .18 + y + size.height * .08 * time * time);
+    return Offset(
+      centerX + x,
+      size.height * .18 + y + size.height * .08 * time * time,
+    );
   }
 
   Offset _waterfallPoint(_FireworkParticle particle, double time, Size size) {
     final sourceX = particle.x * size.width;
-    final dx = math.cos(particle.angle) * particle.distance * size.width * .4 * time;
+    final dx =
+        math.cos(particle.angle) * particle.distance * size.width * .4 * time;
     final dy = size.height * (.05 + .62 * time * time);
     return Offset(sourceX + dx, size.height * .15 + dy);
   }
 
   Offset _ringPoint(_FireworkParticle particle, double time, Size size) {
     final radius = (.045 + particle.distance * .9) * size.width * time;
-    return Offset(size.width * .5 + math.cos(particle.angle) * radius,
-      size.height * .18 + math.sin(particle.angle) * radius);
+    return Offset(
+      size.width * .5 + math.cos(particle.angle) * radius,
+      size.height * .18 + math.sin(particle.angle) * radius,
+    );
   }
 
   Offset _finalePoint(_FireworkParticle particle, double time, Size size) {
     final point = _burstPoint(particle, time, size);
     final shimmer = math.sin((particle.angle + time * 18) * 2) * 3;
-    return Offset(point.dx + shimmer, point.dy + size.height * .17 * time * time);
+    return Offset(
+      point.dx + shimmer,
+      point.dy + size.height * .17 * time * time,
+    );
   }
 
   void _paintComet(Canvas canvas, Size size) {
@@ -477,12 +750,17 @@ class _FireworkPainter extends CustomPainter {
     final start = Offset(size.width * .5, size.height * .88);
     final end = Offset(size.width * .5, size.height * .18);
     final head = Offset.lerp(start, end, flight)!;
-    final paint = Paint()..strokeWidth = 3..strokeCap = StrokeCap.round
-      ..shader = LinearGradient(colors: [const Color(0x00FFD166), const Color(0xFFFFD166)]).createShader(Rect.fromPoints(start, head));
+    final paint = Paint()
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..shader = LinearGradient(
+        colors: [const Color(0x00FFD166), const Color(0xFFFFD166)],
+      ).createShader(Rect.fromPoints(start, head));
     canvas.drawLine(start, head, paint);
     canvas.drawCircle(head, 5, Paint()..color = const Color(0xFFFFF3BF));
   }
 
   @override
-  bool shouldRepaint(_FireworkPainter oldDelegate) => oldDelegate.style != style || oldDelegate.particles != particles;
+  bool shouldRepaint(_FireworkPainter oldDelegate) =>
+      oldDelegate.style != style || oldDelegate.particles != particles;
 }

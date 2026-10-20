@@ -1,3 +1,7 @@
+import 'package:flutter/widgets.dart';
+
+import 'l10n/l10n.dart';
+
 /// Presentation-only lesson metadata. Database ids, codes and numbers stay intact.
 final _specialLessonCode = RegExp(r'^([rp])([0-9]+)$');
 
@@ -14,13 +18,31 @@ String lessonLabel(
   Map<String, Object?> row, {
   String lessonKey = 'lesson',
   String numberKey = 'num',
+  Locale? locale,
+  bool compactEnglish = false,
 }) {
   final special = _specialLesson(row, lessonKey);
   if (special != null) {
     final number = BigInt.parse(special[2]!).toString();
-    return '${special[1] == 'r' ? '复习' : '预备'}$number';
+    final review = special[1] == 'r';
+    return localizedText(
+      locale ?? const Locale('zh'),
+      '${review ? '复习' : '预备'}$number',
+      '${review ? '複習' : '預備'}$number',
+      compactEnglish
+          ? '${review ? 'R' : 'P'}$number'
+          : '${review ? 'Review' : 'Preparation'} $number',
+      '${review ? '復習' : '準備'}$number',
+    );
   }
-  return '第${row[numberKey] ?? ''}课';
+  final number = row[numberKey]?.toString() ?? '';
+  return localizedText(
+    locale ?? const Locale('zh'),
+    '第$number课',
+    '第$number課',
+    compactEnglish ? 'L$number' : 'Lesson $number',
+    '第$number課',
+  );
 }
 
 /// Prep lessons come first. Reviews follow regular lessons with the same num.

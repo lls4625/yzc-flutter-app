@@ -4,13 +4,20 @@ typedef RowData = DictationDemoRow;
 String textOf(RowData row, String key) => row[key]?.toString() ?? '';
 String featureError(Object? error, {String fallback = '操作失败，请重试'}) =>
     error is StateError ? error.message.toString() : fallback;
-Future<void> perform(BuildContext context, Future<void> Function() action) async {
+Future<void> perform(
+  BuildContext context,
+  Future<void> Function() action,
+) async {
   try {
     await action();
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        GlassSnackBar(content: Text(featureError(e))),
+        GlassSnackBar(
+          content: Builder(
+            builder: (context) => Text(studyUi(context, featureError(e))),
+          ),
+        ),
       );
     }
   }
@@ -50,8 +57,11 @@ class DictationDemoController {
 
   Future<void> setting(String key, Object value) async {
     final valid = switch (key) {
-      'book' => value is String &&
-          (await catalog.textbooks()).any((book) => textOf(book, 'id') == value),
+      'book' =>
+        value is String &&
+            (await catalog.textbooks()).any(
+              (book) => textOf(book, 'id') == value,
+            ),
       'pause_each' || 'random_order' => value is bool,
       'repeats' => value is int && value >= 1 && value <= 5,
       'interval' => value is int && value >= 1 && value <= 10,

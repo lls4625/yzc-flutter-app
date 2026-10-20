@@ -24,7 +24,10 @@ class StudyRoomHost {
     required this.newId,
     required this.resources,
     required this.resourceOperations,
-  });
+    String Function()? learningTarget,
+  }) : _learningTarget = learningTarget;
+  final String Function()? _learningTarget;
+  String get learningTarget => _learningTarget?.call() ?? 'ja';
   final String userId, rootPath, contentDatabasePath;
   final Listenable changes;
   final bool Function() isUnlocked, isPurchaseSaving;

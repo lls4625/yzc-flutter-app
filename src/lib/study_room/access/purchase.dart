@@ -28,8 +28,13 @@ class StudyRoomPurchaseController extends ChangeNotifier
   bool get loadingProduct => _loadingProduct;
   String? get price => _price;
   String? get message => _message;
-  bool get canPurchase => _initialized && !_busy && !_loadingProduct && !_unlocked &&
-      _canPay && _price != null;
+  bool get canPurchase =>
+      _initialized &&
+      !_busy &&
+      !_loadingProduct &&
+      !_unlocked &&
+      _canPay &&
+      _price != null;
   bool get supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   void _notify() {
@@ -44,7 +49,7 @@ class StudyRoomPurchaseController extends ChangeNotifier
     _unlocked = value['unlocked'] == true;
     _canPay = value['canPay'] == true;
     _price = value['price'] as String?;
-    _message = value['message'] as String?;
+    _message = value['messageCode'] as String?;
     _initialized = true;
     _notify();
   }
@@ -54,10 +59,13 @@ class StudyRoomPurchaseController extends ChangeNotifier
   }
 
   void _record(Object error, StackTrace stack, String operation) {
-    SystemErrors.record(error, stack, module: 'selfstudy_access', operation: operation);
-    _message = error is PlatformException
-        ? error.message ?? '购买服务暂不可用，请稍后重试'
-        : '购买服务暂不可用，请稍后重试';
+    SystemErrors.record(
+      error,
+      stack,
+      module: 'selfstudy_access',
+      operation: operation,
+    );
+    _message = error is PlatformException ? error.code : 'unavailable';
     _notify();
   }
 
@@ -65,7 +73,7 @@ class StudyRoomPurchaseController extends ChangeNotifier
     if (_disposed) return;
     if (!supported) {
       _initialized = true;
-      _message = '请在 iPhone 或 iPad 上购买或恢复购买';
+      _message = 'unsupported';
       _notify();
       return;
     }

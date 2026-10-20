@@ -106,7 +106,12 @@ void main() {
       );
       addTearDown(source.close);
 
-      await source.insert('yzc_textbook', {'id': 'book', 'textbook': '测试教材'});
+      await source.insert('yzc_textbook', {
+        'source_language': 'ja',
+        'explanation_language': 'zh-Hans',
+        'id': 'book',
+        'textbook': '测试教材',
+      });
       await source.insert('yzc_unit', {'id': 'unit', 'textbook_id': 'book'});
       await source.insert('yzc_lessons', {
         'id': 'lesson',
@@ -309,7 +314,11 @@ void main() {
         '${temporary.path}/source.sqlite',
       );
       addTearDown(source.close);
-      await source.insert('yzc_textbook', {'id': 'book'});
+      await source.insert('yzc_textbook', {
+        'source_language': 'ja',
+        'explanation_language': 'zh-Hans',
+        'id': 'book',
+      });
       await source.insert('yzc_unit', {'id': 'unit', 'textbook_id': 'book'});
       await source.insert('yzc_lessons', {
         'id': 'bad-lesson',
@@ -360,7 +369,11 @@ void main() {
         extraColumns: true,
       );
       addTearDown(source.close);
-      await source.insert('yzc_textbook', {'id': 'book'});
+      await source.insert('yzc_textbook', {
+        'source_language': 'ja',
+        'explanation_language': 'zh-Hans',
+        'id': 'book',
+      });
       final package = Directory('${temporary.path}/package');
       await Directory('${package.path}/mp3').create(recursive: true);
       final validation = await Resources(AppStore.forTesting(local, temporary))
@@ -385,7 +398,11 @@ void main() {
     await local.insert('yzc_words', {'id': 'old-safe', 'textbook_id': 'book'});
     final source = await _sourceFrom(local, '${temporary.path}/source.sqlite');
     addTearDown(source.close);
-    await source.insert('yzc_textbook', {'id': 'book'});
+    await source.insert('yzc_textbook', {
+      'source_language': 'ja',
+      'explanation_language': 'zh-Hans',
+      'id': 'book',
+    });
     final package = Directory('${temporary.path}/package');
     await Directory('${package.path}/mp3').create(recursive: true);
     await expectLater(

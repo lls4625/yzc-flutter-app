@@ -7,8 +7,10 @@ class WordLookupRepository {
   final StudyRoomHost host;
 
   String _pattern(String input) {
-    final escaped = input.replaceAll(r'\', r'\\')
-      .replaceAll('%', r'\%').replaceAll('_', r'\_');
+    final escaped = input
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
     return '%$escaped%';
   }
 
@@ -16,8 +18,9 @@ class WordLookupRepository {
     final keyword = input.trim();
     if (keyword.isEmpty) return const [];
     final pattern = _pattern(keyword);
-    return host.database.rawQuery('''
-      SELECT w.*, b.textbook AS book_name, b.volume AS book_volume,
+    return host.database.rawQuery(
+      '''
+      SELECT w.*, b.source_language, b.explanation_language, b.textbook AS book_name, b.volume AS book_volume,
         l.lesson AS lesson_code, l.num AS lesson_num
       FROM yzc_words w
       LEFT JOIN yzc_textbook b ON b.id=w.textbook_id
@@ -30,8 +33,8 @@ class WordLookupRepository {
         l.num IS NULL, l.num,
         w.sort IS NULL, w.sort,
         w.id
-    ''', [
-      pattern, pattern, pattern, pattern,
-    ]);
+    ''',
+      [pattern, pattern, pattern, pattern],
+    );
   }
 }

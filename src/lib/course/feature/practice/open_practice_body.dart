@@ -6,9 +6,15 @@ import '../../../content_typography.dart';
 /// flow, including its line breaks, tables, numbering and answer blanks.
 /// This deliberately does not use the scored-question format parser.
 class OpenPracticeBody extends StatelessWidget {
-  const OpenPracticeBody(this.text, {super.key});
+  const OpenPracticeBody(
+    this.text, {
+    this.sourceLanguage = 'ja',
+    this.explanationLanguage = 'zh-Hans',
+    super.key,
+  });
 
   final String text;
+  final String sourceLanguage, explanationLanguage;
 
   static final _heading = RegExp(r'^\s*【[^【】\r\n]+】\s*$');
   static final _kana = RegExp(r'[\u3040-\u30ff\uff66-\uff9f]');
@@ -43,7 +49,12 @@ class OpenPracticeBody extends StatelessWidget {
             ? 1.65
             : 1.55,
       ),
-      children: [contentTextSpan(line, japanese: japanese)],
+      children: [
+        contentTextSpan(
+          line,
+          language: japanese ? sourceLanguage : explanationLanguage,
+        ),
+      ],
     );
   }
 

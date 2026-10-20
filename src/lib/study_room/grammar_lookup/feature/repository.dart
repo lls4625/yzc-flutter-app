@@ -36,12 +36,19 @@ class _Meaning {
 }
 
 class _Hit {
-  const _Hit(this.row, this.score, this.label, this.snippet, {
-    this.meaning = '', this.usage = '', this.evidenceId = '',
+  const _Hit(
+    this.row,
+    this.score,
+    this.label,
+    this.snippet, {
+    this.meaning = '',
+    this.usage = '',
+    this.evidenceId = '',
+    this.field = 'content',
   });
   final GrammarLookupRow row;
   final int score;
-  final String label, snippet, meaning, usage, evidenceId;
+  final String label, snippet, meaning, usage, evidenceId, field;
 }
 
 class GrammarLookupRepository {
@@ -54,7 +61,9 @@ class GrammarLookupRepository {
 
   Future<List<_Meaning>> _loadMeanings() async {
     if (_meanings != null) return _meanings!;
-    final source = await rootBundle.loadString('assets/grammar_lookup/meanings.json');
+    final source = await rootBundle.loadString(
+      'assets/grammar_lookup/meanings.json',
+    );
     final data = jsonDecode(source) as Map<String, dynamic>;
     if (data['version'] != 1) throw const FormatException('文法检索资料版本不支持');
     return _meanings = [
@@ -101,7 +110,7 @@ class GrammarLookupRepository {
     // Re-read installed content on every search: no stale cache after imports.
     // Examples and complete grammar trees load only when a card is expanded.
     final rows = await host.database.rawQuery('''
-      SELECT g.*, b.textbook AS book_name, b.volume AS book_volume,
+      SELECT g.*, b.source_language, b.explanation_language, b.textbook AS book_name, b.volume AS book_volume,
         l.lesson AS lesson_code, l.num AS lesson_num, l.title AS lesson_title
       FROM yzc_grammar g
       LEFT JOIN yzc_textbook b ON b.id=g.textbook_id
@@ -120,8 +129,9 @@ class GrammarLookupRepository {
       final visited = <String>{};
       while (current != null && visited.add(_key(current))) {
         if (grammarText(current, 'type') == '1') return current;
-        current = byKey['${grammarText(current, 'textbook_id')}:'
-            '${grammarText(current, 'pid')}'];
+        current =
+            byKey['${grammarText(current, 'textbook_id')}:'
+                '${grammarText(current, 'pid')}'];
       }
       return null;
     }
@@ -140,69 +150,123 @@ class GrammarLookupRepository {
       if (root == null) return;
       final key = _key(root);
       // Maximum score avoids rewarding repeated words in long explanations.
-      if (!hits.containsKey(key) || hit.score > hits[key]!.score) hits[key] = hit;
+      if (!hits.containsKey(key) || hit.score > hits[key]!.score)
+        hits[key] = hit;
     }
 
-    final terms = query.split(RegExp(r'\s+')).map(normalizeGrammar)
-        .where((word) => word.isNotEmpty).toList();
+    final terms = query
+        .split(RegExp(r'\s+'))
+        .map(normalizeGrammar)
+        .where((word) => word.isNotEmpty)
+        .toList();
     for (final item in meanings) {
       final row = byKey['${item.book}:${item.id}'];
       final evidence = byKey['${item.book}:${item.evidenceId}'];
-      if (row == null || evidence == null ||
+      if (row == null ||
+          evidence == null ||
           grammarText(row, 'content') != item.title ||
           grammarText(evidence, 'content') != item.evidence ||
-          grammarText(evidence, 'pid') != item.id) continue;
+          grammarText(evidence, 'pid') != item.id)
+        continue;
       final aliases = item.aliases.map(normalizeGrammar).toSet();
       final usageTerms = item.usage.split('·').map(normalizeGrammar).toSet();
-      final exact = aliases.contains(needle) || normalizeGrammar(item.meaning) == needle;
-      final allTerms = terms.length > 1 &&
-          terms.every((term) => aliases.contains(term) || usageTerms.contains(term));
+      final exact =
+          aliases.contains(needle) || normalizeGrammar(item.meaning) == needle;
+      final allTerms =
+          terms.length > 1 &&
+          terms.every(
+            (term) => aliases.contains(term) || usageTerms.contains(term),
+          );
       if (exact || allTerms) {
-        add(_Hit(row, exact ? 950 : 900, '中文含义匹配',
-            _excerpt(item.evidence, query), meaning: item.meaning,
-            usage: item.usage, evidenceId: item.evidenceId));
+        add(
+          _Hit(
+            row,
+            exact ? 950 : 900,
+            '中文含义匹配',
+            _excerpt(item.evidence, query),
+            meaning: item.meaning,
+            usage: item.usage,
+            evidenceId: item.evidenceId,
+          ),
+        );
       }
     }
     for (final row in rows) {
-      final content = grammarText(row, 'content');
-      final normalized = normalizeGrammar(content);
-      if (!literalNeedles.any(normalized.contains)) continue;
-      final title = const ['1', '4', '41'].contains(grammarText(row, 'type'));
-      final score = title ? (literalNeedles.contains(normalized) ? 1000 : 700)
-          : grammarText(row, 'type') == '2' ? 300 : 100;
-      add(_Hit(row, score, title ? '文法标题匹配' : '说明中提及',
-          _excerpt(content, query)));
+      for (final field in const [
+        'content',
+        'definition',
+        'connection',
+        'example',
+        'example_definition',
+        'tip',
+      ]) {
+        final content = grammarText(row, field);
+        final normalized = normalizeGrammar(content);
+        if (normalized.isEmpty || !literalNeedles.any(normalized.contains))
+          continue;
+        final title =
+            field == 'content' &&
+            const ['1', '4', '41'].contains(grammarText(row, 'type'));
+        final score = title
+            ? (literalNeedles.contains(normalized) ? 1000 : 700)
+            : grammarText(row, 'type') == '2'
+            ? 300
+            : 100;
+        add(
+          _Hit(
+            row,
+            score,
+            title ? '文法标题匹配' : '说明中提及',
+            _excerpt(content, query),
+            field: field,
+          ),
+        );
+      }
     }
     final order = {for (var i = 0; i < rows.length; i++) _key(rows[i]): i};
-    final keys = hits.keys.toList()..sort((a, b) {
-      final score = hits[b]!.score.compareTo(hits[a]!.score);
-      return score != 0 ? score : order[a]!.compareTo(order[b]!);
-    });
+    final keys = hits.keys.toList()
+      ..sort((a, b) {
+        final score = hits[b]!.score.compareTo(hits[a]!.score);
+        return score != 0 ? score : order[a]!.compareTo(order[b]!);
+      });
     return GrammarLookupSearch([
-      for (final key in keys) {
-        ...roots[key]!,
-        'lookup_root_id': grammarText(roots[key]!, 'id'),
-        'lookup_match_id': grammarText(hits[key]!.row, 'id'),
-        'lookup_evidence_id': hits[key]!.evidenceId,
-        'lookup_match_title': grammarText(hits[key]!.row, 'content'),
-        'lookup_score': hits[key]!.score,
-        'lookup_label': hits[key]!.label,
-        'lookup_snippet': hits[key]!.snippet,
-        'lookup_meaning': hits[key]!.meaning,
-        'lookup_usage': hits[key]!.usage,
-      },
+      for (final key in keys)
+        {
+          ...roots[key]!,
+          'lookup_root_id': grammarText(roots[key]!, 'id'),
+          'lookup_match_id': grammarText(hits[key]!.row, 'id'),
+          'lookup_evidence_id': hits[key]!.evidenceId,
+          'lookup_match_title': grammarText(hits[key]!.row, 'content'),
+          'lookup_match_type': grammarText(hits[key]!.row, 'type'),
+          'lookup_score': hits[key]!.score,
+          'lookup_label': hits[key]!.label,
+          'lookup_snippet': hits[key]!.snippet,
+          'lookup_field': hits[key]!.field,
+          'lookup_meaning': hits[key]!.meaning,
+          'lookup_usage': hits[key]!.usage,
+        },
     ], meaningsAvailable: meaningsAvailable);
   }
 
   Future<List<GrammarLookupRow>> tree(GrammarLookupRow root) =>
-      host.database.rawQuery('''
+      host.database.rawQuery(
+        '''
         WITH RECURSIVE tree(id) AS (
           SELECT id FROM yzc_grammar WHERE id=? AND textbook_id=?
           UNION
           SELECT child.id FROM yzc_grammar child JOIN tree ON child.pid=tree.id
           WHERE child.textbook_id=?
         )
-        SELECT g.* FROM tree JOIN yzc_grammar g ON g.id=tree.id
+        SELECT g.*, b.source_language, b.explanation_language
+        FROM tree JOIN yzc_grammar g ON g.id=tree.id
+        LEFT JOIN yzc_textbook b ON b.id=g.textbook_id
         WHERE g.textbook_id=? ORDER BY g.sort IS NULL, g.sort, g.id
-      ''', [root['id'], root['textbook_id'], root['textbook_id'], root['textbook_id']]);
+      ''',
+        [
+          root['id'],
+          root['textbook_id'],
+          root['textbook_id'],
+          root['textbook_id'],
+        ],
+      );
 }

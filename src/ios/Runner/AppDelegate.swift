@@ -44,11 +44,16 @@ import NaturalLanguage
     dictationTokenizerChannel = FlutterMethodChannel(name: "yuzhichu/dictation_tokenizer", binaryMessenger: engineBridge.applicationRegistrar.messenger())
     dictationTokenizerChannel?.setMethodCallHandler { call, result in
       guard call.method == "tokenize" else { result(FlutterMethodNotImplemented); return }
-      guard let text = call.arguments as? String else {
+      let args = call.arguments as? [String: Any]
+      let language = args?["source_language"] == nil ? "ja" : (args?["source_language"] as? String ?? "")
+      guard language == "ja" || language == "en" else {
+        result(FlutterError(code: "content_language", message: "Unsupported content language", details: nil)); return
+      }
+      guard let text = (call.arguments as? String) ?? (args?["text"] as? String) else {
         result(FlutterError(code: "text", message: "日文原文无效", details: nil)); return
       }
       let tokenizer = NLTokenizer(unit: .word)
-      tokenizer.setLanguage(.japanese)
+      tokenizer.setLanguage(language == "en" ? .english : .japanese)
       tokenizer.string = text
       var parts: [String] = []
       var cursor = text.startIndex
@@ -173,7 +178,11 @@ private final class PracticeSpeech: NSObject, AVSpeechSynthesizerDelegate {
           result(FlutterError(code: "speech_text", message: "没有可朗读的正文", details: nil))
           return
         }
-        self.speak(id: id, segments: segments, result: result)
+        let language = args?["source_language"] == nil ? "ja" : (args?["source_language"] as? String ?? "")
+        guard language == "ja" || language == "en" else {
+          result(FlutterError(code: "content_language", message: "Unsupported content language", details: nil)); return
+        }
+        self.speak(id: id, segments: segments, language: language, result: result)
       default: result(FlutterMethodNotImplemented)
       }
     }
@@ -194,10 +203,10 @@ private final class PracticeSpeech: NSObject, AVSpeechSynthesizerDelegate {
     })
   }
 
-  private func speak(id: String, segments: [String], result: @escaping FlutterResult) {
+  private func speak(id: String, segments: [String], language: String, result: @escaping FlutterResult) {
     stop()
-    guard let voice = AVSpeechSynthesisVoice(language: "ja-JP") else {
-      result(FlutterError(code: "speech_voice", message: "手机暂无可用的日语语音，请在系统设置中下载日语声音后重试。", details: nil))
+    guard let voice = AVSpeechSynthesisVoice(language: language == "en" ? "en-US" : "ja-JP") else {
+      result(FlutterError(code: "speech_voice", message: "Content language voice unavailable", details: ["source_language": language]))
       return
     }
     var utterances: [AVSpeechUtterance] = []

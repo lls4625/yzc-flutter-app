@@ -1,7 +1,11 @@
+import '../../demo_localization/ui.dart';
 import '../../../system_errors.dart';
+
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+
 import '../../host_contracts.dart';
 import '../../resources/page.dart';
 import '../../../glass_ui.dart';
@@ -27,94 +31,146 @@ class _JlptTestPageState extends State<JlptTestPage> {
   String? _error, _historyError;
 
   @override
-  void initState() { super.initState(); unawaited(_load()); unawaited(_loadHistory()); }
+  void initState() {
+    super.initState();
+    unawaited(_load());
+    unawaited(_loadHistory());
+  }
 
   Future<void> _load() async {
     final generation = ++_generation;
-    setState(() { _loading = true; _error = null; _bank = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+      _bank = null;
+    });
     try {
       if (!_levelRestored) {
         final level = await _repository.loadLevel();
         if (!mounted || generation != _generation) return;
-        setState(() { _level = level; _levelRestored = true; });
+        setState(() {
+          _level = level;
+          _levelRestored = true;
+        });
       }
-      if (!widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level)) {
-        if (mounted && generation == _generation) setState(() => _loading = false);
+      if (!widget.host.resources.isReady(_level) ||
+          widget.host.resources.isUnavailable(_level)) {
+        if (mounted && generation == _generation)
+          setState(() => _loading = false);
         return;
       }
       final bank = await _repository.load(_level);
       if (!mounted || generation != _generation) return;
-      setState(() { _bank = bank; _paper = 0; _loading = false; });
-    } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'jlpt_test', operation: '测试列表操作', context: {'source': 'study_room/jlpt_test/feature/page.dart'});
-      if (mounted && generation == _generation) setState(() {
-        _loading = false; _error = '题库读取失败，请重试或重新安装当前级别题库。';
+      setState(() {
+        _bank = bank;
+        _paper = 0;
+        _loading = false;
       });
+    } catch (caughtError, caughtStack) {
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_test',
+        operation: '测试列表操作',
+        context: {'source': 'study_room/jlpt_test/feature/page.dart'},
+      );
+      if (mounted && generation == _generation)
+        setState(() {
+          _loading = false;
+          _error = '题库读取失败，请重试或重新安装当前级别题库。';
+        });
     }
   }
 
   Future<void> _loadHistory() async {
     try {
       final history = await _repository.history();
-      if (mounted) setState(() { _history = history; _historyError = null; });
+      if (mounted)
+        setState(() {
+          _history = history;
+          _historyError = null;
+        });
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'jlpt_test', operation: '测试列表操作', context: {'source': 'study_room/jlpt_test/feature/page.dart'});
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_test',
+        operation: '测试列表操作',
+        context: {'source': 'study_room/jlpt_test/feature/page.dart'},
+      );
       if (mounted) setState(() => _historyError = '历史记录读取失败，点此重试');
     }
   }
 
   List<Question> _questions(Json paper) {
     final parts = (paper['parts'] as List).cast<Json>();
-    final partOrder = {for (var i = 0; i < parts.length; i++) parts[i]['code']: i};
+    final partOrder = {
+      for (var i = 0; i < parts.length; i++) parts[i]['code']: i,
+    };
     final allocation = (paper['type_allocation'] as List).cast<Json>();
-    final order = {for (var i = 0; i < allocation.length; i++) allocation[i]['type_code']: i};
-    final questions = (paper['questions'] as List).cast<Json>().map(Question.new).toList();
+    final order = {
+      for (var i = 0; i < allocation.length; i++) allocation[i]['type_code']: i,
+    };
+    final questions = (paper['questions'] as List)
+        .cast<Json>()
+        .map(Question.new)
+        .toList();
     questions.sort((a, b) {
       final part = partOrder[a.clock]!.compareTo(partOrder[b.clock]!);
       if (part != 0) return part;
       final type = order[a.type]!.compareTo(order[b.type]!);
-      return type != 0 ? type : (a.data['paper_position'] as int).compareTo(b.data['paper_position'] as int);
+      return type != 0
+          ? type
+          : (a.data['paper_position'] as int).compareTo(
+              b.data['paper_position'] as int,
+            );
     });
     return questions;
   }
 
   Future<void> _chooseLevel() async {
     if (!_levelRestored || _opening || _choosingLevel) return;
-    final downloadedLevels = levels.where(widget.host.resources.isReady).toList();
+    final downloadedLevels = levels
+        .where(widget.host.resources.isReady)
+        .toList();
     setState(() => _choosingLevel = true);
     try {
       final level = await showGlassDialog<String>(
         context: context,
         builder: (dialogContext) => GlassAlertDialog(
-          title: Row(children: [
-            const Expanded(child: Text('选择考试等级')),
-            const SizedBox(width: 12),
-            StudyIconButton(
-              tooltip: '关闭',
-              onPressed: () => Navigator.pop(dialogContext),
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ]),
+          title: Row(
+            children: [
+              Expanded(child: Text(studyUi(context, '选择考试等级'))),
+              const SizedBox(width: 12),
+              StudyIconButton(
+                tooltip: studyUi(context, '关闭'),
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (downloadedLevels.isEmpty) const Text('暂无已下载的等级，请先下载自习资源。'),
+              if (downloadedLevels.isEmpty)
+                Text(studyUi(context, '暂无已下载的等级，请先下载自习资源。')),
               for (final level in downloadedLevels) ...[
-              if (level != downloadedLevels.first) const SizedBox(height: 12),
-              Semantics(
-                selected: level == _level,
-                child: level == _level
-                    ? StudyButton.filled(
-                        onPressed: () => Navigator.pop(dialogContext, level),
-                        child: Text(level),
-                      )
-                    : StudyButton.text(
-                        onPressed: () => Navigator.pop(dialogContext, level),
-                        child: Text(level),
-                      ),
-              ),
-            ]],
+                if (level != downloadedLevels.first) const SizedBox(height: 12),
+                Semantics(
+                  selected: level == _level,
+                  child: level == _level
+                      ? StudyButton.filled(
+                          onPressed: () => Navigator.pop(dialogContext, level),
+                          child: Text(level),
+                        )
+                      : StudyButton.text(
+                          onPressed: () => Navigator.pop(dialogContext, level),
+                          child: Text(level),
+                        ),
+                ),
+              ],
+            ],
           ),
           actions: const [],
         ),
@@ -126,9 +182,16 @@ class _JlptTestPageState extends State<JlptTestPage> {
         await _load();
       }
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'jlpt_test', operation: '保存考试等级');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('考试等级保存失败，请重试。')));
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_test',
+        operation: '保存考试等级',
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(studyUi(context, '考试等级保存失败，请重试。'))),
+        );
     } finally {
       if (mounted) setState(() => _choosingLevel = false);
     }
@@ -140,54 +203,110 @@ class _JlptTestPageState extends State<JlptTestPage> {
     try {
       final rows = await _repository.mistakes();
       if (!mounted) return;
-      final selected = await showModalBottomSheet<Json>(context: context,
-        isScrollControlled: true, builder: (context) => SafeArea(child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * .65,
-          child: Column(children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('共享错题 · 使用最后一次做错的题目快照')),
-            Expanded(child: ListView(children: [
-              if (rows.isEmpty) const ListTile(title: Text('暂无待重做的错题')),
-              for (final row in rows) ListTile(
-                title: Text(row['question']['stem_json']['text'] as String, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP')),
-                  maxLines: 2, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${row['question']['level']} · 做错 ${row['wrong_count']} 次'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pop(context, row)),
-            ])),
-          ]),
-        )));
+      final selected = await showModalBottomSheet<Json>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .65,
+            child: Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(studyUi(context, '共享错题 · 使用最后一次做错的题目快照')),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      if (rows.isEmpty)
+                        ListTile(title: Text(studyUi(context, '暂无待重做的错题'))),
+                      for (final row in rows)
+                        ListTile(
+                          title: Text(
+                            row['question']['stem_json']['text'] as String,
+                            style: const TextStyle(
+                              fontFamily: 'Hiragino Sans',
+                              locale: Locale('ja', 'JP'),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            studyUi(
+                              context,
+                              '${row['question']['level']} · 做错 ${row['wrong_count']} 次',
+                            ),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.pop(context, row),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
       if (selected == null || !mounted) return;
-      final question = Question(Map<String, dynamic>.from(selected['question'] as Map));
-      final attempt = Attempt.create(question.data['level'] as String, '错题重做 · ${question.typeName}', [question]);
+      final question = Question(
+        Map<String, dynamic>.from(selected['question'] as Map),
+      );
+      final attempt = Attempt.create(
+        question.data['level'] as String,
+        '错题重做 · ${question.typeName}',
+        [question],
+      );
       attempt.snapshot['mistake_review'] = true;
       await _repository.create(attempt);
       if (!mounted) return;
-      final deleted = await Navigator.of(context).push(MaterialPageRoute<bool>(
-        builder: (_) => AttemptPage(_repository, attempt)));
+      final deleted = await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
+          builder: (_) => AttemptPage(_repository, attempt),
+        ),
+      );
       await _loadHistory();
       if (deleted == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('本次测试记录已删除。')));
+          GlassSnackBar(content: Text(studyUi(context, '本次测试记录已删除。'))),
+        );
       }
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'jlpt_test', operation: '测试列表操作', context: {'source': 'study_room/jlpt_test/feature/page.dart'});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('错题记录暂时无法打开，请重试。')));
-    } finally { if (mounted) setState(() => _opening = false); }
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_test',
+        operation: '测试列表操作',
+        context: {'source': 'study_room/jlpt_test/feature/page.dart'},
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(studyUi(context, '错题记录暂时无法打开，请重试。'))),
+        );
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
   }
 
   Widget _mistakesButton() => TextButton.icon(
     onPressed: _opening ? null : _openMistakes,
-    icon: const Icon(Icons.history_edu), label: const Text('共享错题重做'),
+    icon: const Icon(Icons.history_edu),
+    label: Text(studyUi(context, '共享错题重做')),
   );
 
   Future<void> _open({String? id}) async {
     if (_opening || (id == null && (_loading || _choosingLevel))) return;
     setState(() => _opening = true);
     try {
-      if (id == null && (_bank == null || !widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level))) {
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => StudyResourcePage(widget.host)));
+      if (id == null &&
+          (_bank == null ||
+              !widget.host.resources.isReady(_level) ||
+              widget.host.resources.isUnavailable(_level))) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => StudyResourcePage(widget.host),
+          ),
+        );
         if (!mounted) return;
         await _load();
         // Let the user choose from the downloaded bank before creating an attempt.
@@ -198,21 +317,38 @@ class _JlptTestPageState extends State<JlptTestPage> {
         attempt = await _repository.restore(id);
       } else {
         final paper = _bank!.papers[_paper];
-        attempt = Attempt.create(_level, paper['title'] as String, _questions(paper), paper: paper);
+        attempt = Attempt.create(
+          _level,
+          paper['title'] as String,
+          _questions(paper),
+          paper: paper,
+        );
         await _repository.create(attempt);
       }
       if (!mounted) return;
-      final deleted = await Navigator.of(context).push(MaterialPageRoute<bool>(
-        builder: (_) => AttemptPage(_repository, attempt)));
+      final deleted = await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
+          builder: (_) => AttemptPage(_repository, attempt),
+        ),
+      );
       await _loadHistory();
       if (deleted == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('本次测试记录已删除。')));
+          GlassSnackBar(content: Text(studyUi(context, '本次测试记录已删除。'))),
+        );
       }
     } catch (caughtError, caughtStack) {
-      SystemErrors.record(caughtError, caughtStack, module: 'jlpt_test', operation: '测试列表操作', context: {'source': 'study_room/jlpt_test/feature/page.dart'});
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂时无法打开试卷，请检查设备存储后重试。')));
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_test',
+        operation: '测试列表操作',
+        context: {'source': 'study_room/jlpt_test/feature/page.dart'},
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(studyUi(context, '暂时无法打开试卷，请检查设备存储后重试。'))),
+        );
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -220,41 +356,88 @@ class _JlptTestPageState extends State<JlptTestPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: StudyAppBar(title: const Text('J测试'), centerTitle: true, actions: [
-      StudyIconButton(
-        tooltip: '选择考试等级（当前 $_level）',
-        onPressed: !_levelRestored || _opening || _choosingLevel ? null : _chooseLevel,
-        icon: Text(_level, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+    appBar: StudyAppBar(
+      title: Text(studyUi(context, 'J测试')),
+      centerTitle: true,
+      actions: [
+        StudyIconButton(
+          tooltip: studyUi(context, '选择考试等级（当前 $_level）'),
+          onPressed: !_levelRestored || _opening || _choosingLevel
+              ? null
+              : _chooseLevel,
+          icon: Text(
+            _level,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+        ),
+        StudyIconButton(
+          tooltip: studyUi(context, _opening ? '准备中' : '开始测试'),
+          onPressed: _loading || _opening || _choosingLevel
+              ? null
+              : () => _open(),
+          icon: const Icon(Icons.play_circle_outline_rounded),
+        ),
+      ],
+    ),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _bank == null
+              ? ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    Text(
+                      studyUi(
+                        context,
+                        _error ??
+                            (widget.host.resources.isUnavailable(_level)
+                                ? '题库正在处理中，仍可查看历史、继续作答和重做错题。'
+                                : '尚未下载当前级别题库。历史记录、继续作答和错题重做仍可使用；开始新的测试需要下载题库。'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    StudyButton.filledIcon(
+                      onPressed: _opening || _choosingLevel
+                          ? null
+                          : () => _open(),
+                      icon: const Icon(Icons.download_outlined),
+                      label: Text(
+                        studyUi(
+                          context,
+                          widget.host.resources.isReady(_level) ||
+                                  widget.host.resources.isUnavailable(_level)
+                              ? '管理题库'
+                              : '下载题库',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_error != null)
+                      TextButton(
+                        onPressed: _opening || _choosingLevel ? null : _load,
+                        child: Text(studyUi(context, '重新读取')),
+                      ),
+                    if (_error != null) const SizedBox(height: 8),
+                    _mistakesButton(),
+                    const SizedBox(height: 16),
+                    Text(studyUi(context, '仍可打开已保存的作答记录')),
+                    if (_historyError != null)
+                      TextButton(
+                        onPressed: _loadHistory,
+                        child: Text(studyUi(context, _historyError!)),
+                      ),
+                    if (_history.isEmpty && _historyError == null)
+                      ListTile(title: Text(studyUi(context, '暂无已保存的作答记录'))),
+                    for (final item in _history) _historyRow(item),
+                  ],
+                )
+              : _content(context),
+        ),
       ),
-      StudyIconButton(
-        tooltip: _opening ? '准备中' : '开始测试',
-        onPressed: _loading || _opening || _choosingLevel ? null : () => _open(),
-        icon: const Icon(Icons.play_circle_outline_rounded),
-      ),
-    ]),
-    body: SafeArea(child: Center(child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 760),
-      child: _loading ? const Center(child: CircularProgressIndicator())
-        : _bank == null ? ListView(padding: const EdgeInsets.all(20), children: [
-            Text(_error ?? (widget.host.resources.isUnavailable(_level)
-              ? '题库正在处理中，仍可查看历史、继续作答和重做错题。'
-              : '尚未下载当前级别题库。历史记录、继续作答和错题重做仍可使用；开始新的测试需要下载题库。')),
-            const SizedBox(height: 12),
-            StudyButton.filledIcon(
-              onPressed: _opening || _choosingLevel ? null : () => _open(),
-              icon: const Icon(Icons.download_outlined),
-              label: Text(widget.host.resources.isReady(_level) || widget.host.resources.isUnavailable(_level) ? '管理题库' : '下载题库'),
-            ),
-            const SizedBox(height: 8),
-            if (_error != null) TextButton(onPressed: _opening || _choosingLevel ? null : _load, child: const Text('重新读取')),
-            if (_error != null) const SizedBox(height: 8),
-            _mistakesButton(),
-            const SizedBox(height: 16), const Text('仍可打开已保存的作答记录'),
-            if (_historyError != null) TextButton(onPressed: _loadHistory, child: Text(_historyError!)),
-            if (_history.isEmpty && _historyError == null) const ListTile(title: Text('暂无已保存的作答记录')),
-            for (final item in _history) _historyRow(item),
-          ]) : _content(context),
-    ))),
+    ),
   );
 
   Widget _content(BuildContext context) {
@@ -263,116 +446,241 @@ class _JlptTestPageState extends State<JlptTestPage> {
     final questions = _questions(paper);
     final parts = (paper['parts'] as List).cast<Json>();
     final sectionCodes = orderedExamSectionCodes(parts, questions);
-    final totalSeconds = parts.fold<int>(0, (sum, p) => sum + (p['recommended_seconds'] as int));
-    return ListView(padding: const EdgeInsets.all(20), children: [
-      _mistakesButton(),
-      Text('给自己一次完整的检视', style: Theme.of(context).textTheme.headlineSmall),
-      const SizedBox(height: 8), Text('$_level · ${questions.length} 题 · 参考 ${totalSeconds ~/ 60} 分钟'),
-      const SizedBox(height: 20),
-      Row(children: [const Expanded(child: Text('选择模拟卷', style: TextStyle(fontWeight: FontWeight.bold))),
-        TextButton.icon(onPressed: _opening ? null : () => setState(() {
-          final size = _bank!.papers.length;
-          if (size > 1) _paper = (_paper + 1 + Random().nextInt(size - 1)) % size;
-        }), icon: const Icon(Icons.shuffle), label: const Text('随机一份'))]),
-      LayoutBuilder(builder: (context, bounds) {
-        const columns = 4;
-        return Wrap(spacing: 4, runSpacing: 4,
-          children: List.generate(_bank!.papers.length, (index) {
-          final checked = _paper == index;
-          return SizedBox(width: (bounds.maxWidth - (columns - 1) * 4) / columns,
-            child: Semantics(
-            selected: checked,
-            button: true,
-            enabled: !_opening,
-            inMutuallyExclusiveGroup: true,
-            label: '第 ${index + 1} 套 · $_level',
-            child: StudyPanel(
-              color: checked ? scheme.primaryContainer : scheme.surfaceContainerLow,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                  color: checked ? scheme.primary : scheme.outlineVariant,
-                  width: checked ? 2 : 1,
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: StudyInkWell(
-                onTap: _opening ? null : () => setState(() => _paper = index),
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 60),
-                    child: SizedBox(width: double.infinity, child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('第 ${index + 1} 套', textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 5),
-                      Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 2, children: [
-                          Icon(Icons.description_outlined, size: 13, color: scheme.primary),
-                          const SizedBox(width: 2),
-                          Text(_level, style: const TextStyle(fontSize: 10)),
-                          const SizedBox(width: 2),
-                          Icon(checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                            size: 12, color: checked ? scheme.primary : scheme.onSurfaceVariant),
-                      ]),
-                    ],
-                  ))),
-                ),
+    final totalSeconds = parts.fold<int>(
+      0,
+      (sum, p) => sum + (p['recommended_seconds'] as int),
+    );
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _mistakesButton(),
+        Text(
+          studyUi(context, '给自己一次完整的检视'),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          studyUi(
+            context,
+            '$_level · ${questions.length} 题 · 参考 ${totalSeconds ~/ 60} 分钟',
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                studyUi(context, '选择模拟卷'),
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
-          ));
-        }),
-      );
-      }),
-      const SizedBox(height: 24),
-      Text('考试介绍', style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700)),
-      const SizedBox(height: 4),
-      Text('按${sectionCodes.map(examSectionName).join(' → ')}顺序完成',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-      const SizedBox(height: 12),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(Icons.schedule_rounded, size: 16, color: scheme.primary),
-        const SizedBox(width: 6),
-        Expanded(child: Text(
-          [for (final code in sectionCodes)
-            '${examSectionName(code)}：${_duration(parts, code)}'].join(' · '),
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-        )),
-      ]),
-      const SizedBox(height: 12),
-      for (var sectionIndex = 0; sectionIndex < sectionCodes.length; sectionIndex++) ...[
-        if (sectionIndex > 0) const SizedBox(height: 10),
-        _sectionIntroduction(paper, questions, sectionCodes[sectionIndex], sectionIndex),
+            TextButton.icon(
+              onPressed: _opening
+                  ? null
+                  : () => setState(() {
+                      final size = _bank!.papers.length;
+                      if (size > 1)
+                        _paper =
+                            (_paper + 1 + Random().nextInt(size - 1)) % size;
+                    }),
+              icon: const Icon(Icons.shuffle),
+              label: Text(studyUi(context, '随机一份')),
+            ),
+          ],
+        ),
+        LayoutBuilder(
+          builder: (context, bounds) {
+            const columns = 4;
+            return Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: List.generate(_bank!.papers.length, (index) {
+                final checked = _paper == index;
+                return SizedBox(
+                  width: (bounds.maxWidth - (columns - 1) * 4) / columns,
+                  child: Semantics(
+                    selected: checked,
+                    button: true,
+                    enabled: !_opening,
+                    inMutuallyExclusiveGroup: true,
+                    label: studyUi(context, '第 ${index + 1} 套 · $_level'),
+                    child: StudyPanel(
+                      color: checked
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerLow,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: checked
+                              ? scheme.primary
+                              : scheme.outlineVariant,
+                          width: checked ? 2 : 1,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: StudyInkWell(
+                        onTap: _opening
+                            ? null
+                            : () => setState(() => _paper = index),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 60),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    studyUi(context, '第 ${index + 1} 套'),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: 2,
+                                    children: [
+                                      Icon(
+                                        Icons.description_outlined,
+                                        size: 13,
+                                        color: scheme.primary,
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        _level,
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Icon(
+                                        checked
+                                            ? Icons.check_circle_rounded
+                                            : Icons.radio_button_unchecked,
+                                        size: 12,
+                                        color: checked
+                                            ? scheme.primary
+                                            : scheme.onSurfaceVariant,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+        const SizedBox(height: 24),
+        Text(
+          studyUi(context, '考试介绍'),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          studyUi(
+            context,
+            '按${sectionCodes.map(examSectionName).join(' → ')}顺序完成',
+          ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.schedule_rounded, size: 16, color: scheme.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                [
+                  for (final code in sectionCodes)
+                    '${studyUi(context, examSectionName(code))}：${_duration(parts, code)}',
+                ].join(' · '),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (
+          var sectionIndex = 0;
+          sectionIndex < sectionCodes.length;
+          sectionIndex++
+        ) ...[
+          if (sectionIndex > 0) const SizedBox(height: 10),
+          _sectionIntroduction(
+            paper,
+            questions,
+            sectionCodes[sectionIndex],
+            sectionIndex,
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          studyUi(
+            context,
+            ['N1', 'N2'].contains(_level)
+                ? 'N1 / N2 的语言知识与阅读连续作答并共用一个计时额度，完成后进入听力。'
+                : '三个部分分别计时。每部分完成后进入下一部分准备页。',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(studyUi(context, '可暂停、退出续做；超时不会自动交卷。交卷前提示未答题，提交后查看解析和分项表现。')),
+        const SizedBox(height: 8),
+        Text(studyUi(context, '题目为模拟练习。听力支持配套音频、图片与文字稿；结果为练习参考，不作官方合格判定。')),
+        const SizedBox(height: 24),
+        Text(
+          studyUi(context, '最近测试'),
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        if (_historyError != null)
+          TextButton(
+            onPressed: _loadHistory,
+            child: Text(studyUi(context, _historyError!)),
+          ),
+        if (_history.isEmpty && _historyError == null)
+          ListTile(title: Text(studyUi(context, '开始后，测试进度会保存在这里。'))),
+        for (final item in _history) _historyRow(item),
       ],
-      const SizedBox(height: 16),
-      Text(['N1', 'N2'].contains(_level)
-        ? 'N1 / N2 的语言知识与阅读连续作答并共用一个计时额度，完成后进入听力。'
-        : '三个部分分别计时。每部分完成后进入下一部分准备页。'),
-      const SizedBox(height: 8),
-      const Text('可暂停、退出续做；超时不会自动交卷。交卷前提示未答题，提交后查看解析和分项表现。'),
-      const SizedBox(height: 8),
-      const Text('题目为模拟练习。听力支持配套音频、图片与文字稿；结果为练习参考，不作官方合格判定。'),
-      const SizedBox(height: 24), const Text('最近测试', style: TextStyle(fontWeight: FontWeight.bold)),
-      if (_historyError != null) TextButton(onPressed: _loadHistory, child: Text(_historyError!)),
-      if (_history.isEmpty && _historyError == null) const ListTile(title: Text('开始后，测试进度会保存在这里。')),
-      for (final item in _history) _historyRow(item),
-    ]);
+    );
   }
 
-  Widget _sectionIntroduction(Json paper, List<Question> questions,
-      String sectionCode, int sectionIndex) {
+  Widget _sectionIntroduction(
+    Json paper,
+    List<Question> questions,
+    String sectionCode,
+    int sectionIndex,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     final styles = Theme.of(context).textTheme;
-    final sectionQuestions = questions.where((q) => q.clock == sectionCode).toList();
-    final allocations = (paper['type_allocation'] as List).cast<Json>()
-      .where((allocation) => sectionQuestions.any((q) => q.type == allocation['type_code']))
-      .toList();
+    final sectionQuestions = questions
+        .where((q) => q.clock == sectionCode)
+        .toList();
+    final allocations = (paper['type_allocation'] as List)
+        .cast<Json>()
+        .where(
+          (allocation) =>
+              sectionQuestions.any((q) => q.type == allocation['type_code']),
+        )
+        .toList();
     String name(Json allocation) =>
-      typeNames[allocation['type_code']] ?? allocation['name_ja'].toString();
-    final summary = allocations.isEmpty ? '暂无题目'
-      : '${allocations.take(2).map(name).join('、')}${allocations.length > 2 ? '等' : ' · '} ${allocations.length} 类题型';
+        typeNames[allocation['type_code']] ?? allocation['name_ja'].toString();
+    final summary = allocations.isEmpty
+        ? '暂无题目'
+        : '${allocations.take(2).map((item) => studyUi(context, name(item))).join(', ')}${allocations.length > 2 ? '…' : ' · '} ${allocations.length} 类题型';
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -384,52 +692,97 @@ class _JlptTestPageState extends State<JlptTestPage> {
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-              decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: .08),
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Text((sectionIndex + 1).toString().padLeft(2, '0'), style: styles.labelMedium?.copyWith(
-                color: scheme.primary, fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(examSectionName(sectionCode),
-              style: styles.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
-            const SizedBox(width: 8),
-            Text('${sectionQuestions.length} 题', style: styles.bodyMedium),
-          ]),
-          const SizedBox(height: 8),
-          Text(summary, style: styles.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-          ExpansionTile(
-            key: ValueKey('$_level-$_paper-$sectionCode'),
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: 10),
-            initiallyExpanded: false,
-            dense: true,
-            shape: const Border(),
-            collapsedShape: const Border(),
-            iconColor: scheme.onSurfaceVariant,
-            collapsedIconColor: scheme.onSurfaceVariant,
-            title: Text('题型明细', style: styles.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-            children: [
-              Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: .6)),
-              const SizedBox(height: 6),
-              for (final allocation in allocations)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(children: [
-                    Expanded(child: Text(name(allocation), style: styles.bodySmall)),
-                    const SizedBox(width: 12),
-                    Text('${allocation['question_count']} 题', style: styles.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant)),
-                  ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    (sectionIndex + 1).toString().padLeft(2, '0'),
+                    style: styles.labelMedium?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-            ],
-          ),
-        ]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    studyUi(context, examSectionName(sectionCode)),
+                    style: styles.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  studyUi(context, '${sectionQuestions.length} 题'),
+                  style: styles.bodyMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              studyUi(context, summary),
+              style: styles.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            ExpansionTile(
+              key: ValueKey('$_level-$_paper-$sectionCode'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 10),
+              initiallyExpanded: false,
+              dense: true,
+              shape: const Border(),
+              collapsedShape: const Border(),
+              iconColor: scheme.onSurfaceVariant,
+              collapsedIconColor: scheme.onSurfaceVariant,
+              title: Text(
+                studyUi(context, '题型明细'),
+                style: styles.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              children: [
+                Divider(
+                  height: 1,
+                  color: scheme.outlineVariant.withValues(alpha: .6),
+                ),
+                const SizedBox(height: 6),
+                for (final allocation in allocations)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            studyUi(context, name(allocation)),
+                            style: styles.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          studyUi(context, '${allocation['question_count']} 题'),
+                          style: styles.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -446,23 +799,42 @@ class _JlptTestPageState extends State<JlptTestPage> {
       ),
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        title: Row(children: [
-          Expanded(child: Text(item['title'] as String, maxLines: 1, overflow: TextOverflow.ellipsis)),
-          const SizedBox(width: 12),
-          Text(item['submitted'] == 1 ? '查看结果' : '继续作答',
-            style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(width: 4), const Icon(Icons.chevron_right, size: 20),
-        ]),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                item['title'] as String,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              studyUi(context, item['submitted'] == 1 ? '查看结果' : '继续作答'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
         onTap: _opening ? null : () => _open(id: item['id'] as String),
       ),
     );
   }
 
   String _duration(List<Json> parts, String sectionCode) {
-    final seconds = parts.firstWhere((part) => part['code'] == sectionCode)['recommended_seconds'] as int;
+    final seconds =
+        parts.firstWhere(
+              (part) => part['code'] == sectionCode,
+            )['recommended_seconds']
+            as int;
     return '参考 ${seconds ~/ 60} 分钟';
   }
 
   @override
-  void dispose() { _generation++; unawaited(_repository.close()); super.dispose(); }
+  void dispose() {
+    _generation++;
+    unawaited(_repository.close());
+    super.dispose();
+  }
 }

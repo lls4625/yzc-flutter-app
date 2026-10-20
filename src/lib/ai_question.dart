@@ -12,18 +12,23 @@ String questionRelationLabel(Object? relation) => switch (relation) {
 
 String questionDisplayText(String text) => text.trim();
 
-bool _emptyQuestionField(Object? value) => value == null || (value is String && value.trim().isEmpty);
+bool _emptyQuestionField(Object? value) =>
+    value == null || (value is String && value.trim().isEmpty);
 
 /// Open course exercises are display-only. Legacy packages independently use
 /// NULL or blank strings for each absent field.
 bool isOpenDisplayQuestion(Map<String, Object?> question) =>
-    _emptyQuestionField(question['options']) && _emptyQuestionField(question['answer']);
+    _emptyQuestionField(question['options']) &&
+    _emptyQuestionField(question['answer']);
 
 class QuestionAnswerMode {
   const QuestionAnswerMode._(this.open, this.options, this.issue);
-  const QuestionAnswerMode.open() : this._(true, const <Map<String, Object?>>[], null);
-  const QuestionAnswerMode.degraded(String issue) : this._(false, const <Map<String, Object?>>[], issue);
-  const QuestionAnswerMode.choice(List<Map<String, Object?>> options) : this._(false, options, null);
+  const QuestionAnswerMode.open()
+    : this._(true, const <Map<String, Object?>>[], null);
+  const QuestionAnswerMode.degraded(String issue)
+    : this._(false, const <Map<String, Object?>>[], issue);
+  const QuestionAnswerMode.choice(List<Map<String, Object?>> options)
+    : this._(false, options, null);
   final bool open;
   final List<Map<String, Object?>> options;
   final String? issue;
@@ -33,11 +38,16 @@ class QuestionAnswerMode {
 
 QuestionAnswerMode questionAnswerMode(Map<String, Object?> question) {
   if (isOpenDisplayQuestion(question)) return const QuestionAnswerMode.open();
-  if (_emptyQuestionField(question['options']) || _emptyQuestionField(question['answer'])) {
-    return const QuestionAnswerMode.degraded('练习题 options 与 answer 必须同时为空或同时有效');
+  if (_emptyQuestionField(question['options']) ||
+      _emptyQuestionField(question['answer'])) {
+    return const QuestionAnswerMode.degraded(
+      '练习题 options 与 answer 必须同时为空或同时有效',
+    );
   }
   try {
-    return QuestionAnswerMode.choice(questionOptions(question['options'], question['answer']));
+    return QuestionAnswerMode.choice(
+      questionOptions(question['options'], question['answer']),
+    );
   } on FormatException catch (error) {
     return QuestionAnswerMode.degraded(error.message.toString());
   } on Object catch (error) {
@@ -47,8 +57,11 @@ QuestionAnswerMode questionAnswerMode(Map<String, Object?> question) {
 
 bool isReadableQuestion(Map<String, Object?> question) {
   final content = question['content'] ?? question['question'];
-  return content is String && content.trim().isNotEmpty && questionRelations.contains(question['relation']);
+  return content is String &&
+      content.trim().isNotEmpty &&
+      questionRelations.contains(question['relation']);
 }
+
 bool isAnswerableQuestion(Map<String, Object?> question) =>
     isReadableQuestion(question) && questionAnswerMode(question).answerable;
 String questionAnswerCode(Map<String, Object?> question) =>
@@ -77,9 +90,24 @@ QuestionBody questionBody(String source) {
   final heading = RegExp(r'^【([^\n]+)】\n[^\n]+\n[ \t]*\n').firstMatch(text);
   if (heading == null) return QuestionBody(text, const [], '');
   final kind = heading.group(1)!;
-  const wordKinds = {'汉字读音', '选择汉字写法', '漢字読み', '表記'};
+  const wordKinds = {
+    '汉字读音',
+    '选择汉字写法',
+    '漢字読み',
+    '表記',
+    '漢字讀音',
+    '選擇漢字寫法',
+    'Kanji reading',
+    'Kanji spelling',
+  };
   const readingKinds = {
     '短文阅读',
+    '短文閱讀',
+    '中篇閱讀（課內練習）',
+    '查找資訊',
+    'Short reading',
+    'Reading comprehension',
+    'Information search',
     '中篇阅读（课内练习）',
     '查找信息',
     '内容理解・短文',
@@ -91,6 +119,15 @@ QuestionBody questionBody(String source) {
   };
   const otherKinds = {
     '根据语境选词',
+    '根據語境選詞',
+    '選擇意思相近的表達',
+    '語法填空',
+    '短文語法填空',
+    'Vocabulary in context',
+    'Synonyms',
+    'Grammar',
+    'Sentence ordering',
+    'Text grammar',
     '选择意思相近的表达',
     '语法填空',
     '句子排序',
@@ -110,7 +147,7 @@ QuestionBody questionBody(String source) {
   }
   final rest = text.substring(heading.end);
   final note = RegExp(
-    r'^(?:注|注释|注釈|備考|说明|説明)[：:]|^(?:问题|質問|問)[：:]',
+    r'^(?:注|注释|注釋|注釈|備考|说明|說明|説明|Note|Notes)[：:]|^(?:问题|問題|質問|問|Question)[：:]',
     multiLine: true,
   ).firstMatch(rest);
   var end = note?.start ?? rest.length;
@@ -121,7 +158,8 @@ QuestionBody questionBody(String source) {
     final separators = RegExp(r'\n[ \t]*\n').allMatches(beforeNote).toList();
     final explicitQuestion =
         note != null &&
-        RegExp(r'^(?:问题|質問|問)[：:]').hasMatch(rest.substring(note.start));
+        RegExp(r'^(?:问题|問題|質問|問|Question)[：:]')
+            .hasMatch(rest.substring(note.start));
     if (!explicitQuestion) {
       if (separators.isEmpty) return QuestionBody(text, const [], '');
       end = separators.last.start;
@@ -151,8 +189,8 @@ QuestionBody questionBody(String source) {
 
 Map<String, int> practiceQuota(Iterable<Map<String, Object?>> rows) =>
     rows.any((row) => row['relation'] == 'content')
-        ? const {'word': 4, 'grammar': 3, 'content': 3}
-        : const {'word': 5, 'grammar': 5};
+    ? const {'word': 4, 'grammar': 3, 'content': 3}
+    : const {'word': 5, 'grammar': 5};
 
 /// Parse the source JSON's ["A:...", "B:...", ...] without splitting storage.
 List<Map<String, Object?>> questionOptions(Object? value, Object? answer) {

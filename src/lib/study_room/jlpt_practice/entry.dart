@@ -1,3 +1,4 @@
+import '../../l10n/l10n.dart';
 import 'demo/entry.dart';
 import 'feature/entry.dart';
 
@@ -20,9 +21,19 @@ class JlptPracticeEntry extends StatefulWidget {
 
 class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
   bool _opening = false;
-  static const title = 'J练习';
-  static const caption = '所有题目均为测试题目，非考试真题，请慎重考虑！';
-  static const description = '一步一步 稳稳积累 围绕词汇、语法与阅读逐项练习，积累每一点进步。';
+  String get title => context.tr('J练习', 'J練習', 'J Practice', 'J練習');
+  String get caption => context.tr(
+    '目前仅有日语学习题目，暂无英语对应内容。题目用于练习和测试，不是官方考试真题。',
+    '目前僅有日語學習題目，暫無英語對應內容。題目用於練習和測試，並非官方考試真題。',
+    'Japanese-learning questions only. Equivalent English-learning content is not available. These are practice questions, not official past exam questions.',
+    '現在は日本語学習用の問題のみです。英語学習向けの対応コンテンツはありません。練習・テスト用の問題で、公式の過去問ではありません。',
+  );
+  String get description => context.tr(
+    '一步一步 稳稳积累 围绕词汇、语法与阅读逐项练习，积累每一点进步。',
+    '一步一步，穩穩累積。練習詞彙、文法與閱讀。',
+    'Build skills step by step with vocabulary, grammar and reading practice.',
+    '語彙・文法・読解を一つずつ練習し、着実に積み重ねましょう。',
+  );
   static const icon = Icons.menu_book_rounded;
   static const colors = [Color(0xFF8B7051), Color(0xFF57432F)];
   Future<void> _open({required bool demo}) async {
@@ -35,9 +46,11 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
         showJlptPracticeDemo(context);
         return;
       }
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => buildJlptPracticeFeature(widget.host),
-      ));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => buildJlptPracticeFeature(widget.host),
+        ),
+      );
     } finally {
       _opening = false;
     }
@@ -47,9 +60,12 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
     if (_opening || !await widget.access.ensure(context) || !mounted) return;
     _opening = true;
     try {
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => StudyResourcePage(widget.host)));
-    } finally { _opening = false; }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => StudyResourcePage(widget.host)),
+      );
+    } finally {
+      _opening = false;
+    }
   }
 
   @override
@@ -71,7 +87,8 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
         container: true,
         explicitChildNodes: true,
         button: true,
-        label: '$title，${widget.host.isUnlocked() ? '进入功能' : '购买解锁'}',
+        label:
+            '$title, ${widget.host.isUnlocked() ? context.tr('进入功能', '進入功能', 'Open', '開く') : context.tr('购买解锁', '購買解鎖', 'Unlock', 'アンロック')}',
         onTap: openCard,
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -143,11 +160,26 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (widget.host.resources.hasUpdate)
-                              Align(alignment: Alignment.centerRight, child: TextButton.icon(
-                                onPressed: _updateResources,
-                                icon: const Icon(Icons.system_update_alt, color: cream, size: 18),
-                                label: const Text('有更新', style: TextStyle(color: cream)),
-                              )),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _updateResources,
+                                  icon: const Icon(
+                                    Icons.system_update_alt,
+                                    color: cream,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    context.tr(
+                                      '有更新',
+                                      '有更新',
+                                      'Update available',
+                                      '更新あり',
+                                    ),
+                                    style: TextStyle(color: cream),
+                                  ),
+                                ),
+                              ),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -171,8 +203,18 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
                                 Semantics(
                                   button: true,
                                   label: widget.host.isUnlocked()
-                                      ? '进入$title'
-                                      : '购买解锁$title',
+                                      ? context.tr(
+                                          '进入$title',
+                                          '進入$title',
+                                          'Open $title',
+                                          '$titleを開く',
+                                        )
+                                      : context.tr(
+                                          '购买解锁$title',
+                                          '購買解鎖$title',
+                                          'Unlock $title',
+                                          '$titleをアンロック',
+                                        ),
                                   onTap: openCornerAction,
                                   child: ExcludeSemantics(
                                     child: GestureDetector(
@@ -214,7 +256,7 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
                             const SizedBox(height: 10),
                             Padding(
                               padding: const EdgeInsets.only(left: 23),
-                              child: ExcludeSemantics(
+                              child: Semantics(
                                 child: Text(
                                   caption,
                                   style: TextStyle(
@@ -228,7 +270,12 @@ class _JlptPracticeEntryState extends State<JlptPracticeEntry> {
                             const SizedBox(height: 20),
                             Semantics(
                               button: true,
-                              label: '查看$title演示',
+                              label: context.tr(
+                                '查看$title演示',
+                                '查看$title演示',
+                                'View $title demo',
+                                '$titleのデモを見る',
+                              ),
                               onTap: openDemo,
                               child: ExcludeSemantics(
                                 child: GestureDetector(

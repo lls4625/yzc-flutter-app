@@ -1,5 +1,10 @@
+import '../../../l10n/l10n.dart';
+import '../../../content_language.dart';
+import '../../../content_typography.dart';
+import '../../demo_localization/ui.dart';
 import '../../../lesson_presentation.dart';
 import '../../../system_errors.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,11 +19,7 @@ import 'scaffold.dart';
 import 'text.dart';
 
 class ListeningFeature extends StatefulWidget {
-  const ListeningFeature(
-    this.host,
-    this.access, {
-    super.key,
-  });
+  const ListeningFeature(this.host, this.access, {super.key});
   final StudyRoomHost host;
   final StudyRoomAccess access;
   @override
@@ -34,8 +35,7 @@ class _ListeningFeatureState extends State<ListeningFeature> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      ListeningSelectionPage(controller);
+  Widget build(BuildContext context) => ListeningSelectionPage(controller);
 }
 
 class _ListeningCard {
@@ -44,6 +44,8 @@ class _ListeningCard {
   final bool words;
   String get key => '${lesson['id']}:${words ? 'word' : 'content'}';
   String get course => lessonLabel(lesson);
+  String courseLabel(BuildContext context) =>
+      lessonLabel(lesson, locale: Localizations.localeOf(context));
   int get count => lesson[words ? 'word_count' : 'content_count'] as int? ?? 0;
   String get label => words ? '单词' : '课文';
   IconData get icon =>
@@ -158,7 +160,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      item.course,
+                      item.courseLabel(context),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -173,7 +175,10 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                       children: [
                         Icon(item.icon, size: 14, color: scheme.primary),
                         const SizedBox(width: 4),
-                        Text('${item.label} ${item.count}', style: const TextStyle(fontSize: 12)),
+                        Text(
+                          '${studyUi(context, item.label)} ${item.count}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         const SizedBox(width: 4),
                         const Icon(Icons.drag_indicator_rounded, size: 14),
                       ],
@@ -183,7 +188,10 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
               ),
             ),
             StudyIconButton(
-              tooltip: '取消选择${item.course}${item.label}',
+              tooltip: studyUi(
+                context,
+                '取消选择${item.courseLabel(context)}${studyUi(context, item.label)}',
+              ),
               onPressed: () => _toggle(item),
               icon: const Icon(Icons.close_rounded, size: 18),
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),
@@ -267,11 +275,14 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
       final books = await widget.controller.catalog.textbooks();
       final matches = books.where((row) => textOf(row, 'id') == id);
       final current = matches.isEmpty ? null : matches.first;
-      final version = current == null ? null : await widget.controller.catalog.version(id);
+      final version = current == null
+          ? null
+          : await widget.controller.catalog.version(id);
       final lessons = current == null
           ? <RowData>[]
           : await widget.controller.catalog.lessons(id);
-      if (current != null && version != await widget.controller.catalog.version(id)) {
+      if (current != null &&
+          version != await widget.controller.catalog.version(id)) {
         throw StateError('内容已更新，请重新读取课程');
       }
       if (!mounted) return;
@@ -280,15 +291,23 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
         selectionVersion = version;
         cards = [
           for (final lesson in lessons) ...[
-            if ((lesson['word_count'] as int? ?? 0) > 0) _ListeningCard(lesson, true),
-            if ((lesson['content_count'] as int? ?? 0) > 0) _ListeningCard(lesson, false),
+            if ((lesson['word_count'] as int? ?? 0) > 0)
+              _ListeningCard(lesson, true),
+            if ((lesson['content_count'] as int? ?? 0) > 0)
+              _ListeningCard(lesson, false),
           ],
         ];
         selected = [];
         loading = false;
       });
     } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'listening', operation: '读取课程与准备音频', context: {'source': 'study_room/listening/feature/listening.dart'});
+      SystemErrors.record(
+        e,
+        caughtStack,
+        module: 'listening',
+        operation: '读取课程与准备音频',
+        context: {'source': 'study_room/listening/feature/listening.dart'},
+      );
       if (mounted)
         setState(() {
           loading = false;
@@ -309,10 +328,10 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
           builder: (dialogContext) => GlassAlertDialog(
             title: Row(
               children: [
-                const Expanded(child: Text('选择内容')),
+                Expanded(child: Text(studyUi(context, '选择内容'))),
                 const SizedBox(width: 12),
                 StudyIconButton(
-                  tooltip: '关闭',
+                  tooltip: studyUi(context, '关闭'),
                   onPressed: () => Navigator.pop(dialogContext),
                   icon: const Icon(Icons.close_rounded),
                 ),
@@ -322,7 +341,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
+                if (books.isEmpty) Text(studyUi(context, '暂无可用内容，请先在内容库完成下载。')),
                 for (final row in books) ...[
                   if (row != books.first) const SizedBox(height: 12),
                   Semantics(
@@ -379,32 +398,52 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
     final queue = List<_ListeningCard>.unmodifiable(selected);
     setState(() => confirming = true);
     try {
-      final version = await widget.controller.catalog.version(textOf(book!, 'id'));
+      final version = await widget.controller.catalog.version(
+        textOf(book!, 'id'),
+      );
       if (!mounted) return;
       if (version != selectionVersion) {
         await _load();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          GlassSnackBar(content: const Text('内容已更新，数量已刷新，请重新选择')),
-        );
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            GlassSnackBar(
+              content: Text(
+                context.tr(
+                  '内容已更新，数量已刷新，请重新选择',
+                  '內容已更新，數量已重新整理，請重新選擇',
+                  'Content changed. Counts have been refreshed; choose again.',
+                  '内容が更新され件数が再取得されました。選び直してください。',
+                ),
+              ),
+            ),
+          );
         return;
       }
       await Navigator.of(context).push(
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => _ListeningPlayerPage(
-            widget.controller,
-            book!,
-            queue,
-            version,
-          ),
+          pageBuilder: (_, __, ___) =>
+              _ListeningPlayerPage(widget.controller, book!, queue, version),
           transitionDuration: Duration.zero,
           reverseTransitionDuration: Duration.zero,
         ),
       );
     } catch (error, stack) {
-      SystemErrors.record(error, stack, module: 'listening', operation: '校验课程数量');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        GlassSnackBar(content: Text(featureError(error, fallback: '课程校验失败，请重新读取'))),
+      SystemErrors.record(
+        error,
+        stack,
+        module: 'listening',
+        operation: '校验课程数量',
       );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(
+            content: Builder(
+              builder: (context) => Text(
+                studyUi(context, featureError(error, fallback: '课程校验失败，请重新读取')),
+              ),
+            ),
+          ),
+        );
     } finally {
       if (mounted) setState(() => confirming = false);
     }
@@ -417,17 +456,17 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
     return ListeningScaffold(
       appBar: StudyAppBar(
         centerTitle: true,
-        title: const Text('课程排序'),
+        title: Text(studyUi(context, '课程排序')),
         actions: [
           StudyIconButton(
-            tooltip: '选择内容',
+            tooltip: studyUi(context, '选择内容'),
             onPressed: loading || confirming || choosingBook
                 ? null
                 : _chooseBook,
             icon: const Icon(Icons.library_books_outlined),
           ),
           StudyIconButton(
-            tooltip: '确认并开始循环播放',
+            tooltip: studyUi(context, '确认并开始循环播放'),
             onPressed: loading || choosingBook || selected.isEmpty || confirming
                 ? null
                 : _confirm,
@@ -457,8 +496,11 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(error!),
-                  StudyButton.text(onPressed: _load, child: const Text('重新读取')),
+                  Text(studyUi(context, error!)),
+                  StudyButton.text(
+                    onPressed: _load,
+                    child: Text(studyUi(context, '重新读取')),
+                  ),
                 ],
               ),
             )
@@ -467,12 +509,12 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('请先选择本次收听的内容'),
+                  Text(studyUi(context, '请先选择本次收听的内容')),
                   StudyButton.filled(
                     onPressed: () async {
                       await _chooseBook();
                     },
-                    child: const Text('选择内容'),
+                    child: Text(studyUi(context, '选择内容')),
                   ),
                 ],
               ),
@@ -495,13 +537,15 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  child: Text('播放顺序 · 已选 ${selected.length} 项　长按拖动排序'),
+                  child: Text(
+                    studyUi(context, '播放顺序 · 已选 ${selected.length} 项　长按拖动排序'),
+                  ),
                 ),
                 Expanded(
                   child: selected.isEmpty
                       ? Center(
                           child: Text(
-                            '从下方选择课程，组成你的收听顺序',
+                            studyUi(context, '从下方选择课程，组成你的收听顺序'),
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
                         )
@@ -513,13 +557,11 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  child: Text(
-                    '本内容课程 · 点击勾选 / 再次点击取消',
-                  ),
+                  child: Text(studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消')),
                 ),
                 Expanded(
                   child: cards.isEmpty
-                      ? const Center(child: Text('本内容暂无课程'))
+                      ? Center(child: Text(studyUi(context, '本内容暂无课程')))
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final columns = constraints.maxWidth >= 320 ? 6 : 4;
@@ -539,7 +581,8 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                 return Semantics(
                                   selected: checked,
                                   button: true,
-                                  label: '${item.course}${item.label} ${item.count}',
+                                  label:
+                                      '${item.courseLabel(context)}${studyUi(context, item.label)} ${item.count}',
                                   child: StudyPanel(
                                     color: checked
                                         ? scheme.primaryContainer
@@ -565,7 +608,7 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                             FittedBox(
                                               fit: BoxFit.scaleDown,
                                               child: Text(
-                                                item.course,
+                                                item.courseLabel(context),
                                                 style: const TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w700,
@@ -573,7 +616,12 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                               ),
                                             ),
                                             const SizedBox(height: 3),
-                                            Text('${item.count}', style: const TextStyle(fontSize: 11)),
+                                            Text(
+                                              '${item.count}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                            ),
                                             const SizedBox(height: 3),
                                             FittedBox(
                                               fit: BoxFit.scaleDown,
@@ -587,7 +635,10 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                                                   ),
                                                   const SizedBox(width: 2),
                                                   Text(
-                                                    item.label,
+                                                    studyUi(
+                                                      context,
+                                                      item.label,
+                                                    ),
                                                     style: const TextStyle(
                                                       fontSize: 10,
                                                     ),
@@ -635,12 +686,12 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                   children: [
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty ? null : _selectAll,
-                      child: const Text('全部'),
+                      child: Text(studyUi(context, '全部')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: selected.isEmpty ? null : _cancelAll,
-                      child: const Text('取消'),
+                      child: Text(studyUi(context, '取消')),
                     ),
                   ],
                 ),
@@ -655,14 +706,14 @@ class _ListeningSelectionPageState extends State<ListeningSelectionPage> {
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(true),
-                      child: const Text('全部单词'),
+                      child: Text(studyUi(context, '全部单词')),
                     ),
                     const SizedBox(height: 4),
                     StudyButton.outlined(
                       onPressed: loading || cards.isEmpty
                           ? null
                           : () => _selectType(false),
-                      child: const Text('全部课文'),
+                      child: Text(studyUi(context, '全部课文')),
                     ),
                   ],
                 ),
@@ -704,8 +755,10 @@ class _ListeningPlayerPage extends StatefulWidget {
 
 class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
     with WidgetsBindingObserver {
+  ContentLanguage get _language => ContentLanguage.fromTextbook(widget.book);
   double get speed => widget.controller.speed;
-  bool get showRuby => widget.controller.ruby;
+  bool get showRuby =>
+      _language.sourceLanguage == 'ja' && widget.controller.ruby;
   bool get showSource => widget.controller.source;
   bool get showTranslation => widget.controller.translation;
   bool get resourceBlocked => widget.controller.host.isBookUnavailable(bookId);
@@ -718,7 +771,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
   int resumeIndex = 0, listOrigin = 0, listEpoch = 0;
   List<_ListeningSection> sections = [];
   List<RowData> clips = [];
-  List<String> silentCards = [];
+  List<_ListeningCard> silentCards = [];
   late final String identity;
   bool loading = true, busy = false;
   bool coolingDown = false;
@@ -752,6 +805,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
     });
     final stopRevision = playback.stopRevision;
     try {
+      ContentLanguage.fromTextbook(widget.book);
       if (!widget.controller.unlocked || widget.controller.purchaseSaving) {
         throw StateError('自习室尚未解锁，请在“我的”页面购买或恢复购买');
       }
@@ -762,14 +816,14 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
       final nextSections = <_ListeningSection>[];
       final nextClips = <RowData>[];
       final nextIndex = <String, int>{};
-      final nextSilentCards = <String>[];
+      final nextSilentCards = <_ListeningCard>[];
       final pathCache = <String, String>{};
       for (final card in widget.queue) {
         final rows = await widget.controller.catalog.content(
-                card.words ? 'yzc_words' : 'yzc_content',
-                bookId,
-                textOf(card.lesson, 'id'),
-              );
+          card.words ? 'yzc_words' : 'yzc_content',
+          bookId,
+          textOf(card.lesson, 'id'),
+        );
         if (!mounted) return;
         final sectionIndex = nextSections.length;
         final clipStart = nextClips.length;
@@ -786,8 +840,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
           nextIndex[id] = sectionIndex;
           nextClips.add({'id': id, 'path': path});
         }
-        if (nextClips.length == clipStart)
-          nextSilentCards.add('${card.course}${card.label}');
+        if (nextClips.length == clipStart) nextSilentCards.add(card);
         if (!mounted) return;
         setState(() => prepared++);
       }
@@ -831,7 +884,13 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
         await _start();
       _extendCooldown();
     } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'listening', operation: '读取课程与准备音频', context: {'source': 'study_room/listening/feature/listening.dart'});
+      SystemErrors.record(
+        e,
+        caughtStack,
+        module: 'listening',
+        operation: '读取课程与准备音频',
+        context: {'source': 'study_room/listening/feature/listening.dart'},
+      );
       if (mounted)
         setState(() {
           loading = false;
@@ -859,8 +918,14 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
     final section = sectionByClip[textOf(clips[startIndex], 'id')]!;
     await playback.start({
       'lesson': identity,
-      'title': '${textOf(widget.book, 'textbook')} ${textOf(widget.book, 'volume')} · 磨耳朵',
-      'albumTitle': '磨耳朵 · 全内容循环',
+      'title':
+          '${textOf(widget.book, 'textbook')} ${textOf(widget.book, 'volume')} · ${studyUi(context, '磨耳朵')}',
+      'albumTitle': context.tr(
+        '磨耳朵 · 全内容循环',
+        '磨耳朵 · 全內容循環',
+        'Listening · Loop all content',
+        '聞き流し・全コンテンツを繰り返す',
+      ),
       'words': sections[section].card.words,
       'batch': !single,
       'speed': speed,
@@ -880,7 +945,18 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
     if (!mounted) return;
     final nativeError = owns ? playback.error : null;
     if (nativeError != null && nativeError != _lastReportedPlaybackError) {
-      SystemErrors.record(StateError(nativeError), StackTrace.current, module: 'listening', operation: '磨耳朵音频状态异常', hint: '音频播放失败', context: {'textbook_id': widget.book['id'], 'playing_id': playback.playingId, 'stack_origin': '原生状态回调，不含原生堆栈'});
+      SystemErrors.record(
+        StateError(nativeError),
+        StackTrace.current,
+        module: 'listening',
+        operation: '磨耳朵音频状态异常',
+        hint: '音频播放失败',
+        context: {
+          'textbook_id': widget.book['id'],
+          'playing_id': playback.playingId,
+          'stack_origin': '原生状态回调，不含原生堆栈',
+        },
+      );
     }
     _lastReportedPlaybackError = nativeError;
     final id = owns ? playback.playingId : null;
@@ -990,20 +1066,20 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => GlassAlertDialog(
-          title: const Text('播放速度'),
+          title: Text(studyUi(context, '播放速度')),
           content: Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             children: [
               StudyIconButton(
-                tooltip: '减少 0.1',
+                tooltip: studyUi(context, '减少 0.1'),
                 onPressed: value <= 5 ? null : () => update(() => value--),
                 icon: const Icon(Icons.remove),
               ),
               Text('${(value / 10).toStringAsFixed(1)}'),
               StudyIconButton(
-                tooltip: '增加 0.1',
+                tooltip: studyUi(context, '增加 0.1'),
                 onPressed: value >= 30 ? null : () => update(() => value++),
                 icon: const Icon(Icons.add),
               ),
@@ -1012,11 +1088,11 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
           actions: [
             StudyButton.text(
               onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              child: Text(studyUi(context, '取消')),
             ),
             StudyButton.filled(
               onPressed: () => Navigator.pop(context, value),
-              child: const Text('确定'),
+              child: Text(studyUi(context, '确定')),
             ),
           ],
         ),
@@ -1056,9 +1132,9 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const StudyListTile(
+                StudyListTile(
                   title: Text(
-                    '显示内容',
+                    studyUi(context, '显示内容'),
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -1068,7 +1144,8 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                   showSource,
                   const Color(0xFFB55343),
                 ),
-                option('注音', 'show_ruby', showRuby, const Color(0xFF32AA43)),
+                if (_language.sourceLanguage == 'ja')
+                  option('注音', 'show_ruby', showRuby, const Color(0xFF32AA43)),
                 option(
                   '翻译',
                   'show_definition',
@@ -1118,7 +1195,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${section.card.course} · ${section.card.label}',
+                          '${section.card.courseLabel(context)} · ${studyUi(context, section.card.label)}',
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
@@ -1171,7 +1248,10 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
     final active = owns && playback.playingId == id;
     final scheme = Theme.of(context).colorScheme;
     final reading = textOf(row, 'kana').replaceFirst(RegExp(r'@.*$'), '');
-    final surface = plainJapanese(textOf(row, 'word'));
+    final surface = plainContentText(
+      textOf(row, 'word'),
+      _language.sourceLanguage,
+    );
     final clipIndex = clipIndexById[id];
     return StudyCard(
       key: anchors.putIfAbsent(id, GlobalKey.new),
@@ -1200,7 +1280,9 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                               showRuby,
                               Text(
                                 reading,
-                                style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
+                                style: const TextStyle(
+                                  fontFamily: 'Hiragino Sans',
+                                  locale: Locale('ja', 'JP'),
                                   fontSize: 12,
                                   height: 1.3,
                                   color: Color(0xFF32AA43),
@@ -1215,10 +1297,9 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                                     : textOf(row, 'kanji').isNotEmpty
                                     ? textOf(row, 'kanji')
                                     : reading,
-                                style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP'),
-                                  fontSize: 19,
-                                  height: 1.5,
-                                ),
+                                style: contentTextStyle(
+                                  _language.sourceLanguage,
+                                ).copyWith(fontSize: 19, height: 1.5),
                               ),
                             ),
                           ],
@@ -1248,12 +1329,14 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                 if (textOf(row, 'role').isNotEmpty)
                   ListeningRubyText(
                     '${row['role']}：',
+                    sourceLanguage: _language.sourceLanguage,
                     ruby: showRuby,
                     fontSize: 16,
                     color: scheme.primary,
                   ),
                 ListeningRubyText(
                   textOf(row, 'content'),
+                  sourceLanguage: _language.sourceLanguage,
                   ruby: showRuby,
                   source: showSource,
                   active: active,
@@ -1271,16 +1354,17 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                     textAlign: section.card.words
                         ? TextAlign.right
                         : TextAlign.left,
-                    style: TextStyle(fontFamily: 'PingFang SC', locale: Locale('zh', 'CN'),
-                      fontSize: 16,
-                      height: 1.5,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: contentTextStyle(_language.explanationLanguage)
+                        .copyWith(
+                          fontSize: 16,
+                          height: 1.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
                   ),
                 ),
               ),
               if (listeningAudioSource(row).isEmpty)
-                const Text('暂无音频', style: TextStyle(fontSize: 11)),
+                Text(studyUi(context, '暂无音频'), style: TextStyle(fontSize: 11)),
             ],
           ),
         ),
@@ -1290,6 +1374,23 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
 
   @override
   Widget build(BuildContext context) {
+    if (ContentLanguage.tryFromTextbook(widget.book) == null)
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              context.tr(
+                '内容包语言配置无效，请下载修正版。',
+                '內容包語言設定無效，請下載修正版。',
+                'Invalid package language settings. Download a corrected package.',
+                'パッケージの言語設定が無効です。修正版をダウンロードしてください。',
+              ),
+            ),
+          ),
+        ),
+      );
     final current = sections.isEmpty ? null : sections[currentSection];
     final blocked = resourceBlocked;
     final playbackError = owns ? playback.error : null;
@@ -1303,11 +1404,11 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
       controlledLesson: identity,
       appBar: StudyAppBar(
         centerTitle: true,
-        title: const Text('磨耳朵'),
+        title: Text(studyUi(context, '磨耳朵')),
         actions: [
           StudySpeedButton(onPressed: _speed, speed: speed),
           StudyIconButton.transparent(
-            tooltip: '显示内容',
+            tooltip: studyUi(context, '显示内容'),
             onPressed: _displayOptions,
             showPressHighlight: false,
             padding: const EdgeInsets.all(2),
@@ -1326,7 +1427,12 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                 children: [
                   const StudyCircularProgressIndicator(),
                   const SizedBox(height: 16),
-                  Text('正在准备课程 $prepared / ${widget.queue.length}'),
+                  Text(
+                    studyUi(
+                      context,
+                      '正在准备课程 $prepared / ${widget.queue.length}',
+                    ),
+                  ),
                 ],
               ),
             )
@@ -1337,10 +1443,10 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(error!, textAlign: TextAlign.center),
+                    Text(studyUi(context, error!), textAlign: TextAlign.center),
                     StudyButton.text(
                       onPressed: busy ? null : _prepare,
-                      child: const Text('重新准备'),
+                      child: Text(studyUi(context, '重新准备')),
                     ),
                   ],
                 ),
@@ -1352,13 +1458,18 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
               children: [
                 StudyListTile(
                   leading: Icon(current.card.icon),
-                  title: Text('${current.card.course} · ${current.card.label}'),
+                  title: Text(
+                    '${current.card.courseLabel(context)} · ${studyUi(context, current.card.label)}',
+                  ),
                   subtitle: Text(
-                    '${currentSection + 1} / ${sections.length} 项 · ${owns && playback.active
-                        ? playback.batch
-                              ? '按所选顺序循环播放'
-                              : '单条播放，播完停止'
-                        : '等待手动播放'}',
+                    studyUi(
+                      context,
+                      '${currentSection + 1} / ${sections.length} 项 · ${studyUi(context, owns && playback.active
+                          ? playback.batch
+                                ? '按所选顺序循环播放'
+                                : '单条播放，播完停止'
+                          : '等待手动播放')}',
+                    ),
                   ),
                 ),
                 if (silentCards.isNotEmpty)
@@ -1368,24 +1479,30 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                       vertical: 4,
                     ),
                     child: Text(
-                      '暂无音频，自动跳过：${silentCards.join('、')}',
+                      studyUi(
+                        context,
+                        '暂无音频，自动跳过：${silentCards.map((card) => '${card.courseLabel(context)} ${studyUi(context, card.label)}').join(' · ')}',
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
                 if (blocked)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('内容正在同步或需要修复，暂时无法播放。'),
+                    child: Text(studyUi(context, '内容正在同步或需要修复，暂时无法播放。')),
                   ),
                 if (playbackError != null)
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
-                      featureError(
-                        StateError(playbackError),
-                        fallback: '音频播放失败',
+                      studyUi(
+                        context,
+                        featureError(
+                          StateError(playbackError),
+                          fallback: '音频播放失败',
+                        ),
                       ),
                     ),
                   ),
@@ -1406,7 +1523,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                           constraints: const BoxConstraints(minHeight: 48),
                           child: StudyButton.text(
                             onPressed: buttonsDisabled ? null : _stopQueue,
-                            child: const Text('停止播放'),
+                            child: Text(studyUi(context, '停止播放')),
                           ),
                         )
                       : Column(
@@ -1419,7 +1536,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                                 onPressed: buttonsDisabled
                                     ? null
                                     : () => _playFrom(resumeIndex),
-                                child: const Text('继续播放'),
+                                child: Text(studyUi(context, '继续播放')),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -1429,7 +1546,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                                 onPressed: buttonsDisabled
                                     ? null
                                     : () => _playFrom(0),
-                                child: const Text('从头播放'),
+                                child: Text(studyUi(context, '从头播放')),
                               ),
                             ),
                           ],
@@ -1445,7 +1562,7 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                         constraints: const BoxConstraints(minHeight: 48),
                         child: StudyButton.text(
                           onPressed: settingsDisabled ? null : _changeRepeat,
-                          child: Text('循环 $repeat 次'),
+                          child: Text(studyUi(context, '循环 $repeat 次')),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1453,7 +1570,9 @@ class _ListeningPlayerPageState extends State<_ListeningPlayerPage>
                         constraints: const BoxConstraints(minHeight: 48),
                         child: StudyButton.text(
                           onPressed: settingsDisabled ? null : _changeInterval,
-                          child: Text('间隔 $intervalSeconds 秒'),
+                          child: Text(
+                            studyUi(context, '间隔 $intervalSeconds 秒'),
+                          ),
                         ),
                       ),
                     ],

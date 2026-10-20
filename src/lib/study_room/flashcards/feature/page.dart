@@ -1,4 +1,8 @@
+import '../../../content_typography.dart';
+import '../../../l10n/l10n.dart';
+import '../../demo_localization/ui.dart';
 import '../../../lesson_presentation.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -25,7 +29,10 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
   @override
   void initState() {
     super.initState();
-    c = FlashController(widget.host);
+    c = FlashController(
+      widget.host,
+      albumTitle: () => context.tr('闪卡复习', '閃卡複習', 'Flashcards', 'フラッシュカード'),
+    );
     unawaited(c.load());
   }
 
@@ -42,16 +49,16 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
       return await showGlassDialog<bool>(
             context: context,
             builder: (dialogContext) => GlassAlertDialog(
-              title: const Text('未完成的复习'),
-              content: Text(message),
+              title: Text(studyUi(context, '未完成的复习')),
+              content: Text(studyUi(context, message)),
               actions: [
                 StudyButton.text(
                   onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('取消'),
+                  child: Text(studyUi(context, '取消')),
                 ),
                 StudyButton.filled(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('确定'),
+                  child: Text(studyUi(context, '确定')),
                 ),
               ],
             ),
@@ -77,10 +84,10 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
         builder: (dialogContext) => GlassAlertDialog(
           title: Row(
             children: [
-              const Expanded(child: Text('选择内容')),
+              Expanded(child: Text(studyUi(context, '选择内容'))),
               const SizedBox(width: 12),
               StudyIconButton(
-                tooltip: '关闭',
+                tooltip: studyUi(context, '关闭'),
                 onPressed: () => Navigator.pop(dialogContext),
                 icon: const Icon(Icons.close_rounded),
               ),
@@ -90,7 +97,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (c.books.isEmpty) const Text('暂无可用内容，请先在内容库完成下载。'),
+              if (c.books.isEmpty) Text(studyUi(context, '暂无可用内容，请先在内容库完成下载。')),
               for (final row in c.books) ...[
                 if (row != c.books.first) const SizedBox(height: 12),
                 Semantics(
@@ -138,9 +145,16 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
     return '请通过右上角内容图标选择内容';
   }
 
+  String _directionLabel(FlashDirection direction) =>
+      direction == FlashDirection.japanese
+      ? context.tr('原文 → 释义', '原文 → 釋義', 'Original → Meaning', '原文 → 意味')
+      : context.tr('释义 → 原文', '釋義 → 原文', 'Meaning → Original', '意味 → 原文');
   Widget _heading(String text) => Padding(
     padding: const EdgeInsets.only(top: 18, bottom: 10),
-    child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+    child: Text(
+      studyUi(context, text),
+      style: Theme.of(context).textTheme.titleMedium,
+    ),
   );
 
   Widget _optionRow<T>(
@@ -152,7 +166,10 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
     padding: const EdgeInsets.only(top: 12),
     child: Row(
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        Text(
+          studyUi(context, title),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Semantics(
@@ -160,7 +177,9 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             child: AbsorbPointer(
               absorbing: c.busy,
               child: StudySegments<T>(
-                values: values,
+                values: values.map(
+                  (key, value) => MapEntry(key, studyUi(context, value)),
+                ),
                 selected: selected,
                 onChanged: (value) {
                   if (!c.busy && value != selected) onChanged(value);
@@ -175,7 +194,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
 
   Widget _message(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Text(text),
+    child: Text(studyUi(context, text)),
   );
 
   Widget _setup() {
@@ -224,16 +243,21 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          child: Text('本内容课程 · 点击勾选 / 再次点击取消'),
+                          child: Text(
+                            studyUi(context, '本内容课程 · 点击勾选 / 再次点击取消'),
+                          ),
                         ),
                         Expanded(
                           child: c.lessons.isEmpty
                               ? SingleChildScrollView(
                                   padding: const EdgeInsets.all(20),
                                   child: Text(
-                                    c.books.isEmpty
-                                        ? '暂无可用的已安装内容，请先在内容库下载，再重新进入闪卡复习。'
-                                        : '请选择包含单词的内容。',
+                                    studyUi(
+                                      context,
+                                      c.books.isEmpty
+                                          ? '暂无可用的已安装内容，请先在内容库下载，再重新进入闪卡复习。'
+                                          : '请选择包含单词的内容。',
+                                    ),
                                   ),
                                 )
                               : Padding(
@@ -244,7 +268,12 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                                       for (final lesson in c.lessons)
                                         (
                                           id: lesson['id'].toString(),
-                                          title: lessonLabel(lesson),
+                                          title: lessonLabel(
+                                            lesson,
+                                            locale: Localizations.localeOf(
+                                              context,
+                                            ),
+                                          ),
                                         ),
                                     ],
                                     selected: c.lessonIds,
@@ -289,7 +318,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                                 lesson['id'].toString(),
                             },
                           ),
-                    child: const Text('全部单词'),
+                    child: Text(studyUi(context, '全部单词')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -298,7 +327,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                     onPressed: c.busy || c.lessonIds.isEmpty
                         ? null
                         : () => c.configure(selectedLessons: <String>{}),
-                    child: const Text('取消选择'),
+                    child: Text(studyUi(context, '取消选择')),
                   ),
                 ),
               ],
@@ -317,7 +346,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
         '回忆方向',
         {
           for (final direction in FlashDirection.values)
-            direction: direction.label,
+            direction: _directionLabel(direction),
         },
         c.direction,
         (value) => unawaited(c.configure(nextDirection: value)),
@@ -350,7 +379,10 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '上次：${c.session!.direction.label} · 已完成 ${c.session!.index}/${c.session!.words.length}',
+                  studyUi(
+                    context,
+                    '上次：${_directionLabel(c.session!.direction)} · 已完成 ${c.session!.index}/${c.session!.words.length}',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -358,7 +390,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                     Expanded(
                       child: StudyButton.text(
                         onPressed: c.busy || !c.permitted ? null : c.resume,
-                        child: const Text('继续上次'),
+                        child: Text(studyUi(context, '继续上次')),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -372,7 +404,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                                   await c.discard();
                                 }
                               },
-                        child: const Text('放弃草稿'),
+                        child: Text(studyUi(context, '放弃草稿')),
                       ),
                     ),
                   ],
@@ -389,10 +421,10 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Text(c.error!)),
+                Expanded(child: Text(studyUi(context, c.error!))),
                 const SizedBox(width: 12),
                 StudyIconButton(
-                  tooltip: '关闭提示',
+                  tooltip: studyUi(context, '关闭提示'),
                   onPressed: c.dismissError,
                   icon: const Icon(Icons.close_rounded),
                 ),
@@ -427,7 +459,12 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             const SizedBox(height: 16),
             Semantics(
               button: true,
-              label: '点击播放单词读音',
+              label: context.tr(
+                '点击播放单词读音',
+                '點擊播放單字讀音',
+                'Tap to hear word pronunciation',
+                'タップして単語の発音を再生',
+              ),
               child: lg.GlassCard(
                 useOwnLayer: true,
                 quality: studyGlassControlQuality,
@@ -456,10 +493,20 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                           const SizedBox(height: 12),
                           Text(
                             c.flipped
-                                ? '本词条答案'
+                                ? context.tr('本词条答案', '本詞條答案', 'Answer', '答え')
                                 : jp
-                                ? '想一想中文意思'
-                                : '想一想日语怎么说',
+                                ? context.tr(
+                                    '想一想释义',
+                                    '想一想釋義',
+                                    'Recall the meaning',
+                                    '意味を思い出しましょう',
+                                  )
+                                : context.tr(
+                                    '想一想原文怎么说',
+                                    '想一想原文怎麼說',
+                                    'Recall the original word',
+                                    '原語の単語を思い出しましょう',
+                                  ),
                           ),
                           const SizedBox(height: 22),
                           Text(
@@ -467,22 +514,42 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.headlineLarge
                                 ?.copyWith(
-                                  fontFamily: (c.flipped ? !jp : jp) ? 'Hiragino Mincho ProN' : 'Songti SC',
-                                  locale: (c.flipped ? !jp : jp) ? const Locale('ja', 'JP') : const Locale('zh', 'CN'),
+                                  fontFamily: contentTextStyle(
+                                    (c.flipped ? !jp : jp)
+                                        ? word.sourceLanguage
+                                        : word.explanationLanguage,
+                                  ).fontFamily,
+                                  locale: contentTextStyle(
+                                    (c.flipped ? !jp : jp)
+                                        ? word.sourceLanguage
+                                        : word.explanationLanguage,
+                                  ).locale,
                                   height: 1.5,
                                 ),
                           ),
-                          if ((jp || c.flipped) &&
+                          if (word.sourceLanguage == 'ja' &&
+                              (jp || c.flipped) &&
                               word.kana.isNotEmpty &&
                               word.kana != text) ...[
                             const SizedBox(height: 12),
-                            Text(word.kana, style: const TextStyle(fontFamily: 'Hiragino Sans', locale: Locale('ja', 'JP')), textAlign: TextAlign.center),
+                            Text(
+                              word.kana,
+                              style: const TextStyle(
+                                fontFamily: 'Hiragino Sans',
+                                locale: Locale('ja', 'JP'),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                           if (c.flipped) ...[
                             const SizedBox(height: 12),
                             Text(
                               jp ? word.japanese : word.chinese,
-                              style: TextStyle(fontFamily: jp ? 'Hiragino Sans' : 'PingFang SC', locale: jp ? const Locale('ja', 'JP') : const Locale('zh', 'CN')),
+                              style: contentTextStyle(
+                                jp
+                                    ? word.sourceLanguage
+                                    : word.explanationLanguage,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                             if (word.pos.isNotEmpty)
@@ -503,10 +570,11 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             if (!c.awaitingNext) ...[
               const SizedBox(height: 16),
               StudyButton.outlined(
-                onPressed: c.busy || c.advancing || !c.permitted || c.resourceBlocked
+                onPressed:
+                    c.busy || c.advancing || !c.permitted || c.resourceBlocked
                     ? null
                     : c.flip,
-                child: Text(c.flipped ? '回到正面' : '查看答案'),
+                child: Text(studyUi(context, c.flipped ? '回到正面' : '查看答案')),
               ),
               const SizedBox(height: 16),
             ],
@@ -517,7 +585,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
             child: Row(
               children: [
-                Expanded(child: Text(session.direction.label)),
+                Expanded(child: Text(_directionLabel(session.direction))),
                 Text('${c.reviewIndex + 1} / ${session.words.length}'),
               ],
             ),
@@ -542,8 +610,8 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: Semantics(
                         liveRegion: true,
-                        child: const Text(
-                          '已标记不熟，记住答案后继续。',
+                        child: Text(
+                          studyUi(context, '已标记不熟，记住答案后继续。'),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -552,7 +620,9 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                       onPressed: c.busy || !c.permitted || c.resourceBlocked
                           ? null
                           : c.next,
-                      child: Text(session.complete ? '查看本轮结果' : '下一张'),
+                      child: Text(
+                        studyUi(context, session.complete ? '查看本轮结果' : '下一张'),
+                      ),
                     ),
                   ] else ...[
                     Row(
@@ -560,14 +630,14 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                         Expanded(
                           child: StudyButton.outlined(
                             onPressed: !c.canRate ? null : () => c.mark(false),
-                            child: const Text('不熟'),
+                            child: Text(studyUi(context, '不熟')),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: StudyButton.filled(
                             onPressed: !c.canRate ? null : () => c.mark(true),
-                            child: const Text('认识'),
+                            child: Text(studyUi(context, '认识')),
                           ),
                         ),
                       ],
@@ -576,7 +646,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                   const SizedBox(height: 20),
                   StudyButton.text(
                     onPressed: c.busy ? null : c.setup,
-                    child: const Text('暂存退出'),
+                    child: Text(studyUi(context, '暂存退出')),
                   ),
                 ],
               ),
@@ -597,10 +667,12 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
     final session = c.session!;
     final children = <Widget>[
       Text(
-        '这一轮完成了',
+        studyUi(context, '这一轮完成了'),
         style: Theme.of(context).textTheme.headlineMedium,
       ),
-      _message('${session.direction.label} · 复习 ${session.words.length} 词'),
+      _message(
+        '${_directionLabel(session.direction)} · 复习 ${session.words.length} 词',
+      ),
       _heading(
         '认识 ${session.words.length - session.weak.length}　／　不熟 ${session.weak.length}',
       ),
@@ -615,19 +687,16 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
           onPressed: c.busy || !c.permitted || c.resourceBlocked
               ? null
               : c.retryWeak,
-          child: Text('再练本轮不熟 · ${session.weak.length}词'),
+          child: Text(studyUi(context, '再练本轮不熟 · ${session.weak.length}词')),
         ),
         const SizedBox(height: 8),
       ],
       StudyButton.text(
         onPressed: c.busy ? null : c.setup,
-        child: const Text('返回复习设置'),
+        child: Text(studyUi(context, '返回复习设置')),
       ),
     ];
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: children,
-    );
+    return ListView(padding: const EdgeInsets.all(20), children: children);
   }
 
   @override
@@ -641,11 +710,13 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
       },
       child: Scaffold(
         appBar: StudyAppBar(
-          title: const Text('闪卡复习'),
+          title: Text(
+            context.tr('闪卡复习', '單字卡複習', 'Flashcard review', 'フラッシュカード復習'),
+          ),
           actions: [
             if (c.stage == FlashStage.setup)
               StudyIconButton(
-                tooltip: '选择内容',
+                tooltip: studyUi(context, '选择内容'),
                 onPressed: c.busy || _choosingBook || _confirming
                     ? null
                     : _chooseBook,
@@ -653,7 +724,7 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
               ),
             if (c.stage == FlashStage.setup)
               StudyIconButton(
-                tooltip: '开始复习',
+                tooltip: studyUi(context, '开始复习'),
                 onPressed:
                     c.busy || _choosingBook || !c.permitted || c.resourceBlocked
                     ? null
@@ -674,12 +745,26 @@ class _FlashcardsPageState extends State<FlashcardsPage> {
                   if (!c.permitted)
                     Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Text('自习室暂未解锁，复习进度已保留。'),
+                      child: Text(
+                        context.tr(
+                          '自习室暂未解锁，复习进度已保留。',
+                          '自習室尚未解鎖，複習進度已保留。',
+                          'The Study Room is locked. Your review progress is kept.',
+                          '自習室は未解放です。復習の進捗は保持されています。',
+                        ),
+                      ),
                     ),
                   if (c.resourceBlocked)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.all(12),
-                      child: Text('内容正在更新或需要修复，请处理完成后重新进入闪卡复习。'),
+                      child: Text(
+                        context.tr(
+                          '内容正在更新或需要修复，请处理完成后重新进入闪卡复习。',
+                          '內容正在更新或需要修復，請完成後重新進入單字卡複習。',
+                          'Content is updating or needs repair. Return to flashcards when it is ready.',
+                          'コンテンツの更新または修復が必要です。完了後に復習を開き直してください。',
+                        ),
+                      ),
                     ),
                   if (c.error != null && c.stage != FlashStage.setup)
                     Padding(

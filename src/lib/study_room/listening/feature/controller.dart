@@ -1,12 +1,14 @@
+import '../../demo_localization/ui.dart';
 import '../../../lesson_presentation.dart';
 import '../../../user_error.dart';
 import '../../../system_errors.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
-    show BuildContext, ScaffoldMessenger, Text;
+    show BuildContext, ScaffoldMessenger, Text, Builder;
 import 'package:sqflite/sqflite.dart';
 
 import '../../../glass_ui.dart';
@@ -24,10 +26,21 @@ Future<void> perform(
   try {
     await action();
   } catch (e, caughtStack) {
-      SystemErrors.record(e, caughtStack, module: 'listening', operation: '页面操作', context: {'source': 'study_room/listening/feature/controller.dart'});
+    SystemErrors.record(
+      e,
+      caughtStack,
+      module: 'listening',
+      operation: '页面操作',
+      context: {'source': 'study_room/listening/feature/controller.dart'},
+    );
     if (context.mounted)
-      ScaffoldMessenger.of(context)
-          .showSnackBar(GlassSnackBar(content: Text(featureError(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(
+          content: Builder(
+            builder: (context) => Text(studyUi(context, featureError(e))),
+          ),
+        ),
+      );
   }
 }
 
@@ -49,8 +62,11 @@ class ListeningController extends ChangeNotifier {
   bool get translation => _settings['show_definition'] != 0;
   Future<void> load() async {
     if (_loaded) return;
-    final rows = await host.database.query('yzc_study_listening_setting',
-      where: 'user_id=?', whereArgs: [host.userId]);
+    final rows = await host.database.query(
+      'yzc_study_listening_setting',
+      where: 'user_id=?',
+      whereArgs: [host.userId],
+    );
     _settings = rows.isEmpty ? {} : Map<String, dynamic>.from(rows.single);
     _loaded = true;
   }
@@ -73,12 +89,19 @@ class ListeningController extends ChangeNotifier {
     }
     final result = _writes.then((_) async {
       final next = {..._settings, key: value};
-      await host.write(() => host.database.transaction((tx) async {
-        await tx.insert('yzc_study_listening_setting', {'user_id': host.userId},
-          conflictAlgorithm: ConflictAlgorithm.ignore);
-        await tx.update('yzc_study_listening_setting', {key: value},
-          where: 'user_id=?', whereArgs: [host.userId]);
-      }));
+      await host.write(
+        () => host.database.transaction((tx) async {
+          await tx.insert('yzc_study_listening_setting', {
+            'user_id': host.userId,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await tx.update(
+            'yzc_study_listening_setting',
+            {key: value},
+            where: 'user_id=?',
+            whereArgs: [host.userId],
+          );
+        }),
+      );
       _settings = next;
       if (!_disposed) notifyListeners();
     });
@@ -125,10 +148,14 @@ class ListeningCatalog {
     return rows.where((r) => !host.isBookUnavailable(textOf(r, 'id'))).toList();
   });
   Future<List<RowData>> lessons(String book) => _read((db) async {
-    final lessons = sortLessons(await db.query(
-      'yzc_lessons', where: 'textbook_id=?', whereArgs: [book],
-      orderBy: 'num IS NULL,num,id',
-    )).where(isRegularLesson);
+    final lessons = sortLessons(
+      await db.query(
+        'yzc_lessons',
+        where: 'textbook_id=?',
+        whereArgs: [book],
+        orderBy: 'num IS NULL,num,id',
+      ),
+    ).where(isRegularLesson);
     final words = await _content(db, 'yzc_words', book);
     final content = await _content(db, 'yzc_content', book);
     Map<String, int> counts(List<RowData> rows) {
@@ -139,12 +166,16 @@ class ListeningCatalog {
       }
       return result;
     }
+
     final wordCounts = counts(words), contentCounts = counts(content);
-    return [for (final lesson in lessons) {
-      ...lesson,
-      'word_count': wordCounts[textOf(lesson, 'id')] ?? 0,
-      'content_count': contentCounts[textOf(lesson, 'id')] ?? 0,
-    }];
+    return [
+      for (final lesson in lessons)
+        {
+          ...lesson,
+          'word_count': wordCounts[textOf(lesson, 'id')] ?? 0,
+          'content_count': contentCounts[textOf(lesson, 'id')] ?? 0,
+        },
+    ];
   });
   Future<String> version(String book) => _read((db) async {
     if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
@@ -160,30 +191,38 @@ class ListeningCatalog {
     _versions[book] = stamp;
     return stamp;
   });
-  Future<List<RowData>> content(
-    String table,
-    String book,
-    String lesson,
-  ) => _read((db) => _content(db, table, book, lesson));
+  Future<List<RowData>> content(String table, String book, String lesson) =>
+      _read((db) => _content(db, table, book, lesson));
 
   // Counts and the prepared queue use this same read-only inclusion rule.
   Future<List<RowData>> _content(
-    DatabaseExecutor db, String table, String book, [String? lesson]
-  ) async {
+    DatabaseExecutor db,
+    String table,
+    String book, [
+    String? lesson,
+  ]) async {
     if (!{'yzc_words', 'yzc_content'}.contains(table)) {
       throw ArgumentError('未知内容类型');
     }
     if (host.isBookUnavailable(book)) throw StateError('内容正在同步或需要修复');
-    final rows = await db.rawQuery('''SELECT c.*,l.lesson AS _lesson_code
+    final rows = await db.rawQuery(
+      '''SELECT c.*,l.lesson AS _lesson_code
       FROM $table c JOIN yzc_lessons l
         ON l.id=c.lessons_id AND l.textbook_id=c.textbook_id
       WHERE c.textbook_id=? ${lesson == null ? '' : 'AND c.lessons_id=?'}
       ORDER BY ${table == 'yzc_content' ? 'c.category IS NULL,c.category,' : ''}
-        c.sort IS NULL,c.sort,c.id''', [book, if (lesson != null) lesson]);
-    return rows.where((row) =>
-      isRegularLesson({'lesson': row['_lesson_code']}) &&
-      listeningRowEligible(row, table == 'yzc_words')).toList();
+        c.sort IS NULL,c.sort,c.id''',
+      [book, if (lesson != null) lesson],
+    );
+    return rows
+        .where(
+          (row) =>
+              isRegularLesson({'lesson': row['_lesson_code']}) &&
+              listeningRowEligible(row, table == 'yzc_words'),
+        )
+        .toList();
   }
+
   Future<String> audioPath(String book, String filename) async {
     void safeName(String name) {
       if (name.isEmpty ||

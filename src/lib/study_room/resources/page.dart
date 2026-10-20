@@ -1,3 +1,5 @@
+import '../demo_localization/ui.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -87,7 +89,7 @@ class _StudyResourcePageState extends State<StudyResourcePage>
   void _notice(String text) {
     if (_pageCurrent)
       ScaffoldMessenger.of(context)
-          .showSnackBar(GlassSnackBar(content: Text(text)));
+          .showSnackBar(GlassSnackBar(content: Text(studyUi(context, text))));
   }
 
   void _back() {
@@ -139,21 +141,27 @@ class _StudyResourcePageState extends State<StudyResourcePage>
         context: context,
         builder: (context) => GlassAlertDialog(
           title: Text(
-            resources.needsCleanup(level) && !resources.isReady(level)
-                ? '清理剩余资源文件？'
-                : '删除 ${level.toUpperCase()} 题库？',
+            studyUi(
+              context,
+              resources.needsCleanup(level) && !resources.isReady(level)
+                  ? '清理剩余资源文件？'
+                  : '删除 ${level.toUpperCase()} 题库？',
+            ),
           ),
           content: Text(
-            '删除本机 ${level.toUpperCase()} 的题目、试卷及资源文件，保留其他级别、作答历史和错题记录。使用该级别开始新的练习或测试前需要重新下载。',
+            studyUi(
+              context,
+              '删除本机 ${level.toUpperCase()} 的题目、试卷及资源文件，保留其他级别、作答历史和错题记录。使用该级别开始新的练习或测试前需要重新下载。',
+            ),
           ),
           actions: [
             StudyButton.text(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
+              child: Text(studyUi(context, '取消')),
             ),
             StudyButton.filled(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('删除'),
+              child: Text(studyUi(context, '删除')),
             ),
           ],
         ),
@@ -246,27 +254,31 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                             if (!invalidHash || ready) ...[
                               const SizedBox(height: 6),
                               Text(
-                                operating
-                                    ? resourceOperationText(
-                                        widget.host.resourceOperations.stage,
-                                        resources.progress,
-                                        subject: '自习资源',
-                                      )
-                                    : resources.checking
-                                    ? '检查更新中'
-                                    : !ready
-                                    ? (removable
-                                          ? (localOnly
-                                                ? '本地资源异常，服务器已移除，可删除本地数据'
-                                                : canDownload
-                                                ? '本地资源异常，可重新下载或删除'
-                                                : '本地资源异常，可删除本地数据')
-                                          : '未下载')
-                                    : localOnly
-                                    ? '本地资源，服务器已移除 · 可离线使用'
-                                    : update
-                                    ? '有可用更新'
-                                    : '已下载 · 可离线使用',
+                                studyUi(
+                                  context,
+                                  operating
+                                      ? resourceOperationText(
+                                          widget.host.resourceOperations.stage,
+                                          resources.progress,
+                                          subject: '自习资源',
+                                          context: context,
+                                        )
+                                      : resources.checking
+                                      ? '检查更新中'
+                                      : !ready
+                                      ? (removable
+                                            ? (localOnly
+                                                  ? '本地资源异常，服务器已移除，可删除本地数据'
+                                                  : canDownload
+                                                  ? '本地资源异常，可重新下载或删除'
+                                                  : '本地资源异常，可删除本地数据')
+                                            : '未下载')
+                                      : localOnly
+                                      ? '本地资源，服务器已移除 · 可离线使用'
+                                      : update
+                                      ? '有可用更新'
+                                      : '已下载 · 可离线使用',
+                                ),
                                 style: TextStyle(color: colors.primary),
                               ),
                             ],
@@ -278,23 +290,32 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                   if (ready) ...[
                     const SizedBox(height: 12),
                     Text(
-                      resources.infoError.isEmpty
-                          ? '当前题库共 ${resources.questionCounts[level.toUpperCase()] ?? 0} 题'
-                          : '题目数量暂不可用',
+                      studyUi(
+                        context,
+                        resources.infoError.isEmpty
+                            ? '当前题库共 ${resources.questionCounts[level.toUpperCase()] ?? 0} 题'
+                            : '题目数量暂不可用',
+                      ),
                     ),
                     Text(
-                      counts == null
-                          ? '附件数量暂不可用'
-                          : '音频 ${counts.audio} 个 · 图片 ${counts.images} 张',
+                      studyUi(
+                        context,
+                        counts == null
+                            ? '附件数量暂不可用'
+                            : '音频 ${counts.audio} 个 · 图片 ${counts.images} 张',
+                      ),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                   if (resources.needsCleanup(level)) ...[
                     const SizedBox(height: 8),
-                    Text('有资源文件待清理', style: TextStyle(color: colors.error)),
+                    Text(
+                      studyUi(context, '有资源文件待清理'),
+                      style: TextStyle(color: colors.error),
+                    ),
                     StudyButton.text(
                       onPressed: _resourceBusy ? null : () => _cleanup(level),
-                      child: const Text('重试清理'),
+                      child: Text(studyUi(context, '重试清理')),
                     ),
                   ],
                   if (operating) ...[
@@ -319,7 +340,7 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                 top: 7,
                 right: 7,
                 child: Semantics(
-                  label: '正在处理题库',
+                  label: studyUi(context, '正在处理题库'),
                   child: SizedBox(
                     width: 48,
                     height: 48,
@@ -337,9 +358,9 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                 top: 7,
                 right: 7,
                 child: Tooltip(
-                  message: '资源校验错误',
+                  message: studyUi(context, '资源校验错误'),
                   child: Semantics(
-                    label: '资源校验错误',
+                    label: studyUi(context, '资源校验错误'),
                     child: SizedBox(
                       width: 48,
                       height: 48,
@@ -372,7 +393,7 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                 bottom: 7,
                 right: 7,
                 child: StudyIconButton(
-                  tooltip: '删除本地题库',
+                  tooltip: studyUi(context, '删除本地题库'),
                   icon: const Icon(Icons.delete_outline),
                   color: colors.error,
                   onPressed: _resourceBusy ? null : () => _remove(level),
@@ -403,19 +424,22 @@ class _StudyResourcePageState extends State<StudyResourcePage>
           },
           child: Scaffold(
             appBar: StudyAppBar(
-              title: const Text('自习资源'),
+              title: Text(studyUi(context, '自习资源')),
               leading: StudyIconButton(
-                tooltip: '返回',
+                tooltip: studyUi(context, '返回'),
                 onPressed: _back,
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
               ),
               actions: [
                 StudyIconButton(
-                  tooltip: _operationBusy
-                      ? '正在$_operationLabel'
-                      : resources.checking
-                      ? '正在检查题库'
-                      : '刷新题库信息',
+                  tooltip: studyUi(
+                    context,
+                    _operationBusy
+                        ? '正在$_operationLabel'
+                        : resources.checking
+                        ? '正在检查题库'
+                        : '刷新题库信息',
+                  ),
                   onPressed: _resourceBusy ? null : _refresh,
                   icon: ResourceActivityIcon(checking: _resourceBusy),
                 ),
@@ -444,9 +468,11 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                                           .join('\n'),
                                     ),
                                     if (resources.ready)
-                                      const Padding(
+                                      Padding(
                                         padding: EdgeInsets.only(top: 8),
-                                        child: Text('已下载题库可继续离线使用。'),
+                                        child: Text(
+                                          studyUi(context, '已下载题库可继续离线使用。'),
+                                        ),
                                       ),
                                     if (resources.lastFailedLevel != null)
                                       StudyButton.text(
@@ -455,14 +481,14 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                                             : () => _install(
                                                 resources.lastFailedLevel!,
                                               ),
-                                        child: const Text('重试下载'),
+                                        child: Text(studyUi(context, '重试下载')),
                                       ),
                                     if (resources.permissionError)
                                       StudyButton.text(
                                         onPressed: _operationBusy
                                             ? null
                                             : _openSettings,
-                                        child: const Text('前往设置'),
+                                        child: Text(studyUi(context, '前往设置')),
                                       ),
                                   ],
                                 ),
@@ -476,10 +502,13 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                                           ? _refresh
                                           : resources.clearError),
                                 child: Text(
-                                  resources.errorNeedsRecheck ||
-                                          resources.infoError.isNotEmpty
-                                      ? '重新检查'
-                                      : '关闭',
+                                  studyUi(
+                                    context,
+                                    resources.errorNeedsRecheck ||
+                                            resources.infoError.isNotEmpty
+                                        ? '重新检查'
+                                        : '关闭',
+                                  ),
                                 ),
                               ),
                             ],
@@ -491,15 +520,18 @@ class _StudyResourcePageState extends State<StudyResourcePage>
                       visibleLevels.isEmpty &&
                       resources.error.isEmpty &&
                       resources.infoError.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.all(24),
-                      child: Text('暂无自习资源目录，可刷新获取。'),
+                      child: Text(studyUi(context, '暂无自习资源目录，可刷新获取。')),
                     ),
                   for (final level in visibleLevels)
                     _levelCard(level, resources),
                   const SizedBox(height: 14),
-                  const Text(
-                    '按需下载 N1～N5 题库，J练习与J测试共用对应级别资源。更新或删除仅影响该级别，保留作答历史和错题记录。',
+                  Text(
+                    studyUi(
+                      context,
+                      '按需下载 N1～N5 题库，J练习与J测试共用对应级别资源。更新或删除仅影响该级别，保留作答历史和错题记录。',
+                    ),
                   ),
                 ],
               ),

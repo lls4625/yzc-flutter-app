@@ -1,4 +1,6 @@
+import '../../../content_language.dart';
 import '../../../lesson_presentation.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -68,12 +70,14 @@ class FlashCatalog {
   });
 
   Future<List<FlashRow>> lessons(String book) => _read(
-    (db) async => sortLessons(await db.query(
-      'yzc_lessons',
-      where: 'textbook_id=?',
-      whereArgs: [book],
-      orderBy: 'num IS NULL,num,id',
-    )),
+    (db) async => sortLessons(
+      await db.query(
+        'yzc_lessons',
+        where: 'textbook_id=?',
+        whereArgs: [book],
+        orderBy: 'num IS NULL,num,id',
+      ),
+    ),
   );
 
   Future<String> _version(DatabaseExecutor db, String book) async {
@@ -96,7 +100,7 @@ class FlashCatalog {
     final result = await db.transaction((tx) async {
       final stamp = await _version(tx, book);
       final rows = await tx.rawQuery(
-        '''SELECT w.*,l.lesson lesson_code,l.num lesson_num,b.textbook book_name FROM yzc_words w
+        '''SELECT w.*,l.lesson lesson_code,l.num lesson_num,b.textbook book_name,b.source_language,b.explanation_language FROM yzc_words w
         JOIN yzc_lessons l ON l.id=w.lessons_id AND l.textbook_id=w.textbook_id
         JOIN yzc_textbook b ON b.id=w.textbook_id WHERE w.textbook_id=?
         AND w.lessons_id IN (${List.filled(lessonIds.length, '?').join(',')})
@@ -106,14 +110,24 @@ class FlashCatalog {
       final words = <FlashWord>[];
       var skipped = 0;
       for (final row in rows) {
+        final language = ContentLanguage.fromTextbook({...row, 'id': book});
         final kana = flashText(row['kana']).replaceFirst(RegExp(r'@.*$'), '');
         final candidates = [
-          flashText(row['kanji']),
-          flashText(row['word']),
+          plainContentText(
+            row['kanji']?.toString() ?? '',
+            language.sourceLanguage,
+          ),
+          plainContentText(
+            row['word']?.toString() ?? '',
+            language.sourceLanguage,
+          ),
           kana,
         ];
         final jp = candidates.firstWhere((v) => v.isNotEmpty, orElse: () => '');
-        final zh = flashText(row['definition']);
+        final zh = plainContentText(
+          row['definition']?.toString() ?? '',
+          language.explanationLanguage,
+        );
         if (jp.isEmpty || zh.isEmpty) {
           skipped++;
           continue;
@@ -121,13 +135,20 @@ class FlashCatalog {
         words.add(
           FlashWord(
             bookId: book,
+            sourceLanguage: ContentLanguage.fromTextbook({...row, 'id': book})
+                .sourceLanguage,
+            explanationLanguage: ContentLanguage.fromTextbook({
+              ...row,
+              'id': book,
+            }).explanationLanguage,
             lessonId: row['lessons_id'].toString(),
             id: row['id'].toString(),
             japanese: jp,
             kana: kana,
             chinese: zh,
             pos: flashText(row['pos']),
-            source: '${row['book_name']} · ${lessonLabel(row, lessonKey: 'lesson_code', numberKey: 'lesson_num')}',
+            source:
+                '${row['book_name']} · ${lessonLabel(row, lessonKey: 'lesson_code', numberKey: 'lesson_num')}',
           ),
         );
       }
@@ -170,31 +191,51 @@ class FlashDatabaseStore implements FlashStore {
     );
     if (rows.isEmpty) return <String, dynamic>{};
     final row = rows.single;
-    final lessons = await tx.query('yzc_study_flashcard_lesson',
-      where: 'user_id=?', whereArgs: [host.userId], orderBy: 'position');
+    final lessons = await tx.query(
+      'yzc_study_flashcard_lesson',
+      where: 'user_id=?',
+      whereArgs: [host.userId],
+      orderBy: 'position',
+    );
     return <String, dynamic>{
-      'book': row['book'], 'direction': row['direction'],
-      'onlyWeak': row['only_weak'] == 1, 'randomOrder': row['random_order'] == 1,
-      'limit': row['word_limit'], 'lessons': [for (final lesson in lessons) lesson['lessons_id']],
+      'book': row['book'],
+      'direction': row['direction'],
+      'onlyWeak': row['only_weak'] == 1,
+      'randomOrder': row['random_order'] == 1,
+      'limit': row['word_limit'],
+      'lessons': [for (final lesson in lessons) lesson['lessons_id']],
     };
   }, exclusive: false);
 
   @override
-  Future<void> saveSettings(Map<String, dynamic> value) => host.write(() => db.transaction((tx) async {
-    await tx.insert('yzc_study_flashcard_setting', {
-      'user_id': host.userId, 'book': value['book'], 'direction': value['direction'],
-      'only_weak': value['onlyWeak'] == true ? 1 : 0,
-      'random_order': value['randomOrder'] == true ? 1 : 0,
-      'word_limit': value['limit'],
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-    await tx.delete('yzc_study_flashcard_lesson', where: 'user_id=?', whereArgs: [host.userId]);
-    final lessons = (value['lessons'] as List).cast<String>().toSet().toList();
-    for (var i = 0; i < lessons.length; i++) {
-      await tx.insert('yzc_study_flashcard_lesson', {
-        'user_id': host.userId, 'lessons_id': lessons[i], 'position': i,
-      });
-    }
-  }));
+  Future<void> saveSettings(Map<String, dynamic> value) => host.write(
+    () => db.transaction((tx) async {
+      await tx.insert('yzc_study_flashcard_setting', {
+        'user_id': host.userId,
+        'book': value['book'],
+        'direction': value['direction'],
+        'only_weak': value['onlyWeak'] == true ? 1 : 0,
+        'random_order': value['randomOrder'] == true ? 1 : 0,
+        'word_limit': value['limit'],
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await tx.delete(
+        'yzc_study_flashcard_lesson',
+        where: 'user_id=?',
+        whereArgs: [host.userId],
+      );
+      final lessons = (value['lessons'] as List)
+          .cast<String>()
+          .toSet()
+          .toList();
+      for (var i = 0; i < lessons.length; i++) {
+        await tx.insert('yzc_study_flashcard_lesson', {
+          'user_id': host.userId,
+          'lessons_id': lessons[i],
+          'position': i,
+        });
+      }
+    }),
+  );
 
   @override
   Future<Map<String, ({bool known, int time})>> mastery(
@@ -237,49 +278,55 @@ class FlashDatabaseStore implements FlashStore {
 
   @override
   Future<void> discard() => host.write(() async {
-    await db.delete('yzc_study_flashcard_session', where: 'user_id=?', whereArgs: [host.userId]);
+    await db.delete(
+      'yzc_study_flashcard_session',
+      where: 'user_id=?',
+      whereArgs: [host.userId],
+    );
   });
 
   @override
   Future<void> mark(FlashSession before, FlashSession after, bool known) =>
-      host.write(() => db.transaction((tx) async {
-        final rows = await tx.query(
-          'yzc_study_flashcard_session',
-          where: 'user_id=?',
-          whereArgs: [host.userId],
-        );
-        if (rows.isEmpty) throw StateError('复习进度已变化，请返回设置重新载入');
-        final current = FlashSession.fromJson(
-          Map<String, dynamic>.from(
-            jsonDecode(rows.single['value'] as String) as Map,
-          ),
-        );
-        if (current.id != before.id || current.index != before.index)
-          throw StateError('复习进度已变化，请返回设置重新载入');
-        final word = before.words[before.index].key;
-        final time = DateTime.now().millisecondsSinceEpoch;
-        await tx.insert('yzc_study_flashcard_answer', {
-          'user_id': host.userId,
-          'session': before.id,
-          'position': before.index,
-          'word': word,
-          'known': known ? 1 : 0,
-          'time': time,
-        });
-        await tx.insert('yzc_study_flashcard_mastery', {
-          'user_id': host.userId,
-          'word': word,
-          'direction': before.direction.name,
-          'known': known ? 1 : 0,
-          'time': time,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-        await tx.update(
-          'yzc_study_flashcard_session',
-          {'value': jsonEncode(after.toJson())},
-          where: 'user_id=?',
-          whereArgs: [host.userId],
-        );
-      }));
+      host.write(
+        () => db.transaction((tx) async {
+          final rows = await tx.query(
+            'yzc_study_flashcard_session',
+            where: 'user_id=?',
+            whereArgs: [host.userId],
+          );
+          if (rows.isEmpty) throw StateError('复习进度已变化，请返回设置重新载入');
+          final current = FlashSession.fromJson(
+            Map<String, dynamic>.from(
+              jsonDecode(rows.single['value'] as String) as Map,
+            ),
+          );
+          if (current.id != before.id || current.index != before.index)
+            throw StateError('复习进度已变化，请返回设置重新载入');
+          final word = before.words[before.index].key;
+          final time = DateTime.now().millisecondsSinceEpoch;
+          await tx.insert('yzc_study_flashcard_answer', {
+            'user_id': host.userId,
+            'session': before.id,
+            'position': before.index,
+            'word': word,
+            'known': known ? 1 : 0,
+            'time': time,
+          });
+          await tx.insert('yzc_study_flashcard_mastery', {
+            'user_id': host.userId,
+            'word': word,
+            'direction': before.direction.name,
+            'known': known ? 1 : 0,
+            'time': time,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          await tx.update(
+            'yzc_study_flashcard_session',
+            {'value': jsonEncode(after.toJson())},
+            where: 'user_id=?',
+            whereArgs: [host.userId],
+          );
+        }),
+      );
   // The application owns this connection; leaving flashcards must not close it.
   @override
   Future<void> close() async {}
