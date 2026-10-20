@@ -1,0 +1,20 @@
+narrator (ja-JP-NanamiNeural):
+六番。女の人と男の人が話しています。
+
+narrator (ja-JP-NanamiNeural):
+男の人は、晴れた日はどうやって行きますか。
+
+女 (ja-JP-NanamiNeural):
+料理の教室まで、いつもバスで行きますか。
+
+男 (ja-JP-KeitaNeural):
+前はそうでした。でも、先月から自転車です。バスは便利ですが、運動もしたいので。
+
+女 (ja-JP-NanamiNeural):
+雨の日もですか。
+
+男 (ja-JP-KeitaNeural):
+雨の日だけはバスにします。
+
+narrator (ja-JP-NanamiNeural):
+男の人は、晴れた日はどうやって行きますか。

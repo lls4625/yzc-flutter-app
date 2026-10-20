@@ -1,0 +1,46 @@
+{
+  "question_id": "jm1-N5-p01-L_TASK-01",
+  "version": 1,
+  "edge_tts_version": "7.2.8",
+  "rate": "+0%",
+  "duration_pcm_seconds": 31.292,
+  "note": "Generic scene introduction based only on explicit speaker genders. Pauses are production settings, not official exam requirements.",
+  "segments": [
+    {
+      "role": "narrator",
+      "text": "一番。女の人と男の人が話しています。",
+      "pause_ms": 700,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "narrator",
+      "text": "女の人は、これからまず何をしますか。",
+      "pause_ms": 1500,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "女",
+      "text": "今から本を返すんですか。",
+      "pause_ms": 500,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "男",
+      "text": "いいえ。先にカードを作るんです。本を返すのは私がやります。",
+      "pause_ms": 500,
+      "voice": "ja-JP-KeitaNeural"
+    },
+    {
+      "role": "女",
+      "text": "はい、分かりました。",
+      "pause_ms": 1200,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "narrator",
+      "text": "女の人は、これからまず何をしますか。",
+      "pause_ms": 1500,
+      "voice": "ja-JP-NanamiNeural"
+    }
+  ]
+}

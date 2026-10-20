@@ -1,0 +1,74 @@
+{
+  "question_id": "jm1-N5-p02-L_POINT-06",
+  "version": 1,
+  "rate": "+0%",
+  "duration_pcm_seconds": 37.264,
+  "segments": [
+    {
+      "role": "narrator",
+      "text": "六番。女の人と男の人が話しています。",
+      "pause_ms": 700,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "narrator",
+      "text": "男の人は、晴れた日はどうやって行きますか。",
+      "pause_ms": 1500,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "女",
+      "text": "料理の教室まで、いつもバスで行きますか。",
+      "pause_ms": 500,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "男",
+      "text": "前はそうでした。でも、先月から自転車です。バスは便利ですが、運動もしたいので。",
+      "pause_ms": 500,
+      "voice": "ja-JP-KeitaNeural"
+    },
+    {
+      "role": "女",
+      "text": "雨の日もですか。",
+      "pause_ms": 500,
+      "voice": "ja-JP-NanamiNeural"
+    },
+    {
+      "role": "男",
+      "text": "雨の日だけはバスにします。",
+      "pause_ms": 1200,
+      "voice": "ja-JP-KeitaNeural"
+    },
+    {
+      "role": "narrator",
+      "text": "男の人は、晴れた日はどうやって行きますか。",
+      "pause_ms": 1500,
+      "voice": "ja-JP-NanamiNeural"
+    }
+  ],
+  "source_options": [
+    {
+      "id": "1",
+      "text": "電車で",
+      "asset": null
+    },
+    {
+      "id": "2",
+      "text": "歩いて",
+      "asset": null
+    },
+    {
+      "id": "3",
+      "text": "自転車で",
+      "asset": null
+    },
+    {
+      "id": "4",
+      "text": "バスで",
+      "asset": null
+    }
+  ],
+  "sample_options_image": "../../images/n5/jm1-N5-p02-L_POINT-06-v1-options.png",
+  "database_modified": false
+}
