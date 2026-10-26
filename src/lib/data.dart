@@ -402,7 +402,7 @@ class AppStore {
         }
       }
       await tx.execute(
-        "UPDATE yzc_user_setting SET ui_locale='system' WHERE ui_locale IS NULL OR ui_locale NOT IN ('system','zh-Hans','zh-Hant','en','ja')",
+        "UPDATE yzc_user_setting SET ui_locale='system' WHERE ui_locale IS NULL OR ui_locale NOT IN ('system','zh-Hans','zh-Hant','ja','ko','en')",
       );
       await tx.execute(
         "UPDATE yzc_user_setting SET learning_target='ja' WHERE learning_target IS NULL OR learning_target NOT IN ('ja','en')",

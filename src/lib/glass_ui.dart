@@ -866,38 +866,70 @@ class StudySegments<T> extends StatelessWidget {
     final entries = values.entries.toList();
     return LayoutBuilder(
       builder: (context, bounds) {
-        final text = MediaQuery.textScalerOf(context).scale(14);
-        final height = math.max(44.0, text * 1.6 + 16);
-        final minWidth = entries.fold<double>(
-          0,
-          (sum, e) => sum + e.value.length * text + 28,
-        );
+        final textScaler = MediaQuery.textScalerOf(context);
+        final scaledText = textScaler.scale(14);
+        final height = math.max(44.0, scaledText * 1.6 + 16);
         final theme = Theme.of(context);
-        final control = lg.GlassSegmentedControl(
-          segments: [for (final e in entries) lg.GlassSegment(label: e.value)],
+        final selectedStyle = TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.primary,
+        );
+        final unselectedStyle = TextStyle(
+          fontSize: 14,
+          color: theme.colorScheme.onSurface,
+        );
+        double labelWidth(String label, TextStyle style) {
+          final painter = TextPainter(
+            text: TextSpan(text: label, style: style),
+            textDirection: Directionality.of(context),
+            textScaler: textScaler,
+            locale: Localizations.maybeLocaleOf(context),
+            maxLines: 1,
+          )..layout();
+          final width = painter.width;
+          painter.dispose();
+          return width;
+        }
+
+        final maxLabelWidth = entries.fold<double>(0, (width, entry) {
+          final measured = math.max(
+            labelWidth(entry.value, selectedStyle),
+            labelWidth(entry.value, unselectedStyle),
+          );
+          return math.max(width, measured);
+        });
+        final minWidth = (maxLabelWidth + 28) * entries.length + 4;
+        final needsScrolling =
+            bounds.hasBoundedWidth && bounds.maxWidth < minWidth;
+        final segments = [
+          for (final entry in entries) lg.GlassSegment(label: entry.value),
+        ];
+        if (needsScrolling) {
+          return lg.GlassSegmentedControl.scrollable(
+            segments: segments,
+            selectedIndex: entries.indexWhere((e) => e.key == selected),
+            onSegmentSelected: (i) => onChanged(entries[i].key),
+            height: height,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+            useOwnLayer: true,
+            quality: studyGlassControlQuality,
+            selectedTextStyle: selectedStyle,
+            unselectedTextStyle: unselectedStyle,
+            indicatorColor: theme.colorScheme.primary.withValues(alpha: .18),
+          );
+        }
+        return lg.GlassSegmentedControl(
+          segments: segments,
           selectedIndex: entries.indexWhere((e) => e.key == selected),
           onSegmentSelected: (i) => onChanged(entries[i].key),
           height: height,
           useOwnLayer: true,
           quality: studyGlassControlQuality,
-          selectedTextStyle: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.primary,
-          ),
-          unselectedTextStyle: TextStyle(
-            fontSize: 14,
-            color: theme.colorScheme.onSurface,
-          ),
+          selectedTextStyle: selectedStyle,
+          unselectedTextStyle: unselectedStyle,
           indicatorColor: theme.colorScheme.primary.withValues(alpha: .18),
         );
-        if (bounds.hasBoundedWidth && bounds.maxWidth < minWidth) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(width: minWidth, child: control),
-          );
-        }
-        return control;
       },
     );
   }

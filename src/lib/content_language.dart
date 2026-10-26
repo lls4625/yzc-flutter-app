@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 /// User preferences and package language identity deliberately have no coupling.
-const uiLocaleValues = {'system', 'zh-Hans', 'zh-Hant', 'en', 'ja'};
+const uiLocaleValues = {'system', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'en'};
 const learningTargetValues = {'ja', 'en'};
 String normalizedUiLocale(Object? value) =>
     uiLocaleValues.contains(value) ? value as String : 'system';

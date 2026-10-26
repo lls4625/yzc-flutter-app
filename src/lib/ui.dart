@@ -13,6 +13,8 @@ ThemeData studyTheme(Brightness brightness, {Locale? locale}) {
   final language = resolveUiLocale([locale ?? const Locale('zh')]);
   final fontFamily = language.languageCode == 'ja'
       ? 'Hiragino Sans'
+      : language.languageCode == 'ko'
+      ? 'Apple SD Gothic Neo'
       : language.scriptCode == 'Hant'
       ? 'PingFang TC'
       : language.languageCode == 'zh'
@@ -26,14 +28,14 @@ ThemeData studyTheme(Brightness brightness, {Locale? locale}) {
   );
   final baseText = ThemeData(brightness: brightness).textTheme.apply(
     fontFamily: fontFamily,
-    fontFamilyFallback: const ['Hiragino Sans'],
+    fontFamilyFallback: const ['Apple SD Gothic Neo', 'Hiragino Sans'],
     bodyColor: scheme.onSurface,
     displayColor: scheme.onSurface,
   );
   return ThemeData(
     useMaterial3: true,
     fontFamily: fontFamily,
-    fontFamilyFallback: const ['Hiragino Sans'],
+    fontFamilyFallback: const ['Apple SD Gothic Neo', 'Hiragino Sans'],
     brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
@@ -96,6 +98,7 @@ const _studyNavigationHorizontalPadding = 8.0;
 const _studyNavigationItemCount = 5;
 const _studyNavigationIconSize = 24.0;
 const _studyRoomIconSize = 44.0;
+const _studyRoomSelectedIconScale = 1.15;
 
 class StudyNavigationBar extends StatelessWidget {
   const StudyNavigationBar({
@@ -177,6 +180,7 @@ class StudyNavigationBar extends StatelessWidget {
                   width: destinationWidth,
                   icon: _StudyRoomNavigationIcon(
                     isUnlocked: isStudyRoomUnlocked,
+                    emphasized: true,
                   ),
                   label: context.l10n.studyRoomTab,
                   selected: true,
@@ -251,16 +255,23 @@ class _StudyNavigationDestination extends StatelessWidget {
 }
 
 class _StudyRoomNavigationIcon extends StatelessWidget {
-  const _StudyRoomNavigationIcon({required this.isUnlocked});
+  const _StudyRoomNavigationIcon({
+    required this.isUnlocked,
+    this.emphasized = false,
+  });
   final bool isUnlocked;
+  final bool emphasized;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-    dimension: _studyRoomIconSize,
-    child: CustomPaint(
-      painter: _StudyRoomIconPainter(
-        IconTheme.of(context).color ?? Theme.of(context).colorScheme.primary,
-        isUnlocked,
+  Widget build(BuildContext context) => Transform.scale(
+    scale: emphasized ? _studyRoomSelectedIconScale : 1,
+    child: SizedBox.square(
+      dimension: _studyRoomIconSize,
+      child: CustomPaint(
+        painter: _StudyRoomIconPainter(
+          IconTheme.of(context).color ?? Theme.of(context).colorScheme.primary,
+          isUnlocked,
+        ),
       ),
     ),
   );

@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/l10n.dart';
 import 'knowledge_translations.g.dart';
+import 'knowledge_translations_ko.g.dart';
 
 /// Lookup is evaluated on every build, not stored in the learning session.
 /// Sources remain immutable so Japanese examples, ruby and IDs are preserved.
 String knowledgeText(BuildContext context, String source) {
+  final locale = resolveUiLocale([
+    Localizations.maybeLocaleOf(context) ?? const Locale('en'),
+  ]);
+  if (locale.languageCode == 'ko') {
+    return knowledgeTranslationsKo[source] ?? source;
+  }
   final values = knowledgeTranslations[source];
   if (values == null) return source;
   return context.tr(source, values[0], values[1], values[2]);

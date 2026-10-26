@@ -3525,6 +3525,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   '歷史錯題 ${rows.length} 道 · 答對後仍保留歷史紀錄',
                   '${rows.length} past mistakes · History is kept after correct answers',
                   '過去の間違い：${rows.length}問 · 正解後も履歴を保持',
+                  '이전 오답 ${rows.length}개 · 정답을 맞힌 후에도 기록이 유지됩니다',
                 ),
               ),
               const SizedBox(height: 12),
@@ -3538,6 +3539,7 @@ class _HistoryPageState extends State<HistoryPage> {
                           '複習錯題（${rows.length < 10 ? rows.length : 10} 題）',
                           'Review mistakes (${rows.length < 10 ? rows.length : 10})',
                           '間違いを復習（${rows.length < 10 ? rows.length : 10}問）',
+                          '오답 복습 (${rows.length < 10 ? rows.length : 10}문제)',
                         ),
                 ),
               ),
@@ -3614,6 +3616,7 @@ class _MistakeTileState extends State<MistakeTile>
               ' · 累計答錯 ${widget.row['mistake']} 次',
               ' · ${widget.row['mistake']} incorrect attempts',
               ' · 不正解：${widget.row['mistake']}回',
+              ' · 누적 오답 ${widget.row['mistake']}회',
             ),
           ),
         ],
@@ -3710,6 +3713,7 @@ class _PracticeDetailsPageState extends State<PracticeDetailsPage> {
                 '開始：${displayDate(intOf(session, 'start_time'))}',
                 'Started: ${displayDate(intOf(session, 'start_time'))}',
                 '開始：${displayDate(intOf(session, 'start_time'))}',
+                '시작: ${displayDate(intOf(session, 'start_time'))}',
               ),
             ),
             if (session['end_time'] != null)
@@ -3719,6 +3723,7 @@ class _PracticeDetailsPageState extends State<PracticeDetailsPage> {
                   '完成：${displayDate(intOf(session, 'end_time'))}',
                   'Completed: ${displayDate(intOf(session, 'end_time'))}',
                   '完了：${displayDate(intOf(session, 'end_time'))}',
+                  '완료: ${displayDate(intOf(session, 'end_time'))}',
                 ),
               ),
             Text(
@@ -3727,6 +3732,7 @@ class _PracticeDetailsPageState extends State<PracticeDetailsPage> {
                 '作答時間：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} 秒',
                 'Answering time: ${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000} seconds',
                 '解答時間：${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000}秒',
+                '답변 시간: ${items.fold<int>(0, (sum, row) => sum + intOf(row, 'duration')) ~/ 1000}초',
               ),
             ),
             if (items.any((r) => r['answer_time'] == null))
@@ -3816,6 +3822,7 @@ class _FontSettingsPageState extends State<FontSettingsPage> {
                   '文字大小：$percent%',
                   'Text size: $percent%',
                   '文字サイズ：$percent%',
+                  '텍스트 크기: $percent%',
                 ),
               ),
               StudySlider(
@@ -4372,8 +4379,9 @@ class _ProfilePanelState extends State<ProfilePanel>
       switch (value) {
         'zh-Hans' => '简体中文',
         'zh-Hant' => '繁體中文',
-        'en' => 'English',
         'ja' => '日本語',
+        'ko' => '한국어',
+        'en' => 'English',
         _ => context.l10n.followSystem,
       };
 
@@ -4393,7 +4401,7 @@ class _ProfilePanelState extends State<ProfilePanel>
               : textOf(app.settings, 'ui_locale');
           final values = target
               ? const ['ja', 'en']
-              : const ['system', 'zh-Hans', 'zh-Hant', 'en', 'ja'];
+              : const ['system', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'en'];
           return SafeArea(
             child: SingleChildScrollView(
               child: Column(
@@ -4648,6 +4656,7 @@ class AppInformationPage extends StatelessWidget {
                               '版本號：${context.ui(app.appVersionLabel)}',
                               'Version: ${context.ui(app.appVersionLabel)}',
                               'バージョン：${context.ui(app.appVersionLabel)}',
+                              '버전: ${context.ui(app.appVersionLabel)}',
                             ),
                             textAlign: TextAlign.center,
                             style: theme.textTheme.titleLarge,
