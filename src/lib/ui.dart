@@ -97,7 +97,9 @@ const _studyNavigationBarHeight = 70.0;
 const _studyNavigationHorizontalPadding = 8.0;
 const _studyNavigationItemCount = 5;
 const _studyNavigationIconSize = 24.0;
-const _studyRoomIconSize = 44.0;
+const _studyNavigationIconAreaHeight = 44.0;
+const _studyRoomIconSize = 52.0;
+const _studyRoomIconLift = 12.0;
 const _studyRoomSelectedIconScale = 1.15;
 
 class StudyNavigationBar extends StatelessWidget {
@@ -227,7 +229,7 @@ class _StudyNavigationDestination extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         SizedBox(
-          height: _studyRoomIconSize,
+          height: _studyNavigationIconAreaHeight,
           child: Center(child: icon),
         ),
         const SizedBox(height: 3),
@@ -263,14 +265,17 @@ class _StudyRoomNavigationIcon extends StatelessWidget {
   final bool emphasized;
 
   @override
-  Widget build(BuildContext context) => Transform.scale(
-    scale: emphasized ? _studyRoomSelectedIconScale : 1,
-    child: SizedBox.square(
-      dimension: _studyRoomIconSize,
-      child: CustomPaint(
-        painter: _StudyRoomIconPainter(
-          IconTheme.of(context).color ?? Theme.of(context).colorScheme.primary,
-          isUnlocked,
+  Widget build(BuildContext context) => Transform.translate(
+    offset: const Offset(0, -_studyRoomIconLift),
+    child: Transform.scale(
+      scale: emphasized ? _studyRoomSelectedIconScale : 1,
+      child: SizedBox.square(
+        dimension: _studyRoomIconSize,
+        child: CustomPaint(
+          painter: _StudyRoomIconPainter(
+            IconTheme.of(context).color ?? Theme.of(context).colorScheme.primary,
+            isUnlocked,
+          ),
         ),
       ),
     ),
