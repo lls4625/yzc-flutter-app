@@ -248,12 +248,17 @@ class _JlptPracticePageState extends State<JlptPracticePage> {
       attempt.snapshot['mistake_review'] = true;
       await _repository.create(attempt);
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+      final deleted = await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
           builder: (_) => AttemptPage(_repository, attempt),
         ),
       );
       await _loadHistory();
+      if (deleted == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(studyUi(context, '本次练习记录已删除。'))),
+        );
+      }
     } catch (caughtError, caughtStack) {
       SystemErrors.record(
         caughtError,
@@ -309,12 +314,17 @@ class _JlptPracticePageState extends State<JlptPracticePage> {
         await _repository.create(attempt);
       }
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+      final deleted = await Navigator.of(context).push(
+        MaterialPageRoute<bool>(
           builder: (_) => AttemptPage(_repository, attempt),
         ),
       );
       await _loadHistory();
+      if (deleted == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          GlassSnackBar(content: Text(studyUi(context, '本次练习记录已删除。'))),
+        );
+      }
     } catch (caughtError, caughtStack) {
       SystemErrors.record(
         caughtError,
@@ -519,22 +529,7 @@ class _JlptPracticePageState extends State<JlptPracticePage> {
                         ListTile(
                           title: Text(studyUi(context, '开始后，练习进度会保存在这里。')),
                         ),
-                      for (final item in _history)
-                        ListTile(
-                          title: Text(item['title'] as String),
-                          subtitle: Text(
-                            studyUi(
-                              context,
-                              item['submitted'] == 1
-                                  ? '已完成 · 查看结果'
-                                  : '已暂停 · 继续练习',
-                            ),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _opening
-                              ? null
-                              : () => _open(id: item['id'] as String),
-                        ),
+                      for (final item in _history) _historyRow(item),
                       const SizedBox(height: 16),
                       Text(studyUi(context, '题目为模拟练习。听力支持配套音频、图片与文字稿。')),
                     ],
@@ -578,6 +573,41 @@ class _JlptPracticePageState extends State<JlptPracticePage> {
             _typeGrid(category),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _historyRow(Json item) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(top: 10),
+      elevation: 0,
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .6)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                item['title'] as String,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              studyUi(context, item['submitted'] == 1 ? '查看结果' : '继续作答'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+        onTap: _opening ? null : () => _open(id: item['id'] as String),
       ),
     );
   }

@@ -31,6 +31,7 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
   final _explanationKey = GlobalKey();
   Timer? _timer;
   bool _paused = true, _busy = false, _canPop = false, _saveFailed = false;
+  bool _deleting = false;
   bool _submitting = false, _submissionFailed = false;
   Future<void> _writes = Future.value();
   int _ticks = 0;
@@ -193,6 +194,61 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _delete() async {
+    if (_busy || _deleting) return;
+    final confirmed = await showGlassDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassAlertDialog(
+        title: Text(studyUi(context, '删除本次练习记录？')),
+        content: Text(
+          studyUi(context, '本次练习、作答进度、答题明细及其产生的错题和复习关联记录将被删除，无法撤销。'),
+        ),
+        actions: [
+          StudyButton.text(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(studyUi(context, '取消')),
+          ),
+          StudyButton.filled(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(studyUi(context, '确定')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _account();
+    _watch.stop();
+    setState(() {
+      _paused = true;
+      _busy = true;
+      _deleting = true;
+    });
+    await _writes;
+    try {
+      await widget.repository.delete(a.id);
+      if (!mounted) return;
+      setState(() => _canPop = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (caughtError, caughtStack) {
+      SystemErrors.record(
+        caughtError,
+        caughtStack,
+        module: 'jlpt_practice',
+        operation: '删除本次练习记录',
+        context: {'source': 'study_room/jlpt_practice/feature/runner.dart'},
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _deleting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        GlassSnackBar(content: Text(studyUi(context, '本次练习记录暂未删除，请重试。'))),
+      );
+    }
+  }
+
   void _move(int position) {
     _account();
     setState(() => a.position = position);
@@ -350,6 +406,11 @@ class _AttemptPageState extends State<AttemptPage> with WidgetsBindingObserver {
           studyUi(context, a.submitted ? '结果与回顾' : '${a.level} 专项练习'),
         ),
         actions: [
+          StudyIconButton(
+            tooltip: studyUi(context, '删除本次练习记录'),
+            onPressed: _busy || _submissionFailed ? null : _delete,
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
           if (!a.submitted)
             StudyIconButton(
               tooltip: studyUi(context, '暂停并保存'),

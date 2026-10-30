@@ -16,6 +16,7 @@ class JlptRepository {
   }
   Future<void> create(Attempt attempt) => _store.create(attempt.snapshot, attempt.progress);
   Future<void> save(String id, String progress, bool submitted) => _store.save(id, progress, submitted);
+  Future<void> delete(String id) => _store.delete(id);
   Future<List<Json>> history() => _store.history();
   Future<List<Json>> mistakes() => _store.mistakes();
   Future<Attempt> restore(String id) async {

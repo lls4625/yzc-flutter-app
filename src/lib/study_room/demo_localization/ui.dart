@@ -880,6 +880,13 @@ const demoUiText = <String, List<String>>{
     "共通の間違い・最後に間違えた問題の版を使用",
   ],
   "共享错题重做": ["共享错题重做", "共用錯題重做", "Retry shared mistakes", "共通の間違いを解き直す"],
+  "删除本次练习记录": ["删除本次练习记录", "刪除本次練習紀錄", "Delete this practice record", "この練習記録を削除"],
+  "删除本次练习记录？": [
+    "删除本次练习记录？",
+    "刪除本次練習紀錄？",
+    "Delete this practice record?",
+    "この練習記録を削除しますか？",
+  ],
   "删除本次测试记录": ["删除本次测试记录", "刪除本次測試紀錄", "Delete this test record", "このテスト記録を削除"],
   "删除本次测试记录？": [
     "删除本次测试记录？",
@@ -936,6 +943,24 @@ const demoUiText = <String, List<String>>{
     "本次測試、作答進度、答題明細及其產生的錯題與複習關聯紀錄將被刪除，無法復原。",
     "This test, progress, answers, and its linked mistake and review records will be deleted. This cannot be undone.",
     "このテスト、進捗、回答の詳細、および関連する間違い・復習記録を削除します。取り消せません。",
+  ],
+  "本次练习、作答进度、答题明细及其产生的错题和复习关联记录将被删除，无法撤销。": [
+    "本次练习、作答进度、答题明细及其产生的错题和复习关联记录将被删除，无法撤销。",
+    "本次練習、作答進度、答題明細及其產生的錯題與複習關聯紀錄將被刪除，無法復原。",
+    "This practice, progress, answers, and its linked mistake and review records will be deleted. This cannot be undone.",
+    "この練習、進捗、回答の詳細、および関連する間違い・復習記録を削除します。取り消せません。",
+  ],
+  "本次练习记录已删除。": [
+    "本次练习记录已删除。",
+    "本次練習紀錄已刪除。",
+    "Practice record deleted.",
+    "練習記録を削除しました。",
+  ],
+  "本次练习记录暂未删除，请重试。": [
+    "本次练习记录暂未删除，请重试。",
+    "本次練習紀錄尚未刪除，請重試。",
+    "Practice record was not deleted. Please retry.",
+    "練習記録を削除できませんでした。再試行してください。",
   ],
   "本次测试记录已删除。": [
     "本次测试记录已删除。",
